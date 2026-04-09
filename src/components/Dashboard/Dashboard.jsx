@@ -1,0 +1,3365 @@
+﻿import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { createPortal } from 'react-dom';
+import { io } from 'socket.io-client';
+import logoImg from '@images/logos/logo.png';
+
+/* SVG icons */
+import IconHome        from '@images/dashboard_components/icon_home.svg?react';
+import IconTournaments from '@images/dashboard_components/icon_tournaments.svg?react';
+import IconTeams       from '@images/dashboard_components/icon_teams.svg?react';
+import IconLeaderboard from '@images/dashboard_components/icon_leaderboard.svg?react';
+import IconProfile     from '@images/dashboard_components/icon_profile.svg?react';
+import IconAdmin       from '@images/dashboard_components/icon_admin.svg?react';
+import IconChat        from '@images/dashboard_components/icon_chat.svg?react';
+import IconBell        from '@images/dashboard_components/icon_bell.svg?react';
+import IconSearch      from '@images/dashboard_components/icon_search.svg?react';
+
+/* Stat SVG icons */
+import StatTrophy   from '@images/dashboard_components/stat_trophy.svg?react';
+import StatTeam     from '@images/dashboard_components/stat_team.svg?react';
+import StatStar     from '@images/dashboard_components/stat_star.svg?react';
+import StatCalendar from '@images/dashboard_components/stat_calendar.svg?react';
+
+import {
+  getMe, clearSession, isLoggedIn, getToken,
+  getTournaments, getMyTeams,
+  registerTeam, getLeaderboard,
+  createTournament, updateTournamentStatus, deleteTournament,
+  updateMe, uploadAvatar, uploadBanner, getChatHistory, deleteBanner,
+  searchUsers, getUserProfile,
+  uploadChatFile, clearChatRoom, getAdminUsers, setUserRole, getAdminStats,
+  getCustomChatRooms, createChatRoom, deleteChatRoom,
+  getChatRoomSettings, setChatRoomSettings, postChatAnnouncement,
+  pinChatMessage, unpinChatMessage, getPinnedMessages,
+  getMutedChatUsers, toggleChatMute,
+  getJuryTournaments, getJurySubmissions, evaluateSubmission,
+  updateTeam, getTeamById, deleteAdminUser, setUserPassword, getAdminTeams, adminDeleteTeam,
+  getChatReactions,
+  API_BASE,
+} from '@utils/authApi';
+import { useToast } from '@utils/toast.jsx';
+
+/* ── Constants ──────────────────────────────────── */
+const STATUS_LABEL = {
+  draft:        { label: 'Чернетка',   color: '#888',    bg: '#f0f0f0' },
+  registration: { label: 'Реєстрація', color: '#7c5ff5', bg: '#eee9ff' },
+  running:      { label: 'Активний',   color: '#16a34a', bg: '#dcfce7' },
+  finished:     { label: 'Завершений', color: '#0ea5e9', bg: '#e0f2fe' },
+};
+const ACCENT = {
+  draft:        ['#888','#f0f0f0'],
+  registration: ['#AC9EF8','#2d1f6e'],
+  running:      ['#4ade80','#163028'],
+  finished:     ['#0ea5e9','#0c2a3b'],
+};
+const BANNER_PRESETS = ['#1e1b2e','#0f172a','#0d1117','#16213e','#1a1a2e','#0e2240','#2d1b69','#1b4332'];
+
+/* ── Helpers ────────────────────────────────────── */
+function StatusBadge({ status }) {
+  const s = STATUS_LABEL[status] || { label: status, color: '#888', bg: '#eee' };
+  return <span className="db-status-badge" style={{ color: s.color, background: s.bg }}>{s.label}</span>;
+}
+
+function hasRole(user, role) {
+  return !!(user?.role?.split(',').map(r => r.trim()).includes(role));
+}
+const ROLE_LABELS = { user: '\u{1F464} Учасник', jury: '\u2696\uFE0F Журі', admin: '\u2699\uFE0F Адмін', banned: '\u{1F6AB} Бан' };
+function RoleBadges({ role }) {
+  return <>{(role || '').split(',').map(r => r.trim()).filter(Boolean).map(r => (
+    <span key={r} className={`db-role-badge role-${r}`}>{ROLE_LABELS[r] || r}</span>
+  ))}</>;
+}
+
+/* ── Custom Select ──────────────────────────────── */
+function CustomSelect({ value, onChange, options, placeholder = '— Оберіть —' }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const fn = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', fn);
+    return () => document.removeEventListener('mousedown', fn);
+  }, []);
+  const selected = options.find(o => String(o.value) === String(value));
+  return (
+    <div className={`db-custom-select${open ? ' open' : ''}`} ref={ref}>
+      <button type="button" className="db-cs-trigger" onClick={() => setOpen(p => !p)}>
+        <span className="db-cs-value">{selected ? selected.label : placeholder}</span>
+        <span className="db-cs-arrow">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="db-cs-dropdown">
+          <div className="db-cs-option disabled" onClick={() => { onChange(''); setOpen(false); }}>{placeholder}</div>
+          {options.map(o => (
+            <div key={o.value}
+              className={`db-cs-option${String(o.value) === String(value) ? ' selected' : ''}`}
+              onClick={() => { onChange(o.value); setOpen(false); }}>
+              {o.label}
+              {o.tag && <span className="db-cs-tag">{o.tag}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+function formatDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('uk-UA', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+function daysLeft(dateStr) {
+  if (!dateStr) return null;
+  return Math.ceil((new Date(dateStr) - new Date()) / 86400000);
+}
+function avatarUrl(user) {
+  if (!user) return null;
+  if (user.user_avatar_url) return API_BASE + user.user_avatar_url;
+  return null;
+}
+
+/* ── Avatar component ───────────────────────────── */
+function UserAvatar({ user, size = 36, onClick, className = '' }) {
+  const url = avatarUrl(user);
+  const initials = user?.username ? user.username.slice(0,2).toUpperCase() : (user?.email?.[0]?.toUpperCase() ?? '?');
+  const style = { width: size, height: size, borderRadius: '50%', cursor: onClick ? 'pointer' : 'default', flexShrink: 0 };
+  if (url) return <img src={url} alt="" style={{ ...style, objectFit: 'cover' }} onClick={onClick} className={className} />;
+  return (
+    <div style={{ ...style, background: 'var(--main_color)', display:'flex', alignItems:'center', justifyContent:'center',
+      fontFamily:'Space Grotesk,sans-serif', fontWeight:700, fontSize: Math.round(size * 0.38), color:'#191A23' }}
+      onClick={onClick} className={className}>
+      {initials}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════
+   DASHBOARD SHELL
+══════════════════════════════════════════════════ */
+export default function Dashboard() {
+  const navigate    = useNavigate();
+  const toast       = useToast();
+  const [user,    setUser]    = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [tab,     setTabRaw]  = useState(() => localStorage.getItem('db_tab') || 'overview');
+  const setTab = t => { setTabRaw(t); localStorage.setItem('db_tab', t); };
+  const [notifOpen,     setNotifOpen]     = useState(false);
+  const [miniProfile,   setMiniProfile]   = useState(false);
+  const [userSearchOpen,setUserSearchOpen]= useState(false);
+  const [chatHasUnread,  setChatHasUnread]  = useState(false);
+
+  useEffect(() => {
+    if (!isLoggedIn()) { navigate('/login'); return; }
+    getMe()
+      .then(setUser)
+      .catch(() => { clearSession(); toast.error('Сесія закінчилась'); navigate('/login'); })
+      .finally(() => setLoading(false));
+  }, []); // eslint-disable-line
+
+  const handleLogout = () => { clearSession(); toast.info('Ви вийшли'); navigate('/'); };
+
+  const TABS = [
+    { id: 'overview',    label: 'Огляд',    Icon: IconHome },
+    { id: 'tournaments', label: 'Турніри',  Icon: IconTournaments },
+    { id: 'leaderboard', label: 'Лідерборд',Icon: IconLeaderboard },
+    { id: 'teams',       label: 'Команди',  Icon: IconTeams },
+    { id: 'chat',        label: 'Чат',      Icon: IconChat },
+    { id: 'profile',     label: 'Профіль',  Icon: IconProfile },
+    ...(hasRole(user, 'admin') || hasRole(user, 'jury') ? [{ id: 'jury', label: 'Журі', Icon: IconAdmin }] : []),
+    ...(hasRole(user, 'admin') ? [{ id: 'admin', label: 'Адмін', Icon: IconAdmin }] : []),
+  ];
+
+  const tabLabel = TABS.find(t => t.id === tab)?.label ?? '';
+
+  return (
+    <div className="db-page">
+      {/* ══ SIDEBAR ═══════════════════════════════ */}
+      <aside className="db-sidebar">
+        <Link to="/" className="db-logo">
+          <img src={logoImg} alt="logo" className="db-logo-img" />
+          <span>Code League</span>
+        </Link>
+
+        <nav className="db-nav">
+          {!loading && TABS.map(({ id, label, Icon }) => (
+            <button key={id} className={`db-nav-item${tab === id ? ' active' : ''}`} onClick={() => setTab(id)}>
+              <span className="db-nav-icon"><Icon /></span>
+              <span className="db-nav-label">{label}</span>
+              {id === 'admin' && <span className="db-nav-badge">●</span>}
+              {id === 'chat' && chatHasUnread && tab !== 'chat' && <span className="db-nav-badge chat-unread">●</span>}
+            </button>
+          ))}
+        </nav>
+
+        {!loading && user && (
+          <button className="db-sidebar-user" onClick={() => { setTab('profile'); }}>
+            <UserAvatar user={user} size={34} />
+            <div className="db-sidebar-info">
+              <span className="db-sidebar-name">{user.username || user.email}</span>
+              <span className="db-sidebar-role">{hasRole(user, 'admin') ? '⚙ Адмін' : hasRole(user, 'jury') ? '⚖ Журі' : '👤 Учасник'}</span>
+            </div>
+            <button className="db-sidebar-logout" title="Вийти" onClick={e => { e.stopPropagation(); handleLogout(); }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+            </button>
+          </button>
+        )}
+      </aside>
+
+      {/* ══ MAIN ══════════════════════════════════ */}
+      <div className="db-main">
+        {/* Top bar */}
+        <header className="db-topbar">
+          <h2 className="db-topbar-title">{tabLabel}</h2>
+          <div className="db-topbar-right">
+            <button
+              type="button"
+              className="db-topbar-icon-btn"
+              onClick={() => { setUserSearchOpen(true); setNotifOpen(false); setMiniProfile(false); }}
+              title="Пошук користувачів"
+              aria-label="Пошук користувачів"
+            >
+              <IconSearch />
+            </button>
+            {/* Bell / notifications */}
+            <div className={`db-topbar-icon-btn db-bell-wrap${notifOpen ? ' open' : ''}`}
+              onClick={() => { setNotifOpen(p => !p); setMiniProfile(false); }}>
+              <IconBell />
+              <span className="db-bell-dot" />
+              {notifOpen && (
+                <div className="db-notif-panel" onClick={e => e.stopPropagation()}>
+                  <p className="db-notif-title">Сповіщення</p>
+                  <div className="db-notif-item"><span>🏆</span><span>Відкрита реєстрація в нові турніри!</span></div>
+                  <div className="db-notif-item"><span>💬</span><span>Відтепер доступний чат між командами</span></div>
+                </div>
+              )}
+            </div>
+            {!loading && user && (
+              <div className="db-topbar-avatar-wrap" onClick={() => { setMiniProfile(p => !p); setNotifOpen(false); }}>
+                <UserAvatar user={user} size={36} className="db-topbar-avatar" />
+                {miniProfile && (
+                  <MiniProfileModal user={user} onClose={() => setMiniProfile(false)} onGoProfile={() => { setTab('profile'); setMiniProfile(false); }} />
+                )}
+              </div>
+            )}
+          </div>
+        </header>
+
+        {/* Content */}
+        <main className="db-content">
+          {loading ? (
+            <div className="db-loading"><div className="db-spinner" /></div>
+          ) : (
+            <>
+              {tab !== 'chat' && <TabTip tab={tab} />}
+              {tab === 'overview'    && <TabOverview    user={user} toast={toast} onNavigate={setTab} />}
+              {tab === 'tournaments' && <TabTournaments user={user} toast={toast} />}
+              {tab === 'teams'       && <TabTeams       toast={toast} />}
+              {tab === 'leaderboard' && <TabLeaderboard toast={toast} />}
+              {tab === 'chat'        && <TabChat        user={user} toast={toast} userId={user?.id} onUnreadChange={setChatHasUnread} setTab={setTab} />}
+              {tab === 'profile'     && <TabProfile     user={user} setUser={setUser} toast={toast} onLogout={handleLogout} />}
+              {tab === 'jury' && (hasRole(user, 'admin') || hasRole(user, 'jury')) && <TabJury user={user} toast={toast} />}
+              {tab === 'admin' && hasRole(user, 'admin') && <TabAdmin toast={toast} />}
+            </>
+          )}
+        </main>
+      </div>
+
+      {/* Global: User Search Modal */}
+      {userSearchOpen && (
+        <UserSearchModal onClose={() => setUserSearchOpen(false)} />
+      )}
+    </div>
+  );
+}
+
+/* ── Mini Profile Modal ─────────────────────────── */
+function MiniProfileModal({ user, onClose, onGoProfile }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const fn = e => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    document.addEventListener('mousedown', fn);
+    return () => document.removeEventListener('mousedown', fn);
+  }, [onClose]);
+
+  const bannerStyle = user.banner_url
+    ? { backgroundImage: `url(${API_BASE + user.banner_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+    : { background: user.banner_color || '#1e1b2e' };
+
+  return (
+    <div className="db-mini-profile" ref={ref} onClick={e => e.stopPropagation()}>
+      <div className="db-mp-banner" style={bannerStyle} />
+      <div className="db-mp-body">
+        <div className="db-mp-avatar-wrap">
+          <UserAvatar user={user} size={56} />
+        </div>
+        <div className="db-mp-info">
+          <strong>{user.username || user.email}</strong>
+          <span className="db-role-badge" style={{ display:'inline-block', marginTop:4 }}>{user.role}</span>
+        </div>
+        {user.user_description && <p className="db-mp-desc">{user.user_description}</p>}
+        <div className="db-mp-footer">
+          <span style={{ fontSize:12, color:'#aaa' }}>Реєстрація: {formatDate(user.created_at)}</span>
+          <button className="db-btn db-btn-primary db-btn-sm" onClick={onGoProfile}>Редагувати профіль</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── User Search Modal ──────────────────────────── */
+function UserSearchModal({ onClose }) {
+  const [query,   setQuery]   = useState('');
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [selected,setSelected]= useState(null);
+  const ref       = useRef(null);
+  const debounceRef = useRef(null);
+
+  useEffect(() => {
+    const fn = e => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    document.addEventListener('mousedown', fn);
+    return () => document.removeEventListener('mousedown', fn);
+  }, [onClose]);
+
+  useEffect(() => {
+    const fn = e => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', fn);
+    return () => window.removeEventListener('keydown', fn);
+  }, [onClose]);
+
+  const handleSearch = q => {
+    setQuery(q);
+    clearTimeout(debounceRef.current);
+    if (q.trim().length < 2) { setResults([]); return; }
+    debounceRef.current = setTimeout(async () => {
+      setLoading(true);
+      try { setResults(await searchUsers(q)); }
+      catch { setResults([]); }
+      finally { setLoading(false); }
+    }, 300);
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="db-user-search-modal" ref={ref} onClick={e => e.stopPropagation()}>
+        <div className="db-usm-header">
+          <h3>Пошук користувачів</h3>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <input
+          autoFocus
+          className="db-usm-input"
+          placeholder="Введіть нікнейм (мін. 2 символи)..."
+          value={query}
+          onChange={e => handleSearch(e.target.value)}
+        />
+        <div className="db-usm-results">
+          {loading && <div className="db-loading"><div className="db-spinner" /></div>}
+          {!loading && query.trim().length >= 2 && results.length === 0 && (
+            <p className="db-usm-empty">Нікого не знайдено</p>
+          )}
+          {!loading && results.map(u => (
+            <div key={u.id} className="db-usm-card" onClick={() => setSelected(u)}>
+              <UserAvatar user={u} size={40} />
+              <div className="db-usm-info">
+                <strong>{u.username}</strong>
+                <span className="db-role-badge" style={{ marginLeft: 6 }}>{u.role}</span>
+              </div>
+              {u.user_description && (
+                <p className="db-usm-desc">{u.user_description}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+      {selected && (
+        <UserProfileViewModal user={selected} onClose={() => setSelected(null)} />
+      )}
+    </div>
+  );
+}
+
+function UserProfileViewModal({ user, onClose }) {
+  const bannerStyle = user.banner_url
+    ? { backgroundImage: `url(${API_BASE + user.banner_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+    : { background: user.banner_color || '#1e1b2e' };
+  return (
+    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1100 }}>
+      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: 400, padding: 0, overflow: 'hidden' }}>
+        <div className="db-upv-banner" style={bannerStyle} />
+        <div className="db-upv-body">
+          <button className="modal-close" onClick={onClose}>✕</button>
+          <div className="db-upv-head">
+            <UserAvatar user={user} size={64} />
+            <div>
+              <h3 style={{ margin: 0 }}>{user.username}</h3>
+              <span className="db-role-badge">{user.role}</span>
+            </div>
+          </div>
+          {user.user_description && (
+            <p className="db-upv-desc">{user.user_description}</p>
+          )}
+          <div className="db-field-row" style={{ marginTop: 12 }}>
+            <label>Реєстрація</label>
+            <span>{new Date(user.created_at).toLocaleDateString('uk-UA')}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════
+   TAB: OVERVIEW
+══════════════════════════════════════════════════ */
+function TabOverview({ user, toast, onNavigate }) {
+  const [tournaments, setTournaments] = useState([]);
+  const [myTeams,     setMyTeams]     = useState([]);
+  const [loading,     setLoading]     = useState(true);
+
+  useEffect(() => {
+    Promise.all([getTournaments(), getMyTeams()])
+      .then(([t, m]) => { setTournaments(t); setMyTeams(m); })
+      .catch(() => toast.error('Помилка завантаження'))
+      .finally(() => setLoading(false));
+  }, [toast]);
+
+  const openRegistrations = useMemo(() => tournaments.filter(t => t.status === 'registration'), [tournaments]);
+  const activeTournaments = useMemo(() => tournaments.filter(t => t.status === 'running'), [tournaments]);
+
+  const STATS = [
+    { label: 'Усього турнірів',  value: tournaments.length,       Icon: StatTrophy,   color: '#AC9EF8' },
+    { label: 'Мої команди',      value: myTeams.length,           Icon: StatTeam,     color: '#4ade80' },
+    { label: 'Активні зараз',    value: activeTournaments.length, Icon: StatStar,     color: '#f59e0b' },
+    { label: 'Відкрита реєстр.', value: openRegistrations.length, Icon: StatCalendar, color: '#0ea5e9' },
+  ];
+
+  return (
+    <div className="db-tab">
+      <div className="db-welcome-banner">
+        <div className="db-welcome-text">
+          <span className="db-welcome-hi">Привіт,</span>
+          <h2>{user?.username || user?.email}! 👋</h2>
+          <p>Тут зібрано все про ваші турніри та команди.</p>
+        </div>
+        <UserAvatar user={user} size={72} />
+      </div>
+
+      {loading ? (
+        <div className="db-stats-grid">
+          {[1,2,3,4].map(i => <div key={i} className="db-card-skeleton" style={{ height: 96 }} />)}
+        </div>
+      ) : (
+        <div className="db-stats-grid">
+          {STATS.map(({ label, value, Icon, color }) => (
+            <div key={label} className="db-stat-card" style={{ '--accent': color }}>
+              <div className="db-stat-icon"><Icon /></div>
+              <div className="db-stat-info">
+                <span className="db-stat-value">{value}</span>
+                <span className="db-stat-label">{label}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!loading && (
+        <>
+        {/* Countdown widget */}
+        {(() => {
+          const nearest = [...tournaments]
+            .filter(t => t.status === 'registration' || t.status === 'running')
+            .sort((a,b) => new Date(a.start_date) - new Date(b.start_date))[0];
+          if (!nearest) return null;
+          const target = nearest.status === 'registration' ? nearest.registration_end : nearest.end_date;
+          const msLeft = new Date(target) - new Date();
+          if (msLeft <= 0) return null;
+          const d = Math.floor(msLeft / 86400000);
+          const h = Math.floor((msLeft % 86400000) / 3600000);
+          const m = Math.floor((msLeft % 3600000) / 60000);
+          const s = Math.floor((msLeft % 60000) / 1000);
+          return (
+            <CountdownBanner tournament={nearest} d={d} h={h} m={m} s={s} />
+          );
+        })()}
+        <div className="db-overview-grid">
+          <div className="db-ov-section">
+            <h3 className="db-ov-title">Відкрита реєстрація</h3>
+            {openRegistrations.length === 0 ? (
+              <p className="db-ov-empty">Зараз відкритих реєстрацій немає</p>
+            ) : openRegistrations.slice(0,4).map(t => (
+              <div key={t.id} className="db-ov-item" onClick={() => onNavigate('tournaments')}>
+                <div className="db-ov-dot" style={{ background: '#AC9EF8' }} />
+                <div className="db-ov-item-text">
+                  <strong>{t.name}</strong>
+                  <span>до {formatDate(t.registration_end)}</span>
+                </div>
+                <span className="db-ov-arrow">›</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="db-ov-section">
+            <h3 className="db-ov-title">Мої активні команди</h3>
+            {myTeams.length === 0 ? (
+              <p className="db-ov-empty">Ви ще не зареєстровані в жодному турнірі</p>
+            ) : myTeams.slice(0,4).map(t => (
+              <div key={t.id} className="db-ov-item" onClick={() => onNavigate('teams')}>
+                <div className="db-ov-dot" style={{ background: '#4ade80' }} />
+                <div className="db-ov-item-text">
+                  <strong>{t.name}</strong>
+                  <span>{t.tournament_name}</span>
+                </div>
+                <StatusBadge status={t.tournament_status} />
+              </div>
+            ))}
+          </div>
+
+          <div className="db-ov-section">
+            <h3 className="db-ov-title">Швидкі дії</h3>
+            <button className="db-qa-btn" onClick={() => onNavigate('tournaments')}><IconTournaments /> Переглянути турніри</button>
+            <button className="db-qa-btn" onClick={() => onNavigate('chat')}><IconChat /> Відкрити чат</button>
+            <button className="db-qa-btn" onClick={() => onNavigate('leaderboard')}><IconLeaderboard /> Лідерборд</button>
+            <button className="db-qa-btn" onClick={() => onNavigate('profile')}><IconProfile /> Мій профіль</button>
+          </div>
+        </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ── Countdown Banner ──────────────────────────── */
+function CountdownBanner({ tournament, d, h, m, s }) {
+  const [tick, setTick] = useState(0);
+  const [time, setTime] = useState({ d, h, m, s });
+  useEffect(() => {
+    const target = tournament.status === 'registration' ? tournament.registration_end : tournament.end_date;
+    const t = setInterval(() => {
+      const ms = new Date(target) - new Date();
+      if (ms <= 0) { clearInterval(t); return; }
+      setTime({
+        d: Math.floor(ms / 86400000),
+        h: Math.floor((ms % 86400000) / 3600000),
+        m: Math.floor((ms % 3600000) / 60000),
+        s: Math.floor((ms % 60000) / 1000),
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [tournament]);
+  const label = tournament.status === 'registration' ? 'реєстраціи' : 'кінця турніру';
+  return (
+    <div className="db-countdown-banner">
+      <div className="db-countdown-info">
+        <span className="db-countdown-tag">До {label}</span>
+        <strong>{tournament.name}</strong>
+      </div>
+      <div className="db-countdown-digits">
+        {[{ v: time.d, l: 'д' }, { v: time.h, l: 'г' }, { v: time.m, l: 'хв' }, { v: time.s, l: 'с' }].map(({ v, l }) => (
+          <div key={l} className="db-countdown-cell">
+            <span className="db-countdown-num">{String(v).padStart(2,'0')}</span>
+            <span className="db-countdown-lbl">{l}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════
+   TAB: TOURNAMENTS
+══════════════════════════════════════════════════ */
+function TabTournaments({ user, toast }) {
+  const [tournaments, setTournaments] = useState([]);
+  const [myTeams,     setMyTeams]     = useState([]);
+  const [filter,      setFilter]      = useState('all');
+  const [search,      setSearch]      = useState('');
+  const [loading,     setLoading]     = useState(true);
+  const [selected,    setSelected]    = useState(null);
+  const [openReg,     setOpenReg]     = useState(false);
+
+  // Set of tournament IDs the user already registered for
+  const registeredIds = useMemo(() => new Set(myTeams.map(t => t.tournament_id)), [myTeams]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [t, m] = await Promise.all([getTournaments(filter === 'all' ? null : filter), getMyTeams()]);
+      setTournaments(t);
+      setMyTeams(m);
+    }
+    catch { toast.error('Не вдалось завантажити турніри'); }
+    finally { setLoading(false); }
+  }, [filter, toast]);
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = useMemo(() =>
+    search.trim()
+      ? tournaments.filter(t => t.name.toLowerCase().includes(search.toLowerCase()))
+      : tournaments,
+    [tournaments, search]
+  );
+
+  const FILTERS = [
+    { id: 'all', label: 'Всі' }, { id: 'registration', label: 'Реєстрація' },
+    { id: 'running', label: 'Активні' }, { id: 'finished', label: 'Завершені' }, { id: 'draft', label: 'Чернетки' },
+  ];
+
+  return (
+    <div className="db-tab">
+      <div className="db-tab-header">
+        <div className="db-search-bar">
+          <span className="db-search-icon"><IconSearch /></span>
+          <input type="search" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Пошук турніру..." className="db-search-input" />
+        </div>
+        <div className="db-filter-bar">
+          {FILTERS.map(f => (
+            <button key={f.id} className={`db-filter-btn${filter === f.id ? ' active' : ''}`} onClick={() => setFilter(f.id)}>{f.label}</button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="db-tournament-grid">
+          {[1,2,3].map(i => <div key={i} className="db-card-skeleton" style={{ height: 220 }} />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="db-empty"><IconTournaments /><p>{search ? 'Нічого не знайдено' : 'Турнірів не знайдено'}</p></div>
+      ) : (
+        <div className="db-tournament-grid">
+          {filtered.map(t => {
+            const [ac] = ACCENT[t.status] || ['#888'];
+            const regFill = t.teams_limit ? Math.min(100, Math.round(((t.teams_count || 0) / t.teams_limit) * 100)) : 0;
+            const dl = daysLeft(t.registration_end);
+            return (
+              <div key={t.id} className="db-tournament-card" onClick={() => { setSelected(t); setOpenReg(false); }}>
+                <div className="db-tc-accent" style={{ background: ac }} />
+                <div className="db-tc-body">
+                  <div className="db-tournament-card-top"><h3>{t.name}</h3><StatusBadge status={t.status} /></div>
+                  <p className="db-tournament-desc">{t.description || 'Опис відсутній'}</p>
+                  <div className="db-tournament-meta"><span>📅 {formatDate(t.start_date)} — {formatDate(t.end_date)}</span></div>
+                  {t.teams_limit > 0 && (
+                    <div className="db-progress-wrap">
+                      <div className="db-progress-labels"><span>{t.teams_count || 0}/{t.teams_limit} команд</span><span>{regFill}%</span></div>
+                      <div className="db-progress-bar"><div className="db-progress-fill" style={{ width:`${regFill}%`, background: ac }} /></div>
+                    </div>
+                  )}
+                  <div className="db-tournament-footer">
+                    {t.status === 'registration' && dl !== null && (
+                      <span className={`db-deadline${dl <= 3 ? ' urgent' : ''}`}>
+                        {dl > 0 ? `⏳ ${dl} дн.` : '🔴 Закрита'}
+                      </span>
+                    )}
+                    {t.status === 'registration' && (
+                      registeredIds.has(t.id)
+                        ? <span className="db-badge-registered">✓ Зареєстровано</span>
+                        : <button className="db-btn db-btn-primary db-btn-sm"
+                            onClick={e => { e.stopPropagation(); setSelected(t); setOpenReg(true); }}>
+                            Зареєструватись
+                          </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {selected && (
+        <TournamentModal tournament={selected} user={user} toast={toast} initReg={openReg}
+          isRegistered={registeredIds.has(selected.id)}
+          onClose={() => { setSelected(null); setOpenReg(false); }} onRegistered={load} />
+      )}
+    </div>
+  );
+}
+
+function TournamentModal({ tournament: t, user, toast, initReg, isRegistered, onClose, onRegistered }) {
+  const [showReg, setShowReg] = useState(initReg && !isRegistered);
+  const [accentColor] = ACCENT[t.status] || ['#888'];
+  useEffect(() => {
+    const fn = e => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', fn); return () => window.removeEventListener('keydown', fn);
+  }, [onClose]);
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box modal-box--light db-tournament-modal" onClick={e => e.stopPropagation()}>
+        <div className="db-modal-accent" style={{ background:`linear-gradient(135deg, ${accentColor}33 0%, transparent 60%)` }} />
+        <div className="db-modal-header">
+          <div className="db-modal-header-left">
+            <h2>{t.name}</h2>
+            <StatusBadge status={t.status} />
+          </div>
+          <button className="modal-close db-modal-close-inline" onClick={onClose}>✕</button>
+        </div>
+        <div className="db-modal-meta-row">
+          <div className="db-modal-meta-item"><span className="db-meta-label">Дати турніру</span><span>{formatDate(t.start_date)} — {formatDate(t.end_date)}</span></div>
+          <div className="db-modal-meta-item"><span className="db-meta-label">Реєстрація</span><span>{formatDate(t.registration_start)} — {formatDate(t.registration_end)}</span></div>
+          <div className="db-modal-meta-item"><span className="db-meta-label">Команди</span><span>{t.teams_count || 0}{t.teams_limit ? `/${t.teams_limit}` : ' (без ліміту)'}</span></div>
+          <div className="db-modal-meta-item"><span className="db-meta-label">Розмір</span><span>{t.min_team_size}–{t.max_team_size} осіб</span></div>
+          <div className="db-modal-meta-item"><span className="db-meta-label">Раундів</span><span>{t.rounds_count}</span></div>
+        </div>
+        {t.description && <div className="db-modal-section"><h4>Опис</h4><p>{t.description}</p></div>}
+        {t.rules       && <div className="db-modal-section"><h4>Правила</h4><p>{t.rules}</p></div>}
+        {t.status === 'registration' && !showReg && (
+          isRegistered
+            ? <div className="db-already-registered">✅ Ви вже зареєструвались на цей турнір</div>
+            : <button className="db-btn db-btn-primary db-btn-full" onClick={() => setShowReg(true)}>Зареєструвати команду</button>
+        )}
+        {showReg && (
+          <TeamRegForm tournament={t} toast={toast} user={user}
+            onSuccess={() => { onRegistered(); onClose(); toast.success('Команду зареєстровано!'); }}
+            onCancel={() => setShowReg(false)} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TeamRegForm({ tournament, toast, onSuccess, onCancel, user }) {
+  const min = tournament.min_team_size || 2;
+  const max = tournament.max_team_size || 5;
+  const [teamName, setTeamName] = useState('');
+  const [city,     setCity]     = useState('');
+  const [school,   setSchool]   = useState('');
+  const [telegram, setTelegram] = useState('');
+
+  // SELF (the registrant) is slot 0 — locked linked card
+  const selfSlot = user ? {
+    full_name: '', email: user.email || '',
+    onPlatform: true, platformQuery: '', platformUser: null, searching: false,
+    linkedUser: { username: user.username, email: user.email || '', userId: user.id },
+    isSelf: true,
+  } : { full_name: '', email: '', onPlatform: false, platformQuery: '', platformUser: null, searching: false, linkedUser: null };
+
+  const [members, setMembers] = useState(() => {
+    const rest = Array.from({ length: Math.max(0, min - 1) }, () => ({
+      full_name: '', email: '', onPlatform: false, platformQuery: '', platformUser: null, searching: false, linkedUser: null,
+    }));
+    return [selfSlot, ...rest];
+  });
+  const [loading, setLoading] = useState(false);
+
+  const updateMember = (i, patch) =>
+    setMembers(m => m.map((x, idx) => idx === i ? { ...x, ...patch } : x));
+
+  // Platform user search per member
+  const searchTimers = useRef({});
+  const handlePlatformSearch = (i, q) => {
+    updateMember(i, { platformQuery: q, platformUser: null });
+    clearTimeout(searchTimers.current[i]);
+    if (q.trim().length < 2) return;
+    searchTimers.current[i] = setTimeout(async () => {
+      updateMember(i, { searching: true });
+      try {
+        const results = await searchUsers(q.trim());
+        updateMember(i, { searching: false, platformUser: results[0] || null });
+      } catch { updateMember(i, { searching: false }); }
+    }, 400);
+  };
+
+  const addPlatformUser = (i) => {
+    const m = members[i];
+    if (!m.platformUser) return;
+    updateMember(i, {
+      linkedUser: { username: m.platformUser.username, email: m.platformUser.email || '', userId: m.platformUser.id, missingEmail: !m.platformUser.email },
+      platformUser: null,
+      platformQuery: '',
+      onPlatform: true,
+    });
+  };
+
+  const unlinkPlatformUser = (i) => {
+    updateMember(i, { linkedUser: null, full_name: '', email: '' });
+  };
+
+  const handleSubmit = async e => {
+    e.preventDefault();
+    if (!teamName.trim()) { toast.error('Введіть назву команди'); return; }
+    // Validate: linked users with missing email must have email filled in
+    for (let i = 0; i < members.length; i++) {
+      const m = members[i];
+      if (m.linkedUser && m.linkedUser.missingEmail && !m.linkedUser.email?.trim()) {
+        toast.error(`Учасник ${i + 1}: вкажіть email`); return;
+      }
+    }
+    setLoading(true);
+    const cleanMembers = members.map(m => ({
+      full_name: m.linkedUser ? (m.linkedUser.full_name?.trim() || m.linkedUser.username) : m.full_name,
+      email:     m.linkedUser ? m.linkedUser.email     : m.email,
+    }));
+    try { await registerTeam({ name: teamName.trim(), tournament_id: tournament.id, city, school, telegram_username: telegram, members: cleanMembers }); onSuccess(); }
+    catch (err) { toast.error(err.message); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <form className="db-reg-form" onSubmit={handleSubmit}>
+      <h4>Реєстрація команди</h4>
+      <div className="db-form-row"><label>Назва *</label><input className="db-input" value={teamName} onChange={e => setTeamName(e.target.value)} required placeholder="Назва команди" /></div>
+      <div className="db-form-row-2">
+        <div className="db-form-row"><label>Місто</label><input className="db-input" value={city} onChange={e => setCity(e.target.value)} placeholder="Київ" /></div>
+        <div className="db-form-row"><label>Школа</label><input className="db-input" value={school} onChange={e => setSchool(e.target.value)} placeholder="КПІ..." /></div>
+      </div>
+      <div className="db-form-row"><label>Telegram</label><input className="db-input" value={telegram} onChange={e => setTelegram(e.target.value)} placeholder="@username" /></div>
+      <div className="db-members-section">
+        <div className="db-members-header">
+          <h5>Учасники ({members.length}/{max})</h5>
+          {members.length < max && <button type="button" className="db-btn db-btn-ghost db-btn-sm" onClick={() => setMembers(m => [...m, { full_name:'', email:'', onPlatform:false, platformQuery:'', platformUser:null, searching:false, linkedUser: null }])}>+ Додати</button>}
+        </div>
+        {members.map((m, i) => (
+          <div key={i} className="db-member-wrap">
+            {m.linkedUser ? (
+              /* ── linked platform user card ── */
+              <>
+                <div className="db-member-linked-card">
+                  <span className="db-member-num">{i + 1}</span>
+                  <div className="db-member-linked-avatar">{m.linkedUser.username.slice(0,2).toUpperCase()}</div>
+                  <div className="db-member-linked-info">
+                    <span className="db-member-linked-name">{m.linkedUser.username}</span>
+                    {m.linkedUser.email && !m.linkedUser.missingEmail && (
+                      <span className="db-member-linked-email">{m.linkedUser.email}</span>
+                    )}
+                    {m.linkedUser.missingEmail && (
+                      <span className="db-member-linked-email" style={{ color: '#e57373' }}>⚠ email не вказано</span>
+                    )}
+                  </div>
+                  <span className="db-member-linked-badge">{m.isSelf ? 'Це ви' : 'На платформі'}</span>
+                  {!m.isSelf && (
+                    <button type="button" className="db-member-remove" onClick={() => unlinkPlatformUser(i)}>✕</button>
+                  )}
+                </div>
+                {/* If linked but no email — show extra fields */}
+                {m.linkedUser.missingEmail && (
+                  <div className="db-member-extra-fields">
+                    <input className="db-input db-input-sm"
+                      placeholder="Ініціали / ПІБ (необов'язково)"
+                      value={m.linkedUser.full_name || ''}
+                      onChange={e => updateMember(i, { linkedUser: { ...m.linkedUser, full_name: e.target.value } })} />
+                    <input className="db-input db-input-sm" type="email" required
+                      placeholder="Email *"
+                      value={m.linkedUser.email || ''}
+                      onChange={e => updateMember(i, { linkedUser: { ...m.linkedUser, email: e.target.value } })} />
+                  </div>
+                )}
+                {/* Self slot extra fields if no email */}
+                {m.isSelf && !m.linkedUser.email && (
+                  <div className="db-member-extra-fields">
+                    <input className="db-input db-input-sm" type="email" required
+                      placeholder="Ваш Email *"
+                      value={m.linkedUser.email || ''}
+                      onChange={e => updateMember(i, { linkedUser: { ...m.linkedUser, email: e.target.value } })} />
+                  </div>
+                )}
+              </>
+            ) : (
+              /* ── manual inputs ── */
+              <>
+                <div className="db-member-row">
+                  <span className="db-member-num">{i + 1}</span>
+                  <input className="db-input" value={m.full_name} onChange={e => updateMember(i, { full_name: e.target.value })} placeholder="ПІБ" required />
+                  <input className="db-input" type="email" value={m.email} onChange={e => updateMember(i, { email: e.target.value })} placeholder="Email" required />
+                  {members.length > min && <button type="button" className="db-member-remove" onClick={() => setMembers(ms => ms.filter((_,idx) => idx !== i))}>✕</button>}
+                </div>
+                <label className="db-member-platform-check">
+                  <input type="checkbox" checked={m.onPlatform} onChange={e => updateMember(i, { onPlatform: e.target.checked, platformQuery: '', platformUser: null })} />
+                  <span>Зареєстрований на платформі</span>
+                </label>
+                {m.onPlatform && (
+                  <div className="db-member-platform-search">
+                    <input className="db-input" placeholder="Нікнейм на платформі..." value={m.platformQuery}
+                      onChange={e => handlePlatformSearch(i, e.target.value)} />
+                    {m.searching && <span className="db-search-hint">Пошук...</span>}
+                    {m.platformUser && (
+                      <div className="db-member-found-user" onClick={() => addPlatformUser(i)}>
+                        <div className="db-member-found-avatar">{m.platformUser.username.slice(0,2).toUpperCase()}</div>
+                        <div>
+                          <div className="db-member-found-name">{m.platformUser.username}</div>
+                          <div className="db-member-found-sub">{m.platformUser.email || 'еmail не вказано'}</div>
+                        </div>
+                        <span className="db-member-found-add">+ Додати</span>
+                      </div>
+                    )}
+                    {!m.platformUser && !m.searching && m.platformQuery.length >= 2 && (
+                      <span className="db-search-hint">Не знайдено</span>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="db-form-actions">
+        <button type="button" className="db-btn db-btn-ghost" onClick={onCancel}>Скасувати</button>
+        <button type="submit" className="db-btn db-btn-primary" disabled={loading}>{loading ? 'Збереження...' : 'Зареєструвати'}</button>
+      </div>
+    </form>
+  );
+}
+
+/* ══════════════════════════════════════════════════
+   TAB: TEAMS
+══════════════════════════════════════════════════ */
+function TabTeams({ toast }) {
+  const [teams, setTeams] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(null);
+  const [editTeam, setEditTeam] = useState(null); // team obj for editing
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { setTeams(await getMyTeams()); } catch { toast.error('Помилка'); } finally { setLoading(false); }
+  }, [toast]);
+  useEffect(() => { load(); }, [load]);
+
+  return (
+    <div className="db-tab">
+      <div className="db-tab-header"><h1>Мої команди</h1></div>
+      {loading ? (
+        <div className="db-team-list">{[1,2].map(i => <div key={i} className="db-card-skeleton" style={{ height:90 }} />)}</div>
+      ) : teams.length === 0 ? (
+        <div className="db-empty"><IconTeams /><p>У вас ще немає команд</p><small>Перейдіть у Турніри та зареєструйтесь</small></div>
+      ) : (
+        <div className="db-team-list">
+          {teams.map(t => {
+            const isExp = expanded === t.id;
+            const canEdit = t.tournament_status === 'registration';
+            return (
+              <div key={t.id} className={`db-team-card${isExp ? ' expanded' : ''}`}>
+                <div className="db-team-card-main" onClick={() => setExpanded(isExp ? null : t.id)}>
+                  <div className="db-team-card-left">
+                    <div className="db-team-avatar">{t.name.slice(0,2).toUpperCase()}</div>
+                    <div>
+                      <h3>{t.name}</h3>
+                      <p className="db-team-tournament">{t.tournament_name}</p>
+                      {t.city && <p className="db-team-city">📍 {t.city}</p>}
+                    </div>
+                  </div>
+                  <div className="db-team-card-right">
+                    <StatusBadge status={t.tournament_status} />
+                    {canEdit && (
+                      <button className="db-btn db-btn-ghost db-btn-sm" onClick={e => { e.stopPropagation(); setEditTeam(t); }}>
+                        ✏️ Редагувати
+                      </button>
+                    )}
+                    <span className={`db-expand-btn${isExp ? ' open' : ''}`}>›</span>
+                  </div>
+                </div>
+                {isExp && (
+                  <div className="db-team-details">
+                    <div className="db-team-detail-row">
+                      {t.school && <span><strong>Школа:</strong> {t.school}</span>}
+                      {t.telegram_username && <span><strong>Telegram:</strong> {t.telegram_username}</span>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {editTeam && (
+        <EditTeamModal team={editTeam} toast={toast}
+          onClose={() => setEditTeam(null)}
+          onSuccess={() => { setEditTeam(null); load(); toast.success('Команду оновлено!'); }} />
+      )}
+    </div>
+  );
+}
+
+/* ── Edit Team Modal ─────────────────────────────────── */
+function EditTeamModal({ team, toast, onClose, onSuccess }) {
+  const [name,     setName]     = useState(team.name || '');
+  const [city,     setCity]     = useState(team.city || '');
+  const [school,   setSchool]   = useState(team.school || '');
+  const [telegram, setTelegram] = useState(team.telegram_username || '');
+  const [members,  setMembers]  = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [saving,   setSaving]   = useState(false);
+  const min = 2;
+  const max = 5;
+  const searchTimers = useRef({});
+
+  useEffect(() => {
+    getTeamById(team.id).then(t => {
+      setMembers((t.members || []).map(m => ({
+        full_name: m.full_name, email: m.email,
+        linkedUser: null, platformQuery: '', platformUser: null, searching: false,
+      })));
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [team.id]);
+
+  const updateMember = (i, patch) =>
+    setMembers(m => m.map((x, idx) => idx === i ? { ...x, ...patch } : x));
+
+  const handlePlatformSearch = (i, q) => {
+    updateMember(i, { platformQuery: q, platformUser: null });
+    clearTimeout(searchTimers.current[i]);
+    if (q.trim().length < 2) return;
+    searchTimers.current[i] = setTimeout(async () => {
+      updateMember(i, { searching: true });
+      try {
+        const results = await searchUsers(q.trim());
+        updateMember(i, { searching: false, platformUser: results[0] || null });
+      } catch { updateMember(i, { searching: false }); }
+    }, 400);
+  };
+
+  const addPlatformUser = (i) => {
+    const m = members[i];
+    if (!m.platformUser) return;
+    updateMember(i, {
+      linkedUser: { username: m.platformUser.username, email: m.platformUser.email || '' },
+      platformUser: null, platformQuery: '', onPlatform: true,
+    });
+  };
+
+  const unlinkPlatformUser = (i) =>
+    updateMember(i, { linkedUser: null, full_name: '', email: '' });
+
+  const handleSave = async e => {
+    e.preventDefault();
+    if (!name.trim()) { toast.error('Введіть назву команди'); return; }
+    setSaving(true);
+    const cleanMembers = members.map(m => ({
+      full_name: m.linkedUser ? m.linkedUser.username : m.full_name,
+      email:     m.linkedUser ? m.linkedUser.email     : m.email,
+    }));
+    try {
+      await updateTeam(team.id, { name: name.trim(), city, school, telegram_username: telegram, members: cleanMembers });
+      onSuccess();
+    } catch (err) { toast.error(err.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box modal-box--light" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
+        <button className="modal-close" onClick={onClose}>✕</button>
+        <h2 style={{ margin: '0 0 20px', fontSize: 20, fontWeight: 700 }}>Редагувати команду</h2>
+        {loading ? <div style={{ padding: 40, textAlign: 'center', color: '#aaa' }}>Завантаження...</div> : (
+          <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="db-form-row"><label>Назва *</label><input className="db-input" value={name} onChange={e => setName(e.target.value)} required /></div>
+            <div className="db-form-row-2">
+              <div className="db-form-row"><label>Місто</label><input className="db-input" value={city} onChange={e => setCity(e.target.value)} /></div>
+              <div className="db-form-row"><label>Школа</label><input className="db-input" value={school} onChange={e => setSchool(e.target.value)} /></div>
+            </div>
+            <div className="db-form-row"><label>Telegram</label><input className="db-input" value={telegram} onChange={e => setTelegram(e.target.value)} /></div>
+            <div className="db-members-section">
+              <div className="db-members-header">
+                <h5>Учасники ({members.length}/{max})</h5>
+                {members.length < max && (
+                  <button type="button" className="db-btn db-btn-ghost db-btn-sm"
+                    onClick={() => setMembers(m => [...m, { full_name: '', email: '', linkedUser: null, platformQuery: '', platformUser: null, searching: false }])}>+ Додати</button>
+                )}
+              </div>
+              {members.map((m, i) => (
+                <div key={i} className="db-member-wrap">
+                  {m.linkedUser ? (
+                    /* ── linked platform user card ── */
+                    <div className="db-member-linked-card">
+                      <span className="db-member-num">{i + 1}</span>
+                      <div className="db-member-linked-avatar">{m.linkedUser.username.slice(0,2).toUpperCase()}</div>
+                      <div className="db-member-linked-info">
+                        <span className="db-member-linked-name">{m.linkedUser.username}</span>
+                        {m.linkedUser.email && <span className="db-member-linked-email">{m.linkedUser.email}</span>}
+                      </div>
+                      <span className="db-member-linked-badge">На платформі</span>
+                      <button type="button" className="db-member-remove" onClick={() => unlinkPlatformUser(i)}>✕</button>
+                    </div>
+                  ) : (
+                    /* ── manual / search row ── */
+                    <>
+                      <div className="db-member-row">
+                        <span className="db-member-num">{i + 1}</span>
+                        <input className="db-input" value={m.full_name}
+                          onChange={e => updateMember(i, { full_name: e.target.value })}
+                          placeholder="ПІБ" required />
+                        <input className="db-input" type="email" value={m.email}
+                          onChange={e => updateMember(i, { email: e.target.value })}
+                          placeholder="Email" required />
+                        {members.length > min && (
+                          <button type="button" className="db-member-remove"
+                            onClick={() => setMembers(ms => ms.filter((_,idx) => idx !== i))}>✕</button>
+                        )}
+                      </div>
+                      {/* Platform user search — separate row */}
+                      <div className="db-member-platform-wrap">
+                        <input className="db-input db-input-sm" value={m.platformQuery}
+                          onChange={e => handlePlatformSearch(i, e.target.value)}
+                          placeholder="🔍 Знайти на платформі" />
+                        {m.searching && <span className="db-member-searching">...</span>}
+                        {m.platformUser && !m.searching && (
+                          <div className="db-platform-suggestion" onClick={() => addPlatformUser(i)}>
+                            <span className="db-ps-avatar">{m.platformUser.username.slice(0,2).toUpperCase()}</span>
+                            <span className="db-ps-name">{m.platformUser.username}</span>
+                            <span className="db-ps-add">+ Додати</span>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="db-form-actions">
+              <button type="button" className="db-btn db-btn-ghost" onClick={onClose}>Скасувати</button>
+              <button type="submit" className="db-btn db-btn-primary" disabled={saving}>{saving ? 'Збереження...' : 'Зберегти'}</button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════
+   TAB: LEADERBOARD
+══════════════════════════════════════════════════ */
+function TabLeaderboard({ toast }) {
+  const [tournaments,  setTournaments]  = useState([]);
+  const [selected,     setSelected]     = useState('');
+  const [leaderboard,  setLeaderboard]  = useState([]);
+  const [loadingList,  setLoadingList]  = useState(true);
+  const [loadingBoard, setLoadingBoard] = useState(false);
+
+  useEffect(() => {
+    getTournaments()
+      .then(t => {
+        setTournaments(t);
+        const def = t.find(x => x.status === 'finished') || t.find(x => x.status === 'running');
+        if (def) setSelected(String(def.id));
+      })
+      .catch(() => toast.error('Помилка'))
+      .finally(() => setLoadingList(false));
+  }, [toast]);
+
+  useEffect(() => {
+    if (!selected) return;
+    setLoadingBoard(true);
+    getLeaderboard(selected).then(setLeaderboard).catch(() => toast.error('Помилка лідерборду')).finally(() => setLoadingBoard(false));
+  }, [selected, toast]);
+
+  const maxScore = useMemo(() => leaderboard.reduce((m, r) => Math.max(m, Number(r.total_score)), 0), [leaderboard]);
+  const MEDALS = ['🥇','🥈','🥉'];
+
+  return (
+    <div className="db-tab">
+      <div className="db-tab-header">
+        <h1>Лідерборд</h1>
+        {!loadingList && (
+          <CustomSelect
+            value={selected}
+            onChange={setSelected}
+            placeholder="— Оберіть турнір —"
+            options={tournaments.map(t => ({
+              value: t.id,
+              label: t.name,
+              tag: STATUS_LABEL[t.status]?.label,
+            }))}
+          />
+        )}
+      </div>
+      {!selected ? (
+        <div className="db-empty"><IconLeaderboard /><p>Оберіть турнір</p></div>
+      ) : loadingBoard ? (
+        <div className="db-team-list">{[1,2,3].map(i => <div key={i} className="db-card-skeleton" style={{ height:72 }} />)}</div>
+      ) : leaderboard.length === 0 ? (
+        <div className="db-empty"><IconLeaderboard /><p>Результатів ще немає</p></div>
+      ) : (
+        <div className="db-leaderboard">
+          <div className="db-leaderboard-header"><span>#</span><span>Команда</span><span>Рейтинг</span><span>Балів</span></div>
+          {leaderboard.map((row, i) => {
+            const score = Number(row.total_score);
+            const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
+            return (
+              <div key={row.team_id} className={`db-leaderboard-row${i < 3 ? ' top' : ''}`}>
+                <span className="db-rank">{MEDALS[i] || `${i+1}.`}</span>
+                <div className="db-lb-team"><strong>{row.team_name}</strong>{row.city && <span>{row.city}</span>}</div>
+                <div className="db-lb-bar-wrap"><div className="db-lb-bar"><div className="db-lb-bar-fill" style={{ width:`${pct}%` }} /></div></div>
+                <span className="db-lb-score">{score.toFixed(1)}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════
+   TAB: CHAT (Socket.IO)
+══════════════════════════════════════════════════ */
+let _socket = null;
+function getSocket() {
+  if (!_socket) _socket = io(API_BASE, { auth: { token: getToken() }, autoConnect: true });
+  return _socket;
+}
+
+/* Simple notification sound via Web Audio API */
+function playMsgSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.25);
+    osc.onended = () => ctx.close();
+  } catch {}
+}
+
+const BASE_ROOMS = [
+  { id: 'general',     label: '# загальний',  locked: false },
+  { id: 'tournaments', label: '# турніри',    locked: false },
+  { id: 'offtopic',    label: '# офф-топік',  locked: false },
+];
+
+const EMOJI_QUICK = ['😀','😂','❤️','🔥','👍','🎉','😮','👏','😢','🤔','😎','👀','🙌','🤩','💯','🫡'];
+const EMOJI_REACT = ['👍','❤️','🔥','😂','😮','👏','😢','🎉'];
+
+/* ── Emoji-only message detection ─────────────── */
+const EMOJI_RE = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}|\uFE0F|\u200D|\u20E3|\p{Emoji_Modifier_Base}\p{Emoji_Modifier}?)+$/u;
+function isEmojiOnly(text) {
+  const t = (text || '').trim().replace(/\s/g, '');
+  return t.length > 0 && t.length <= 12 && EMOJI_RE.test(t);
+}
+
+/* ── Compress image via Canvas (quality 0..1) ── */
+function compressImage(file, quality = 0.5) {
+  return new Promise(resolve => {
+    const img = new Image();
+    const objUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width  = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      URL.revokeObjectURL(objUrl);
+      canvas.toBlob(
+        blob => resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' })),
+        'image/jpeg',
+        quality
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(objUrl); resolve(file); };
+    img.src = objUrl;
+  });
+}
+
+/* ── Parse file_url field (may be JSON array or plain string) ── */
+function parseFileUrls(fileUrl) {
+  if (!fileUrl) return [];
+  if (fileUrl.startsWith('[')) { try { return JSON.parse(fileUrl); } catch { return [fileUrl]; } }
+  return [fileUrl];
+}
+
+/* ── Platform onboarding tips ─────────────────── */
+const TAB_TIPS = {
+  overview:    { icon: '🏠', title: 'Огляд',     text: 'Тут зібрана вся важлива інформація: ваші турніри, команди та швидка навігація.' },
+  tournaments: { icon: '🏆', title: 'Турніри',   text: 'Переглядайте актуальні змагання, фільтруйте за статусом та реєструйте команди.' },
+  teams:       { icon: '👥', title: 'Команди',   text: 'Усі ваші команди в одному місці. Команди прив\'язані до конкретних турнірів.' },
+  leaderboard: { icon: '📊', title: 'Лідерборд', text: 'Рейтинг команд по кожному турніру. Оберіть турнір щоб побачити результати.' },
+  chat:        { icon: '💬', title: 'Чат',       text: 'Загальний чат та приватні кімнати для вашої команди. ПКМ на повідомлення — дії.' },
+  profile:     { icon: '👤', title: 'Профіль',   text: 'Налаштуйте нікнейм, аватар, банер та опис профілю.' },
+  admin:       { icon: '⚙️', title: 'Адмін',     text: 'Управляйте турнірами, користувачами та чатом платформи.' },
+};
+
+/* ── Sidebar tab nav shows current tip ─────────── */
+function TabTip({ tab }) {
+  const tip = TAB_TIPS[tab];
+  if (!tip) return null;
+  return (
+    <div className="db-tab-tip">
+      <span className="db-tab-tip-icon">{tip.icon}</span>
+      <div className="db-tab-tip-body">
+        <strong>{tip.title}</strong>
+        <p>{tip.text}</p>
+      </div>
+    </div>
+  );
+}
+
+function TabChat({ user, toast, userId, onUnreadChange, setTab }) {
+  const [myTeams,     setMyTeams]     = useState([]);
+  const [room,        setRoom]        = useState('general');
+  const [messages,    setMessages]    = useState([]);
+  const [reactions,   setReactions]   = useState({});
+  const [text,        setText]        = useState('');
+  const [loading,     setLoading]     = useState(true);
+  const [online,      setOnline]      = useState(false);
+  const [onlineCount, setOnlineCount] = useState(0);
+  const [typingUsers, setTypingUsers] = useState([]);
+  const [showEmoji,   setShowEmoji]   = useState(false);
+  const [replyTo,     setReplyTo]     = useState(null);
+  const [editingId,   setEditingId]   = useState(null);
+  const [editText,    setEditText]    = useState('');
+  const [ctxMenu,     setCtxMenu]     = useState(null);
+  const [soundOn,     setSoundOn]     = useState(true);
+  const [imgFiles,    setImgFiles]    = useState([]);  // array of { file, previewUrl }
+  const [uploading,   setUploading]   = useState(false);
+  const [unreadCounts,setUnreadCounts]= useState({});  // { roomId: number }
+  const [deletePending,setDeletePending]=useState(null); // message obj waiting confirm modal
+  const [chatProfile, setChatProfile] = useState(null); // user obj for mini profile
+  const [hoveredMsg,  setHoveredMsg]  = useState(null); // id of message being hovered
+  const [viewProfile, setViewProfile] = useState(null); // full Discord-style profile popup
+  const [mutedUsers,  setMutedUsers]  = useState(new Set()); // Set<userId> muted in chat
+  const [lightboxImg, setLightboxImg] = useState(null); // full-size chat image preview
+
+  // NEW: pinned, lock, custom rooms
+  const [pinnedMsgs,  setPinnedMsgs]  = useState([]);
+
+  async function openChatProfile(basic) {
+    setChatProfile({ ...basic, loading: true });
+    try {
+      const full = await getUserProfile(basic.user_id);
+      setChatProfile({ ...basic, ...full, user_id: full.id, loading: false });
+    } catch { setChatProfile({ ...basic, loading: false }); }
+  }
+  const [roomLocked,  setRoomLocked]  = useState(false);
+  const [chatError,   setChatError]   = useState('');
+  const [customRooms, setCustomRooms] = useState([]);
+
+  // Notify parent about unread state
+  useEffect(() => {
+    onUnreadChange?.(Object.values(unreadCounts).some(v => v > 0));
+  }, [unreadCounts, onUnreadChange]);
+
+  const bottomRef      = useRef(null);
+  const typingTimer    = useRef(null);
+  const typingRmTimers = useRef({});  // per-user remove timers
+  const socket         = getSocket();
+  const fileRef        = useRef(null);
+  const inputRef       = useRef(null);
+  const ctxRef         = useRef(null);
+  const meId        = user?.id ?? userId;
+  const isAdmin     = user?.role === 'admin';
+
+  useEffect(() => {
+    getMyTeams().then(setMyTeams).catch(() => {});
+    getCustomChatRooms().then(setCustomRooms).catch(() => {});
+  }, []);
+
+  const ROOMS = useMemo(() => [
+    ...BASE_ROOMS,
+    ...customRooms.map(r => ({ id: r.name, label: `# ${r.label}`, locked: false, customId: r.id })),
+    ...myTeams.map(t => ({ id: `team_${t.id}`, label: `🔒 ${t.name}`, locked: true })),
+  ], [myTeams, customRooms]);
+
+  useEffect(() => {
+    setLoading(true);
+    setMessages([]); setReactions({}); setTypingUsers([]);
+    setReplyTo(null); setEditingId(null); setCtxMenu(null); setImgFiles([]);
+    setDeletePending(null); setPinnedMsgs([]); setChatError(''); setRoomLocked(false);
+    // Clear unread for this room when switching to it
+    setUnreadCounts(prev => { const n = { ...prev }; delete n[room]; return n; });
+    getChatHistory(room)
+      .then(setMessages)
+      .catch(() => toast.error('Не вдалось завантажити чат'))
+      .finally(() => setLoading(false));
+    getChatReactions(room).then(setReactions).catch(() => {});
+    getPinnedMessages(room).then(setPinnedMsgs).catch(() => {});
+    // Request live room settings via socket
+    socket.emit('get_room_settings', { room });
+  }, [room, toast]);
+
+  useEffect(() => {
+    socket.emit('join_room', room);
+    const onMsg    = msg => {
+      if (msg.room !== room) {
+        // Track unread for rooms we're not viewing
+        setUnreadCounts(prev => ({ ...prev, [msg.room]: (prev[msg.room] || 0) + 1 }));
+        if (soundOn) playMsgSound();
+        return;
+      }
+      setMessages(prev => [...prev, msg]);
+      if (msg.user_id !== meId && soundOn) playMsgSound();
+    };
+    const onEdited  = ({ messageId, newText }) =>
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, text: newText, edited_at: 1 } : m));
+    const onDeleted = ({ messageId }) =>
+      setMessages(prev => prev.filter(m => m.id !== messageId));
+    const onCleared = () => { setMessages([]); setReactions({}); };
+    const onConn    = () => setOnline(true);
+    const onDisconn = () => setOnline(false);
+    const onOnline  = ({ room: r, count }) => { if (r === room) setOnlineCount(count); };
+    const onTyping  = ({ username: u }) => {
+      setTypingUsers(p => p.includes(u) ? p : [...p, u]);
+      // Reset the per-user remove timer so it only fires 3.5s after the LAST typing event
+      clearTimeout(typingRmTimers.current[u]);
+      typingRmTimers.current[u] = setTimeout(() => {
+        setTypingUsers(p => p.filter(x => x !== u));
+        delete typingRmTimers.current[u];
+      }, 3500);
+    };
+    const onStopTyping = ({ username: u }) => setTypingUsers(p => p.filter(x => x !== u));
+    const onReaction   = ({ messageId, emoji, username: u }) => {
+      setReactions(prev => {
+        const key = `${messageId}_${emoji}`;
+        const cur = prev[key] || { emoji, count: 0, users: [] };
+        const has = cur.users.includes(u);
+        return { ...prev, [key]: { emoji, count: has ? cur.count - 1 : cur.count + 1, users: has ? cur.users.filter(x => x !== u) : [...cur.users, u] } };
+      });
+    };
+    const onSettings = ({ room: r, locked: lk }) => { if (r === room) setRoomLocked(!!lk); };
+    const onChatError = ({ message: msg }) => { setChatError(msg); setTimeout(() => setChatError(''), 4000); };
+    const onPinned    = ({ room: r, messageId }) => {
+      if (r === room) getPinnedMessages(room).then(setPinnedMsgs).catch(() => {});
+    };
+    const onUnpinned  = ({ room: r, messageId }) => {
+      if (r === room) setPinnedMsgs(prev => prev.filter(m => m.id !== messageId));
+    };
+    const onMuteChanged = ({ userId: uid, isMuted }) => {
+      setMutedUsers(prev => {
+        const next = new Set(prev);
+        isMuted ? next.add(uid) : next.delete(uid);
+        return next;
+      });
+    };
+    socket.on('new_message',          onMsg);
+    socket.on('message_edited',       onEdited);
+    socket.on('message_deleted',      onDeleted);
+    socket.on('chat_cleared',         onCleared);
+    socket.on('connect',              onConn);
+    socket.on('disconnect',           onDisconn);
+    socket.on('room_online',          onOnline);
+    socket.on('user_typing',          onTyping);
+    socket.on('user_stop_typing',     onStopTyping);
+    socket.on('reaction',             onReaction);
+    socket.on('room_settings_changed',onSettings);
+    socket.on('chat_error',           onChatError);
+    socket.on('message_pinned',       onPinned);
+    socket.on('message_unpinned',     onUnpinned);
+    socket.on('user_mute_changed',    onMuteChanged);
+    if (socket.connected) setOnline(true);
+    return () => {
+      socket.emit('leave_room', room);
+      socket.off('new_message', onMsg); socket.off('message_edited', onEdited);
+      socket.off('message_deleted', onDeleted); socket.off('chat_cleared', onCleared);
+      socket.off('connect', onConn); socket.off('disconnect', onDisconn);
+      socket.off('room_online', onOnline); socket.off('user_typing', onTyping);
+      socket.off('user_stop_typing', onStopTyping); socket.off('reaction', onReaction);
+      socket.off('room_settings_changed', onSettings); socket.off('chat_error', onChatError);
+      socket.off('message_pinned', onPinned); socket.off('message_unpinned', onUnpinned);
+      socket.off('user_mute_changed', onMuteChanged);
+    };
+  }, [room, socket, soundOn, meId]);
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+
+  useEffect(() => {
+    if (!lightboxImg) return;
+    const onEsc = e => { if (e.key === 'Escape') setLightboxImg(null); };
+    window.addEventListener('keydown', onEsc);
+    return () => window.removeEventListener('keydown', onEsc);
+  }, [lightboxImg]);
+
+  // Admin: load initially muted users
+  useEffect(() => {
+    if (!isAdmin) return;
+    getMutedChatUsers()
+      .then(rows => setMutedUsers(new Set(rows.map(r => r.id))))
+      .catch(() => {});
+  }, [isAdmin]);
+
+  const handleMuteToggle = async (targetUserId) => {
+    setCtxMenu(null);
+    try {
+      const res = await toggleChatMute(targetUserId);
+      setMutedUsers(prev => {
+        const next = new Set(prev);
+        res.isMuted ? next.add(targetUserId) : next.delete(targetUserId);
+        return next;
+      });
+      toast.success(res.isMuted ? '🔇 Користувача вимкнуто в чаті' : '🔊 Користувача увімкнуто в чаті');
+    } catch (e) { toast.error(e.message); }
+  };
+
+  /* Close context menu on outside click */
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const fn = e => { if (ctxRef.current && !ctxRef.current.contains(e.target)) setCtxMenu(null); };
+    document.addEventListener('mousedown', fn);
+    return () => document.removeEventListener('mousedown', fn);
+  }, [ctxMenu]);
+
+  const send = async e => {
+    e.preventDefault();
+    if ((!text.trim() && !imgFiles.length) || !online) return;
+    let fileUrls = [];
+    if (imgFiles.length > 0) {
+      setUploading(true);
+      try { fileUrls = await Promise.all(imgFiles.map(f => uploadChatFile(f.file))); }
+      catch { toast.error('Не вдалось завантажити файл'); setUploading(false); return; }
+      finally { setUploading(false); }
+    }
+    socket.emit('send_message', { room, text: text.trim(), replyToId: replyTo?.id || null, fileUrls });
+    socket.emit('stop_typing', { room });
+    clearTimeout(typingTimer.current);
+    setText(''); setReplyTo(null); setShowEmoji(false); setImgFiles([]);
+  };
+
+  const handleInput = e => {
+    setText(e.target.value);
+    if (!online) return;
+    socket.emit('typing', { room });
+    clearTimeout(typingTimer.current);
+    typingTimer.current = setTimeout(() => socket.emit('stop_typing', { room }), 2500);
+  };
+
+  const addEmoji = emoji => { setText(t => t + emoji); setShowEmoji(false); inputRef.current?.focus(); };
+
+  const sendReaction = (messageId, emoji) => { if (online) socket.emit('react', { room, messageId, emoji }); };
+
+  const startEdit = msg => { setEditingId(msg.id); setEditText(msg.text); setCtxMenu(null); };
+  const submitEdit = () => {
+    if (!editText.trim() || !online) return;
+    socket.emit('edit_message', { messageId: editingId, newText: editText.trim() });
+    setEditingId(null); setEditText('');
+  };
+  const cancelEdit = () => { setEditingId(null); setEditText(''); };
+
+  const deleteMsg = msg => {
+    setDeletePending(msg);
+    setCtxMenu(null);
+  };
+  const confirmDelete = () => {
+    if (!deletePending) return;
+    socket.emit('delete_message', { messageId: deletePending.id });
+    setDeletePending(null);
+  };
+  const cancelDelete = () => setDeletePending(null);
+
+  const pinMsg = msg => {
+    socket.emit('pin_message', { messageId: msg.id });
+    setCtxMenu(null);
+  };
+  const unpinMsg = msgId => {
+    socket.emit('unpin_message', { messageId: msgId });
+  };
+
+  const handleFileChange = async e => {
+    const selected = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!selected.length) return;
+    const remaining = 4 - imgFiles.length;
+    if (remaining <= 0) { toast.error('Максимум 4 зображення'); return; }
+    const toAdd = selected.slice(0, remaining);
+    const compressed = await Promise.all(
+      toAdd.map(f => f.type.startsWith('image/') ? compressImage(f) : Promise.resolve(f))
+    );
+    const totalSize = [...imgFiles.map(f => f.file.size), ...compressed.map(f => f.size)]
+      .reduce((a, b) => a + b, 0);
+    if (totalSize > 40 * 1024 * 1024) { toast.error('Загальний розмір перевищує 40 МБ'); return; }
+    const newItems = compressed.map(file => ({ file, previewUrl: URL.createObjectURL(file) }));
+    setImgFiles(prev => [...prev, ...newItems]);
+  };
+
+  const handleMsgContextMenu = (e, msg) => { e.preventDefault(); setCtxMenu({ msg, x: e.clientX, y: e.clientY }); };
+  const currentRoom = ROOMS.find(r => r.id === room);
+
+  /* ── Inner ChatMsg component ─────────────────── */
+  function ChatMsg({ msg }) {
+    const isMe  = msg.user_id === meId;
+    const time  = new Date(msg.created_at).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
+    const msgReactions = EMOJI_REACT
+      .map(emoji => ({ emoji, ...(reactions[`${msg.id}_${emoji}`] || { count: 0, users: [] }) }))
+      .filter(r => r.count > 0);
+    const isEditing  = editingId === msg.id;
+    const fileUrls   = parseFileUrls(msg.file_url);
+    const bigEmoji   = !fileUrls.length && isEmojiOnly(msg.text);
+
+    // Announcement (system message)
+    if (msg.msg_type === 'announcement') {
+      return (
+        <div className="db-chat-announcement" onContextMenu={e => isAdmin && handleMsgContextMenu(e, msg)}>
+          <span className="db-chat-ann-icon">📣</span>
+          <div className="db-chat-ann-body">
+            <span className="db-chat-ann-label">Оголошення від {msg.username}</span>
+            <p className="db-chat-ann-text">{msg.text}</p>
+          </div>
+          <span className="db-chat-time">{time}</span>
+        </div>
+      );
+    }
+
+    return (
+      <div className={`db-chat-msg${isMe ? ' me' : ''}${msg.role === 'admin' ? ' from-admin' : ''}`}
+        onMouseEnter={() => setHoveredMsg(msg.id)}
+        onMouseLeave={() => setHoveredMsg(null)}
+        onContextMenu={e => handleMsgContextMenu(e, msg)}>
+        {!isMe && (
+          <div className="db-chat-msg-avatar-wrap"
+            title={`Профіль ${msg.username}`}
+            onClick={() => openChatProfile({ user_id: msg.user_id, username: msg.username, user_avatar_url: msg.user_avatar_url, role: msg.role })}>
+            {msg.user_avatar_url ? (
+              <img
+                src={API_BASE + msg.user_avatar_url}
+                alt={msg.username}
+                className={`db-chat-msg-avatar db-chat-msg-avatar--img${msg.role === 'admin' ? ' admin' : ''}`}
+              />
+            ) : (
+              <div className={`db-chat-msg-avatar${msg.role === 'admin' ? ' admin' : ''}`}>
+                {(msg.username || '?').slice(0, 2).toUpperCase()}
+              </div>
+            )}
+          </div>
+        )}
+        <div className="db-chat-msg-body">
+          {!isMe && (
+            <span className={`db-chat-msg-name db-chat-msg-name-link${msg.role === 'admin' ? ' admin-name' : ''}`}
+              onClick={() => openChatProfile({ user_id: msg.user_id, username: msg.username, user_avatar_url: msg.user_avatar_url, role: msg.role })}>
+              {msg.username || 'Anonymous'}
+              {msg.role === 'admin' && <span className="db-chat-admin-badge" title="Адміністратор">👑</span>}
+            </span>
+          )}
+
+          {/* Reply preview */}
+          {msg.reply_to_id && (
+            <div className="db-chat-reply-preview">
+              <span className="db-crp-name">{msg.reply_username || '…'}</span>
+              <span className="db-crp-text">{(msg.reply_text || '').slice(0, 80)}{(msg.reply_text?.length > 80) ? '…' : ''}</span>
+            </div>
+          )}
+
+          {isEditing ? (
+            <div className="db-chat-edit-wrap">
+              <input autoFocus className="db-chat-edit-input" value={editText}
+                onChange={e => setEditText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') submitEdit(); if (e.key === 'Escape') cancelEdit(); }}
+              />
+              <div className="db-chat-edit-btns">
+                <button className="db-btn db-btn-sm db-btn-primary" onClick={submitEdit}>Зберегти</button>
+                <button className="db-btn db-btn-sm db-btn-ghost"   onClick={cancelEdit}>Скас.</button>
+              </div>
+            </div>
+          ) : (
+            <div className={`db-chat-bubble${bigEmoji ? ' big-emoji' : ''}${hoveredMsg === msg.id && ctxMenu?.msg?.id !== msg.id ? ' show-react' : ''}`}>
+              {fileUrls.length > 0 && (
+                <div className={`db-chat-imgs${fileUrls.length > 1 ? ' db-chat-imgs--grid' : ''}`}>
+                  {fileUrls.map((url, i) => (
+                    <button key={i} type="button" className="db-chat-img-link"
+                      onClick={e => { e.preventDefault(); e.stopPropagation(); setLightboxImg(API_BASE + url); }}
+                      aria-label="Переглянути зображення">
+                      <img src={API_BASE + url} className="db-chat-img" alt="файл"
+                        onError={e => { e.target.style.display = 'none'; }} />
+                    </button>
+                  ))}
+                </div>
+              )}
+              {msg.text && <span className="db-chat-text">{msg.text}</span>}
+              {msg.edited_at && !bigEmoji && <span className="db-chat-edited"> (ред.)</span>}
+              {!bigEmoji && (
+                <div className="db-chat-react-row">
+                  {EMOJI_REACT.map(emoji => (
+                    <button key={emoji} className="db-react-btn" onClick={() => sendReaction(msg.id, emoji)}>{emoji}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {msgReactions.length > 0 && (
+            <div className="db-reactions">
+              {msgReactions.map(r => (
+                <span key={r.emoji} className="db-reaction-pill"
+                  onClick={() => sendReaction(msg.id, r.emoji)} title={r.users.join(', ')}>{r.emoji} {r.count}</span>
+              ))}
+            </div>
+          )}
+          <span className="db-chat-time">{time}</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="db-tab db-chat-layout" onClick={() => setCtxMenu(null)}>
+
+      {/* ── Context Menu ─────────────────────── */}
+      {ctxMenu && (
+        <div ref={ctxRef} className="db-ctx-menu"
+          style={{ top: ctxMenu.y, left: Math.min(ctxMenu.x, window.innerWidth - 200) }}
+          onClick={e => e.stopPropagation()}>
+          <button onClick={() => {
+            setReplyTo({ id: ctxMenu.msg.id, text: ctxMenu.msg.text, username: ctxMenu.msg.username });
+            setCtxMenu(null); inputRef.current?.focus();
+          }}>↩ Відповісти</button>
+          <button onClick={() => {
+            navigator.clipboard?.writeText(ctxMenu.msg.text);
+            setCtxMenu(null); toast.success('Скопійовано');
+          }}>📋 Копіювати</button>
+          {(ctxMenu.msg.user_id === meId) && (
+            <button onClick={() => startEdit(ctxMenu.msg)}>✏️ Редагувати</button>
+          )}
+          {isAdmin && (
+            <>
+              {pinnedMsgs.some(p => p.id === ctxMenu.msg.id)
+                ? <button onClick={() => { unpinMsg(ctxMenu.msg.id); setCtxMenu(null); }}>📌 Відкріпити</button>
+                : <button onClick={() => pinMsg(ctxMenu.msg)}>📌 Закріпити</button>
+              }
+              {/* Mute toggle — only for other users, not self */}
+              {ctxMenu.msg.user_id !== meId && (
+                mutedUsers.has(ctxMenu.msg.user_id)
+                  ? <button onClick={() => handleMuteToggle(ctxMenu.msg.user_id)}>🔊 Розблокувати чат</button>
+                  : <button className="danger" onClick={() => handleMuteToggle(ctxMenu.msg.user_id)}>🔇 Вимкнути чат</button>
+              )}
+            </>
+          )}
+          {(ctxMenu.msg.user_id === meId || isAdmin) && (
+            <button className="danger" onClick={() => deleteMsg(ctxMenu.msg)}>🗑 Видалити</button>
+          )}
+          <div className="db-ctx-sep" />
+          <div className="db-ctx-react-row">
+            {EMOJI_REACT.map(e => (
+              <button key={e} className="db-ctx-emoji"
+                onClick={() => { sendReaction(ctxMenu.msg.id, e); setCtxMenu(null); }}>{e}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Rooms Sidebar ────────────────────── */}
+      <div className="db-chat-rooms">
+        <div className="db-chat-rooms-title">Кімнати</div>
+        <div className="db-chat-rooms-group">
+          <div className="db-chat-rooms-group-label">Загальні</div>
+          {BASE_ROOMS.map(r => (
+            <button key={r.id} className={`db-chat-room-btn${room === r.id ? ' active' : ''}`}
+              onClick={() => setRoom(r.id)}>
+              <span>{r.label}</span>
+              {unreadCounts[r.id] > 0 && room !== r.id && (
+                <span className="db-room-unread">{unreadCounts[r.id] > 99 ? '99+' : unreadCounts[r.id]}</span>
+              )}
+            </button>
+          ))}
+        </div>
+        {customRooms.length > 0 && (
+          <div className="db-chat-rooms-group">
+            <div className="db-chat-rooms-group-label">Категорії</div>
+            {customRooms.map(r => (
+              <button key={r.id} className={`db-chat-room-btn${room === r.name ? ' active' : ''}`}
+                onClick={() => setRoom(r.name)}>
+                <span>🏷 {r.label}</span>
+                {unreadCounts[r.name] > 0 && room !== r.name && (
+                  <span className="db-room-unread">{unreadCounts[r.name] > 99 ? '99+' : unreadCounts[r.name]}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+        {myTeams.length > 0 && (
+          <div className="db-chat-rooms-group">
+            <div className="db-chat-rooms-group-label">Мої команди</div>
+            {myTeams.map(t => (
+              <button key={t.id} className={`db-chat-room-btn team${room === `team_${t.id}` ? ' active' : ''}`}
+                onClick={() => setRoom(`team_${t.id}`)}>
+                <span>🔒 {t.name}</span>
+                {unreadCounts[`team_${t.id}`] > 0 && room !== `team_${t.id}` && (
+                  <span className="db-room-unread">{unreadCounts[`team_${t.id}`] > 99 ? '99+' : unreadCounts[`team_${t.id}`]}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+        <div style={{ flex: 1 }} />
+        <button className="db-chat-sound-btn" onClick={() => setSoundOn(p => !p)}
+          title={soundOn ? 'Вимкнути звук' : 'Увімкнути звук'}>{soundOn ? '🔔' : '🔕'}</button>
+        <div className={`db-chat-status${online ? ' online' : ''}`}>
+          <span className="db-chat-dot" />{online ? 'Підключено' : 'Відключено'}
+        </div>
+      </div>
+
+      {/* ── Main area ────────────────────────── */}
+      <div className="db-chat-main">
+        <div className="db-chat-header">
+          <div>
+            <strong>{currentRoom?.label ?? room}</strong>
+            {currentRoom?.locked && <span className="db-chat-locked-tag">приватна</span>}
+            {roomLocked && <span className="db-chat-locked-tag locked">🔒 заблоковано</span>}
+          </div>
+          {online && onlineCount > 0 && <span className="db-chat-online-count">⚫ {onlineCount} онлайн</span>}
+        </div>
+
+        {/* Pinned messages banner */}
+        {pinnedMsgs.length > 0 && (
+          <div className="db-chat-pinned-bar">
+            <span className="db-chat-pinned-icon">📌</span>
+            <div className="db-chat-pinned-content">
+              {pinnedMsgs.map(p => (
+                <div key={p.id} className="db-chat-pinned-item">
+                  <span className="db-chat-pinned-author">{p.username}:</span>
+                  <span className="db-chat-pinned-text">{(p.text || '').slice(0, 100)}{p.text?.length > 100 ? '…' : ''}</span>
+                  {isAdmin && (
+                    <button className="db-chat-pinned-unpin" onClick={() => unpinMsg(p.id)} title="Відкріпити">✕</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="db-chat-messages">
+          {loading
+            ? <div className="db-loading"><div className="db-spinner" /></div>
+            : messages.length === 0
+              ? <div className="db-empty" style={{ marginTop: 48 }}><IconChat /><p>Поки немає повідомлень. Будьте першим!</p></div>
+              : messages.map(m => <ChatMsg key={m.id} msg={m} />)
+          }
+          {typingUsers.length > 0 && (
+            <div className="db-typing-indicator">
+              <span className="db-typing-dots"><span /><span /><span /></span>
+              <span className="db-typing-text">{typingUsers.slice(0, 3).join(', ')} пише...</span>
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+
+        <div className="db-chat-bottom">
+          {replyTo && (
+            <div className="db-chat-reply-bar">
+              <span>↩ <strong>{replyTo.username}</strong>: {(replyTo.text || '').slice(0, 60)}{replyTo.text?.length > 60 ? '…' : ''}</span>
+              <button className="db-chat-reply-cancel" onClick={() => setReplyTo(null)}>✕</button>
+            </div>
+          )}
+          {imgFiles.length > 0 && (
+            <div className="db-chat-img-preview db-chat-img-preview--multi">
+              {imgFiles.map((f, i) => (
+                <div key={i} className="db-chat-img-preview-item">
+                  <img src={f.previewUrl} alt="preview" />
+                  <button type="button" onClick={() => setImgFiles(prev => prev.filter((_, j) => j !== i))}>✕</button>
+                </div>
+              ))}
+              {imgFiles.length < 4 && (
+                <button type="button" className="db-chat-img-preview-add" onClick={() => fileRef.current?.click()} title="Додати ще">+</button>
+              )}
+            </div>
+          )}
+          {showEmoji && (
+            <div className="db-emoji-picker">
+              {EMOJI_QUICK.map(e => <button key={e} className="db-emoji-btn" onClick={() => addEmoji(e)}>{e}</button>)}
+            </div>
+          )}
+          <form className="db-chat-input-row" onSubmit={send}>
+            <button type="button" className="db-emoji-toggle" onClick={() => setShowEmoji(p => !p)} title="Емодзі">😊</button>
+            <button type="button" className="db-emoji-toggle" onClick={() => fileRef.current?.click()} title="Прикріпити зображення">📎</button>
+            <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleFileChange} />
+            {roomLocked && !isAdmin ? (
+              <div className="db-chat-locked-input">🔒 Чат заблоковано адміністратором</div>
+            ) : (
+              <>
+                <input ref={inputRef} type="text" value={text} onChange={handleInput}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) send(e); }}
+                  placeholder={chatError || (online ? 'Написати повідомлення...' : 'Підключення...')}
+                  disabled={!online || uploading} className={`db-chat-input${chatError ? ' error' : ''}`} />
+                <button type="submit" className="db-btn db-btn-primary db-btn-sm"
+                  disabled={!online || (!text.trim() && !imgFiles.length) || uploading}>
+                  {uploading ? '⏳' : 'Надіслати'}
+                </button>
+              </>
+            )}
+          </form>
+        </div>
+      </div>
+
+      {/* ── Mini-profile overlay ──────────────── */}
+      {chatProfile && (
+        <div className="db-chat-profile-overlay" onClick={() => setChatProfile(null)}>
+          <div className="db-chat-profile-card" onClick={e => e.stopPropagation()}>
+            {/* Banner */}
+            <div className="db-cp-header"
+              style={chatProfile.banner_url
+                ? { backgroundImage: `url(${API_BASE + chatProfile.banner_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+                : { background: chatProfile.banner_color || '#191A23' }
+              }>
+              <button className="db-chat-profile-close" onClick={() => setChatProfile(null)}>✕</button>
+            </div>
+            {/* Avatar overlapping banner */}
+            <div className="db-cp-avatar-wrap">
+              {chatProfile.user_avatar_url ? (
+                <img
+                  src={API_BASE + chatProfile.user_avatar_url}
+                  alt={chatProfile.username}
+                  className={`db-cp-avatar db-cp-avatar--img${chatProfile.role === 'admin' ? ' admin' : ''}`}
+                />
+              ) : (
+                <div className={`db-cp-avatar${chatProfile.role === 'admin' ? ' admin' : ''}`}>
+                  {(chatProfile.username || '?').slice(0, 2).toUpperCase()}
+                </div>
+              )}
+            </div>
+            <div className="db-cp-body">
+              <div className="db-cp-name">{chatProfile.username || 'Anonymous'}</div>
+              {chatProfile.role && chatProfile.role !== 'user' && (
+                <div className="db-cp-role-badge">{chatProfile.role === 'admin' ? '⚙ Admin' : chatProfile.role}</div>
+              )}
+              {chatProfile.user_description && !chatProfile.loading && (
+                <p className="db-cp-desc">{chatProfile.user_description}</p>
+              )}
+              <div className="db-cp-meta">
+                {chatProfile.loading
+                  ? <span className="db-cp-date">Завантаження...</span>
+                  : chatProfile.created_at && (
+                    <span className="db-cp-date">Реєстрація: {new Date(chatProfile.created_at).toLocaleDateString('uk-UA', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                  )
+                }
+              </div>
+              <div className="db-cp-actions">
+                {chatProfile.user_id === meId
+                  ? <button className="db-cp-btn" onClick={() => { setChatProfile(null); setTab('profile'); }}>Редагувати профіль</button>
+                  : <button className="db-cp-btn" onClick={() => { setViewProfile(chatProfile); setChatProfile(null); }}>Профіль →</button>
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Full profile modal (Discord-style) ─── */}
+      {viewProfile && (
+        <UserProfileModal
+          profile={viewProfile}
+          meId={meId}
+          onClose={() => setViewProfile(null)}
+          onGoOwnProfile={() => { setViewProfile(null); setTab('profile'); }}
+        />
+      )}
+
+      {/* ── Delete confirmation modal ─────────── */}
+      {deletePending && createPortal(
+        <div className="modal-overlay" style={{ zIndex: 9999 }} onClick={cancelDelete}>
+          <div className="db-confirm-modal" onClick={e => e.stopPropagation()}>
+            <div className="db-confirm-icon">🗑️</div>
+            <p className="db-confirm-message">Видалити повідомлення від <strong>{deletePending.username}</strong>?</p>
+            {deletePending.text && (
+              <p className="db-delete-msg-preview">"{(deletePending.text).slice(0, 100)}{deletePending.text.length > 100 ? '…' : ''}"</p>
+            )}
+            <div className="db-confirm-actions">
+              <button className="db-btn db-btn-ghost" onClick={cancelDelete}>Скасувати</button>
+              <button className="db-btn db-btn-danger" onClick={confirmDelete}>Видалити</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── Chat image preview modal ────────────── */}
+      {lightboxImg && createPortal(
+        <div className="db-lightbox-overlay" onClick={() => setLightboxImg(null)}>
+          <button
+            className="db-lightbox-close"
+            onClick={() => setLightboxImg(null)}
+            aria-label="Закрити перегляд"
+          >
+            ✕
+          </button>
+          <a
+            href={lightboxImg}
+            target="_blank"
+            rel="noreferrer"
+            className="db-lightbox-open"
+            onClick={e => e.stopPropagation()}
+          >
+            Відкрити оригінал
+          </a>
+          <img
+            src={lightboxImg}
+            alt="Попередній перегляд"
+            className="db-lightbox-img"
+            onClick={e => e.stopPropagation()}
+          />
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════
+   TAB: PROFILE
+══════════════════════════════════════════════════ */
+function TabProfile({ user, setUser, toast, onLogout }) {
+  const [myTeams,   setMyTeams]  = useState([]);
+  const [editing,   setEditing]  = useState(false);
+  const [saving,    setSaving]   = useState(false);
+  const [form,      setForm]     = useState({ username: '', user_description: '', banner_color: '' });
+  const [bannerMode, setBannerMode] = useState('color'); // 'color' | 'image'
+  const avatarInputRef = useRef(null);
+  const bannerInputRef = useRef(null);
+
+  useEffect(() => {
+    getMyTeams().then(setMyTeams).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (user) {
+      setForm({ username: user.username || '', user_description: user.user_description || '', banner_color: user.banner_color || '#1e1b2e' });
+    }
+  }, [user]);
+
+  if (!user) return null;
+
+  const initials = user.username ? user.username.slice(0,2).toUpperCase() : user.email[0].toUpperCase();
+
+  const canChangeUsername = () => {
+    if (!user.username_updated_at) return true;
+    return (Date.now() - new Date(user.username_updated_at).getTime()) >= 7 * 86400000;
+  };
+  const daysUntilChange = () => {
+    if (!user.username_updated_at) return 0;
+    return Math.ceil(7 - (Date.now() - new Date(user.username_updated_at).getTime()) / 86400000);
+  };
+
+  // live preview during editing
+  const bannerStyle = editing
+    ? (
+        bannerMode === 'image' && user.banner_url
+          ? { backgroundImage: `url(${API_BASE + user.banner_url})`, backgroundSize:'cover', backgroundPosition:'center' }
+          : { background: form.banner_color || '#1e1b2e' }
+      )
+    : (
+        user.banner_url
+          ? { backgroundImage: `url(${API_BASE + user.banner_url})`, backgroundSize:'cover', backgroundPosition:'center' }
+          : { background: user.banner_color || '#1e1b2e' }
+      );
+
+  const handleDeleteBanner = async () => {
+    try { await deleteBanner(); setUser(u => ({ ...u, banner_url: null })); toast.success('Банер видалено'); }
+    catch (err) { toast.error(err.message); }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const payload = { user_description: form.user_description, banner_color: form.banner_color };
+      if (form.username !== user.username) {
+        if (!canChangeUsername()) { toast.error(`Змінити ім'я можна через ${daysUntilChange()} дн.`); setSaving(false); return; }
+        payload.username = form.username;
+      }
+      const updated = await updateMe(payload);
+      setUser(updated);
+      toast.success('Профіль оновлено!');
+      setEditing(false);
+    } catch (err) { toast.error(err.message); }
+    finally { setSaving(false); }
+  };
+
+  const handleAvatarPick = async e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try { const { url } = await uploadAvatar(file); setUser(u => ({ ...u, user_avatar_url: url })); toast.success('Аватар оновлено!'); }
+    catch (err) { toast.error(err.message); }
+  };
+
+  const handleBannerPick = async e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try { const { url } = await uploadBanner(file); setUser(u => ({ ...u, banner_url: url })); toast.success('Банер оновлено!'); }
+    catch (err) { toast.error(err.message); }
+  };
+
+  return (
+    <div className="db-tab">
+      {/* Banner */}
+      <div className="db-profile-banner" style={bannerStyle}>
+        {editing && (
+          <div className="db-banner-controls">
+            <button className={`db-banner-mode-btn${bannerMode === 'color' ? ' active' : ''}`} onClick={() => setBannerMode('color')}>🎨 Колір</button>
+            <button className={`db-banner-mode-btn${bannerMode === 'image' ? ' active' : ''}`} onClick={() => setBannerMode('image')}>🖼 Фото</button>
+            {user.banner_url && (
+              <button className="db-banner-mode-btn db-banner-del-btn" onClick={handleDeleteBanner} title="Видалити банер">❌ Видалити</button>
+            )}
+          </div>
+        )}
+        {editing && bannerMode === 'color' && (
+          <div className="db-color-presets">
+            {BANNER_PRESETS.map(c => (
+              <button key={c} className={`db-color-dot${form.banner_color === c ? ' selected' : ''}`}
+                style={{ background: c }} onClick={() => setForm(f => ({ ...f, banner_color: c }))} />
+            ))}
+            <input type="color" value={form.banner_color} onChange={e => setForm(f => ({ ...f, banner_color: e.target.value }))}
+              className="db-color-custom" title="Свій колір" />
+          </div>
+        )}
+        {editing && bannerMode === 'image' && (
+          <button className="db-banner-upload-btn" onClick={() => bannerInputRef.current?.click()}>
+            📤 Завантажити фото (до 10 МБ)
+          </button>
+        )}
+        <input ref={bannerInputRef} type="file" accept="image/*" style={{ display:'none' }} onChange={handleBannerPick} />
+      </div>
+
+      {/* Avatar row */}
+      <div className="db-profile-avatar-row">
+        <div className="db-profile-avatar-wrap">
+          <UserAvatar user={user} size={88} />
+          {editing && (
+            <button className="db-avatar-edit-btn" onClick={() => avatarInputRef.current?.click()} title="Змінити аватар">📷</button>
+          )}
+          <input ref={avatarInputRef} type="file" accept="image/*" style={{ display:'none' }} onChange={handleAvatarPick} />
+        </div>
+        <div className="db-profile-headings">
+          <h2>{user.username || user.email}</h2>
+          <div className="db-profile-chips">
+            <span className="db-role-badge">{user.role === 'admin' ? '⚙ Адмін' : '👤 Учасник'}</span>
+            <span className="db-chip">🏆 Команд: {myTeams.length}</span>
+            <span className="db-chip">📅 З {formatDate(user.created_at)}</span>
+          </div>
+        </div>
+        <div className="db-profile-actions">
+          {!editing ? (
+            <button className="db-btn db-btn-primary" onClick={() => setEditing(true)}>Редагувати</button>
+          ) : (
+            <>
+              <button className="db-btn db-btn-ghost" onClick={() => setEditing(false)} disabled={saving}>Скасувати</button>
+              <button className="db-btn db-btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Збереження...' : 'Зберегти'}</button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Fields */}
+      <div className="db-profile-cards">
+        {/* Info card */}
+        <div className="db-info-card">
+          <h3>Особиста інформація</h3>
+          {editing ? (
+            <>
+              <div className="db-field-row">
+                <label>Нікнейм
+                  {!canChangeUsername() && <span className="db-field-hint"> (через {daysUntilChange()} дн.)</span>}
+                </label>
+                <input className="db-field-input" value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
+                  disabled={!canChangeUsername()} placeholder="Ваш нікнейм" />
+              </div>
+              <div className="db-field-row">
+                <label>Про себе</label>
+                <textarea className="db-field-input" rows={3} value={form.user_description}
+                  onChange={e => setForm(f => ({ ...f, user_description: e.target.value }))}
+                  placeholder="Розкажіть про себе..." />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="db-field-row"><label>Нікнейм</label><span>{user.username || '—'}</span></div>
+              <div className="db-field-row"><label>Email</label><span>{user.email}</span></div>
+              <div className="db-field-row"><label>Про себе</label><span>{user.user_description || '—'}</span></div>
+              <div className="db-field-row"><label>Реєстрація</label><span>{formatDate(user.created_at)}</span></div>
+            </>
+          )}
+        </div>
+
+        {/* Teams card */}
+        <div className="db-info-card">
+          <h3>Мої команди</h3>
+          {myTeams.length === 0 ? <p style={{ color:'#aaa', fontSize:14 }}>Ще немає команд</p>
+            : myTeams.slice(0,5).map(t => (
+              <div key={t.id} className="db-field-row">
+                <label>{t.tournament_name}</label>
+                <span style={{ display:'flex', alignItems:'center', gap:8 }}>{t.name} <StatusBadge status={t.tournament_status} /></span>
+              </div>
+            ))}
+        </div>
+
+        {/* Security card */}
+        <div className="db-info-card">
+          <h3>Безпека</h3>
+          <div className="db-field-row"><label>Статус</label><span style={{ color:'#16a34a', fontWeight:600 }}>● Активний</span></div>
+          <div className="db-field-row"><label>Пароль</label><span>••••••••</span></div>
+          <button className="db-btn db-btn-danger db-btn-full" style={{ marginTop:20 }} onClick={onLogout}>Вийти з акаунту</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════
+   TAB: ADMIN
+══════════════════════════════════════════════════ */
+function TabAdmin({ toast }) {
+  const [adminTab,    setAdminTab]    = useState('tournaments'); // 'tournaments'|'users'|'teams'|'chat'
+  const [tournaments, setTournaments] = useState([]);
+  const [users,       setUsers]       = useState([]);
+  const [adminTeams,  setAdminTeams]  = useState([]);
+  const [stats,       setStats]       = useState(null);
+  const [loading,     setLoading]     = useState(true);
+  const [showCreate,     setShowCreate]     = useState(false);
+  const [roleLoading,    setRoleLoading]    = useState(null);
+  const [manageUser,     setManageUser]     = useState(null);  // user to manage in modal
+  const [filterTour,     setFilterTour]     = useState('');    // for teams filter
+  const [editTournament, setEditTournament] = useState(null);  // tournament to edit
+  const [confirmModal,   setConfirmModal]   = useState(null);  // { message, onConfirm }
+
+  // Chat management state
+  const [customRooms,   setCustomRooms]   = useState([]);
+  const [newRoomName,   setNewRoomName]   = useState('');
+  const [newRoomLabel,  setNewRoomLabel]  = useState('');
+  const [roomSettings,  setRoomSettings]  = useState({}); // { [roomId]: { locked, time_from, time_to } }
+  const [announceRoom,  setAnnounceRoom]  = useState('general');
+  const [announceText,  setAnnounceText]  = useState('');
+  const [settingsRoom,  setSettingsRoom]  = useState('general');
+  const [savingSettings,setSavingSettings]= useState(false);
+  const [creatingRoom,  setCreatingRoom]  = useState(false);
+
+  const ALL_CHAT_ROOMS = useMemo(() => [
+    { id: 'general', label: '# загальний' },
+    { id: 'tournaments', label: '# турніри' },
+    { id: 'offtopic', label: '# офф-топік' },
+    ...customRooms.map(r => ({ id: r.name, label: `# ${r.label}`, customId: r.id })),
+  ], [customRooms]);
+
+  const loadChatData = useCallback(async () => {
+    try {
+      const rooms = await getCustomChatRooms();
+      setCustomRooms(rooms);
+    } catch {}
+  }, []);
+
+  const loadRoomSettings = useCallback(async room => {
+    try {
+      const s = await getChatRoomSettings(room);
+      setRoomSettings(prev => ({ ...prev, [room]: s }));
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (adminTab === 'chat') loadChatData();
+  }, [adminTab, loadChatData]);
+
+  useEffect(() => {
+    if (adminTab === 'chat') loadRoomSettings(settingsRoom);
+  }, [adminTab, settingsRoom, loadRoomSettings]);
+
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [t, u, s] = await Promise.all([getTournaments(), getAdminUsers(), getAdminStats()]);
+      setTournaments(t); setUsers(u); setStats(s);
+    } catch { toast.error('Помилка завантаження'); }
+    finally { setLoading(false); }
+  }, [toast]);
+
+  const loadTeams = useCallback(async () => {
+    try { setAdminTeams(await getAdminTeams()); } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (adminTab === 'teams') loadTeams();
+  }, [adminTab, loadTeams]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { setTournaments(await getTournaments()); } catch { toast.error('Помилка'); } finally { setLoading(false); }
+  }, [toast]);
+
+  useEffect(() => { loadAll(); }, [loadAll]);
+
+  const confirmAction = (message, onConfirm) => setConfirmModal({ message, onConfirm });
+
+  const handleStatus = async (id, status) => {
+    try { await updateTournamentStatus(id, status); toast.success('Статус оновлено'); load(); }
+    catch (err) { toast.error(err.message); }
+  };
+  const handleDelete = async (id, name) => {
+    confirmAction(`Видалити турнір "${name}"?`, async () => {
+      try { await deleteTournament(id); toast.success('Видалено'); load(); }
+      catch (err) { toast.error(err.message); }
+    });
+  };
+
+  const handleRoleChange = async (uid, role) => {
+    setRoleLoading(uid);
+    try {
+      await setUserRole(uid, role);
+      setUsers(prev => prev.map(u => u.id === uid ? { ...u, role } : u));
+      toast.success('Роль змінено');
+    } catch (err) { toast.error(err.message); }
+    finally { setRoleLoading(null); }
+  };
+
+  const handleDeleteUser = async (uid, uname) => {
+    confirmAction(`Видалити користувача "${uname}"? Цю дію не можна скасувати.`, async () => {
+      try {
+        await deleteAdminUser(uid);
+        setUsers(prev => prev.filter(u => u.id !== uid));
+        setManageUser(null);
+        toast.success('Користувача видалено');
+      } catch (err) { toast.error(err.message); }
+    });
+  };
+
+  const handleDeleteAdminTeam = async (id, name) => {
+    confirmAction(`Видалити команду "${name}"?`, async () => {
+      try {
+        await adminDeleteTeam(id);
+        setAdminTeams(prev => prev.filter(t => t.id !== id));
+        toast.success('Команду видалено');
+      } catch (err) { toast.error(err.message); }
+    });
+  };
+
+  const handleClearChat = async room => {
+    confirmAction(`Очистити чат «${room}»?`, async () => {
+      try { await clearChatRoom(room); toast.success('Чат очищено'); }
+      catch (err) { toast.error(err.message); }
+    });
+  };
+
+  const handleCreateRoom = async e => {
+    e.preventDefault();
+    if (!newRoomName.trim() || !newRoomLabel.trim()) return;
+    setCreatingRoom(true);
+    try {
+      const created = await createChatRoom(newRoomName.trim(), newRoomLabel.trim());
+      setCustomRooms(prev => [...prev, created]);
+      setNewRoomName(''); setNewRoomLabel('');
+      toast.success(`Кімнату «${created.label}» створено`);
+    } catch (err) { toast.error(err.message); }
+    finally { setCreatingRoom(false); }
+  };
+
+  const handleDeleteRoom = async (id, label) => {
+    confirmAction(`Видалити кімнату «${label}»?`, async () => {
+      try {
+        await deleteChatRoom(id);
+        setCustomRooms(prev => prev.filter(r => r.id !== id));
+        toast.success('Кімнату видалено');
+      } catch (err) { toast.error(err.message); }
+    });
+  };
+
+  const handleSaveSettings = async e => {
+    e.preventDefault();
+    setSavingSettings(true);
+    const cur = roomSettings[settingsRoom] || {};
+    try {
+      await setChatRoomSettings(settingsRoom, {
+        locked: cur.locked || false,
+        time_from: cur.time_from || null,
+        time_to:   cur.time_to   || null,
+      });
+      toast.success('Налаштування збережено');
+    } catch (err) { toast.error(err.message); }
+    finally { setSavingSettings(false); }
+  };
+
+  const handleSendAnnouncement = async e => {
+    e.preventDefault();
+    if (!announceText.trim()) return;
+    try {
+      await postChatAnnouncement(announceRoom, announceText.trim());
+      setAnnounceText('');
+      toast.success('Оголошення надіслано');
+    } catch (err) { toast.error(err.message); }
+  };
+
+  const curSettings = roomSettings[settingsRoom] || { locked: false, time_from: '', time_to: '' };
+  const updSetting = (k, v) => setRoomSettings(prev => ({
+    ...prev,
+    [settingsRoom]: { ...(prev[settingsRoom] || {}), [k]: v },
+  }));
+
+  const adminStats = stats
+    ? [
+        { label: 'Користувачів', value: stats.users,       color: '#AC9EF8' },
+        { label: 'Команд',       value: stats.teams,        color: '#7c5ff5' },
+        { label: 'Турнірів',     value: stats.tournaments,  color: '#4ade80' },
+        { label: 'Повідомлень',  value: stats.messages,     color: '#0ea5e9' },
+        { label: 'Заблоковано',  value: stats.banned,       color: '#f87171' },
+      ]
+    : [];
+
+  const STATUS_OPTIONS = ['draft','registration','running','finished'];
+  const ROLE_OPTIONS = [
+    { value: 'user',    label: '👤 Учасник' },
+    { value: 'admin',   label: '⚙ Адмін' },
+    { value: 'banned',  label: '🚫 Бан' },
+  ];
+
+  return (
+    <div className="db-tab">
+      <div className="db-tab-header">
+        <h1>Адмін панель</h1>
+        {adminTab === 'tournaments' && (
+          <button className="db-btn db-btn-primary" onClick={() => setShowCreate(p => !p)}>
+            {showCreate ? '✕ Скасувати' : '+ Новий турнір'}
+          </button>
+        )}
+      </div>
+
+      {/* Stats row */}
+      {adminStats.length > 0 && (
+        <div className="db-admin-stats">
+          {adminStats.map(s => (
+            <div key={s.label} className="db-admin-stat" style={{ '--c': s.color }}>
+              <span className="db-admin-stat-val">{s.value}</span>
+              <span className="db-admin-stat-label">{s.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Admin sub-tabs */}
+      <div className="db-admin-tabs">
+        {[['tournaments','🏆 Турніри'], ['users','👥 Користувачі'], ['teams','👫 Команди'], ['chat','💬 Чат']].map(([id, lbl]) => (
+          <button key={id} className={`db-admin-tab-btn${adminTab === id ? ' active' : ''}`} onClick={() => setAdminTab(id)}>{lbl}</button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="db-team-list">{[1,2,3].map(i => <div key={i} className="db-card-skeleton" style={{ height: 56 }} />)}</div>
+      ) : (
+        <>
+          {/* ─── TOURNAMENTS ─── */}
+          {adminTab === 'tournaments' && (
+            <>
+              {showCreate && (
+                <CreateTournamentForm toast={toast}
+                  onSuccess={() => { setShowCreate(false); load(); loadAll(); toast.success('Турнір створено!'); }}
+                  onCancel={() => setShowCreate(false)} />
+              )}
+              <div className="db-admin-table-wrap">
+                <table className="db-admin-table">
+                  <thead><tr><th>Назва</th><th>Статус</th><th>Команд</th><th>Реєстрація</th><th>Змінити статус</th><th></th></tr></thead>
+                  <tbody>
+                    {tournaments.map(t => (
+                      <tr key={t.id}>
+                        <td><strong>{t.name}</strong></td>
+                        <td><StatusBadge status={t.status} /></td>
+                        <td>{t.teams_count || 0}{t.teams_limit ? `/${t.teams_limit}` : ''}</td>
+                        <td style={{ fontSize: 13 }}>{formatDate(t.registration_start)} – {formatDate(t.registration_end)}</td>
+                        <td>
+                          <select className="db-select db-select-sm" value={t.status} onChange={e => handleStatus(t.id, e.target.value)}>
+                            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{STATUS_LABEL[s]?.label || s}</option>)}
+                          </select>
+                        </td>
+                        <td style={{ display:'flex', gap:6 }}>
+                          <button className="db-btn db-btn-ghost db-btn-sm" onClick={() => setEditTournament(t)}>✏ Редагувати</button>
+                          <button className="db-btn db-btn-danger db-btn-sm" onClick={() => handleDelete(t.id, t.name)}>Видалити</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          {/* ─── USERS ─── */}
+          {adminTab === 'users' && (
+            <div className="db-admin-table-wrap">
+              <table className="db-admin-table">
+                <thead><tr><th>#</th><th>Нікнейм</th><th>Email</th><th>Ролі</th><th>Реєстрація</th><th></th></tr></thead>
+                <tbody>
+                  {users.map(u => (
+                    <tr key={u.id} className={u.role?.includes('banned') ? 'row-banned' : ''}>
+                      <td style={{ color: '#bbb', fontSize: 12 }}>{u.id}</td>
+                      <td><strong>{u.username}</strong></td>
+                      <td style={{ fontSize: 13, color: '#888' }}>{u.email}</td>
+                      <td><RoleBadges role={u.role} /></td>
+                      <td style={{ fontSize: 13 }}>{formatDate(u.created_at)}</td>
+                      <td>
+                        <button className="db-btn db-btn-ghost db-btn-sm" onClick={() => setManageUser(u)}>
+                          Керувати користувачем
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* ─── TEAMS ─── */}
+          {adminTab === 'teams' && (
+            <div className="db-admin-table-wrap">
+              <div style={{ marginBottom: 12, display: 'flex', gap: 10, alignItems: 'center' }}>
+                <label style={{ fontSize: 13, color: '#666' }}>Турнір:</label>
+                <select className="db-select db-select-sm" value={filterTour} onChange={e => setFilterTour(e.target.value)}>
+                  <option value="">— Усі —</option>
+                  {[...new Map(adminTeams.map(t => [t.tournament_id, t.tournament_name])).entries()].map(([id, name]) => (
+                    <option key={id} value={id}>{name}</option>
+                  ))}
+                </select>
+              </div>
+              <table className="db-admin-table">
+                <thead><tr><th>#</th><th>Команда</th><th>Турнір</th><th>Капітан</th><th>Учасників</th><th>Статус</th><th></th></tr></thead>
+                <tbody>
+                  {adminTeams
+                    .filter(t => !filterTour || String(t.tournament_id) === String(filterTour))
+                    .map(t => (
+                      <tr key={t.id}>
+                        <td style={{ color: '#bbb', fontSize: 12 }}>{t.id}</td>
+                        <td><strong>{t.name}</strong></td>
+                        <td style={{ fontSize: 13 }}>{t.tournament_name}</td>
+                        <td style={{ fontSize: 13, color: '#666' }}>{t.captain_name}</td>
+                        <td>{t.members_count}</td>
+                        <td><StatusBadge status={t.tournament_status} /></td>
+                        <td>
+                          <button className="db-btn db-btn-danger db-btn-sm" onClick={() => handleDeleteAdminTeam(t.id, t.name)}>
+                            🗑 Видалити
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  }
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* ─── CHAT ─── */}
+          {adminTab === 'chat' && (
+            <div className="db-admin-chat-grid">
+
+              {/* Section: All rooms + clear */}
+              <div className="db-admin-card">
+                <h3>Кімнати чату</h3>
+                <p className="db-admin-hint">Системні та кастомні кімнати. Натисніть «Очистити» щоб видалити всі повідомлення.</p>
+                <div className="db-admin-chat-rooms">
+                  {ALL_CHAT_ROOMS.map(r => (
+                    <div key={r.id} className="db-admin-chat-room-row">
+                      <span className="db-admin-chat-room-label">{r.label}</span>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {r.customId && (
+                          <button className="db-btn db-btn-ghost db-btn-sm"
+                            onClick={() => handleDeleteRoom(r.customId, r.label)}>🗑 Видалити</button>
+                        )}
+                        <button className="db-btn db-btn-danger db-btn-sm" onClick={() => handleClearChat(r.id)}>
+                          🧹 Очистити
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <form className="db-admin-new-room" onSubmit={handleCreateRoom}>
+                  <h4>+ Нова кімната</h4>
+                  <div className="db-form-row-2">
+                    <div className="db-form-row">
+                      <label>Ідентифікатор (латиниця)</label>
+                      <input value={newRoomName} onChange={e => setNewRoomName(e.target.value)}
+                        placeholder="наприклад: design-talk" pattern="[a-z0-9_-]+" />
+                    </div>
+                    <div className="db-form-row">
+                      <label>Назва для відображення</label>
+                      <input value={newRoomLabel} onChange={e => setNewRoomLabel(e.target.value)}
+                        placeholder="Дизайн і UX" />
+                    </div>
+                  </div>
+                  <button type="submit" className="db-btn db-btn-primary" disabled={creatingRoom}>
+                    {creatingRoom ? 'Створення...' : 'Створити кімнату'}
+                  </button>
+                </form>
+              </div>
+
+              {/* Section: Room settings (lock, time) */}
+              <div className="db-admin-card">
+                <h3>Обмеження кімнати</h3>
+                <p className="db-admin-hint">Виберіть кімнату та задайте обмеження. «Заблокувати» — тільки адмін може писати.</p>
+                <div className="db-form-row" style={{ marginBottom: 14 }}>
+                  <label>Кімната</label>
+                  <CustomSelect
+                    value={settingsRoom}
+                    onChange={v => { setSettingsRoom(v); }}
+                    options={ALL_CHAT_ROOMS.map(r => ({ value: r.id, label: r.label }))}
+                  />
+                </div>
+                <form onSubmit={handleSaveSettings} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <label className="db-admin-toggle-row">
+                    <span>🔒 Заблокувати чат (лише адмін може писати)</span>
+                    <button type="button"
+                      className={`db-toggle-btn${curSettings.locked ? ' on' : ''}`}
+                      onClick={() => updSetting('locked', !curSettings.locked)}>
+                      {curSettings.locked ? 'Заблоковано' : 'Увімкнено'}
+                    </button>
+                  </label>
+                  <div className="db-form-row-2">
+                    <div className="db-form-row">
+                      <label>⏰ Писати від (HH:MM)</label>
+                      <input type="time" value={curSettings.time_from || ''}
+                        onChange={e => updSetting('time_from', e.target.value || null)} />
+                    </div>
+                    <div className="db-form-row">
+                      <label>До (HH:MM)</label>
+                      <input type="time" value={curSettings.time_to || ''}
+                        onChange={e => updSetting('time_to', e.target.value || null)} />
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#888' }}>Якщо поля часу порожні — обмеження за часом вимкнено.</div>
+                  <button type="submit" className="db-btn db-btn-primary" style={{ alignSelf: 'flex-start' }}
+                    disabled={savingSettings}>
+                    {savingSettings ? 'Збереження...' : 'Зберегти налаштування'}
+                  </button>
+                </form>
+              </div>
+
+              {/* Section: Announcements */}
+              <div className="db-admin-card">
+                <h3>📣 Оголошення</h3>
+                <p className="db-admin-hint">Повідомлення виглядатиме як системне оголошення в чаті.</p>
+                <form onSubmit={handleSendAnnouncement} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div className="db-form-row">
+                    <label>Кімната</label>
+                    <CustomSelect
+                      value={announceRoom}
+                      onChange={setAnnounceRoom}
+                      options={ALL_CHAT_ROOMS.map(r => ({ value: r.id, label: r.label }))}
+                    />
+                  </div>
+                  <div className="db-form-row">
+                    <label>Текст оголошення</label>
+                    <textarea rows={3} value={announceText} onChange={e => setAnnounceText(e.target.value)}
+                      placeholder="Шановні учасники, повідомляємо що..." />
+                  </div>
+                  <button type="submit" className="db-btn db-btn-primary" style={{ alignSelf: 'flex-start' }}
+                    disabled={!announceText.trim()}>
+                    📣 Надіслати оголошення
+                  </button>
+                </form>
+              </div>
+
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ─── Manage User Modal ─── */}
+      {manageUser && (
+        <ManageUserModal
+          user={manageUser}
+          toast={toast}
+          onClose={() => setManageUser(null)}
+          onRoleChange={(uid, role) => { handleRoleChange(uid, role); setManageUser(u => ({ ...u, role })); }}
+          onDelete={handleDeleteUser}
+        />
+      )}
+      {/* ─── Edit Tournament Modal ─── */}
+      {editTournament && (
+        <EditTournamentModal
+          tournament={editTournament}
+          allTeams={adminTeams}
+          toast={toast}
+          onClose={() => setEditTournament(null)}
+          onSuccess={() => { setEditTournament(null); loadAll(); loadTeams(); toast.success('Турнір оновлено!'); }}
+          onDeleteTeam={handleDeleteAdminTeam}
+        />
+      )}
+      {/* ─── Confirm Dialog ─── */}
+      {confirmModal && (
+        <ConfirmModal
+          message={confirmModal.message}
+          onConfirm={() => { setConfirmModal(null); confirmModal.onConfirm(); }}
+          onCancel={() => setConfirmModal(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ── Confirm Modal ──────────────────────────────────── */
+function ConfirmModal({ message, onConfirm, onCancel }) {
+  useEffect(() => {
+    const fn = e => { if (e.key === 'Escape') onCancel(); };
+    window.addEventListener('keydown', fn);
+    return () => window.removeEventListener('keydown', fn);
+  }, [onCancel]);
+
+  return (
+    <div className="modal-overlay" style={{ zIndex: 9999 }} onClick={onCancel}>
+      <div className="db-confirm-modal" onClick={e => e.stopPropagation()}>
+        <div className="db-confirm-icon">⚠️</div>
+        <p className="db-confirm-message">{message}</p>
+        <div className="db-confirm-actions">
+          <button className="db-btn db-btn-ghost" onClick={onCancel}>Скасувати</button>
+          <button className="db-btn db-btn-danger" onClick={onConfirm}>Підтвердити</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── User Profile Modal (Discord-style) ─────────────── */
+function UserProfileModal({ profile, meId, onClose, onGoOwnProfile }) {
+  useEffect(() => {
+    const fn = e => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', fn);
+    return () => window.removeEventListener('keydown', fn);
+  }, [onClose]);
+
+  const bannerStyle = profile.banner_url
+    ? { backgroundImage: `url(${API_BASE + profile.banner_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+    : { background: profile.banner_color || 'linear-gradient(135deg, #2d1b6e 0%, #191A23 100%)' };
+
+  const isAdmin = profile.role === 'admin';
+
+  return (
+    <div className="modal-overlay db-upm-overlay" style={{ zIndex: 10000 }} onClick={onClose}>
+      <div className="db-upm-card" onClick={e => e.stopPropagation()}>
+        {/* Banner */}
+        <div className="db-upm-banner" style={bannerStyle}>
+          <button className="db-upm-close" onClick={onClose}>✕</button>
+        </div>
+        {/* Body */}
+        <div className="db-upm-body">
+          {/* Avatar */}
+          <div className={`db-upm-avatar${isAdmin ? ' admin' : ''}`}>
+            {profile.user_avatar_url ? (
+              <img src={API_BASE + profile.user_avatar_url} alt={profile.username} className="db-upm-avatar-img" />
+            ) : (
+              <span className="db-upm-avatar-initials">{(profile.username || '?').slice(0, 2).toUpperCase()}</span>
+            )}
+          </div>
+
+          {/* Name row */}
+          <div className="db-upm-name-row">
+            <span className="db-upm-name">{profile.username || 'Anonymous'}</span>
+            {isAdmin && <span className="db-upm-badge admin">⚙ Admin</span>}
+          </div>
+
+          {/* Description */}
+          {profile.user_description && (
+            <p className="db-upm-desc">{profile.user_description}</p>
+          )}
+
+          {/* Meta */}
+          {profile.created_at && (
+            <div className="db-upm-meta">
+              📅 На платформі з {new Date(profile.created_at).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' })}
+            </div>
+          )}
+
+          <div className="db-upm-divider" />
+
+          {/* Actions */}
+          <div className="db-upm-actions">
+            {profile.user_id === meId
+              ? <button className="db-upm-btn primary" onClick={onGoOwnProfile}>✏ Редагувати профіль</button>
+              : <button className="db-upm-btn ghost" onClick={onClose}>Закрити</button>
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Manage User Modal ──────────────────────────────── */
+function ManageUserModal({ user, toast, onClose, onRoleChange, onDelete }) {
+  const [newPassword,  setNewPassword]  = useState('');
+  const [savingPwd,    setSavingPwd]    = useState(false);
+  const [savingRoles,  setSavingRoles]  = useState(false);
+  const [currentRoles, setCurrentRoles] = useState(
+    (user.role || 'user').split(',').map(r => r.trim()).filter(Boolean)
+  );
+
+  const ROLE_OPTIONS_FULL = [
+    { value: 'user',   label: '👤 Учасник' },
+    { value: 'jury',   label: '⚖ Журі' },
+    { value: 'admin',  label: '⚙ Адмін' },
+    { value: 'banned', label: '🚫 Бан', danger: true },
+  ];
+
+  const toggleRole = (r) => {
+    if (r === 'banned') {
+      setCurrentRoles(p => p.includes('banned') ? ['user'] : ['banned']);
+    } else {
+      setCurrentRoles(prev => {
+        const withoutBan = prev.filter(x => x !== 'banned');
+        const next = withoutBan.includes(r) ? withoutBan.filter(x => x !== r) : [...withoutBan, r];
+        return next.length ? next : ['user'];
+      });
+    }
+  };
+
+  const handleSaveRoles = async () => {
+    const roles = [...currentRoles].sort().join(',') || 'user';
+    setSavingRoles(true);
+    try { await onRoleChange(user.id, roles); toast.success('Ролі збережено'); }
+    catch (err) { toast.error(err.message); }
+    finally { setSavingRoles(false); }
+  };
+
+  const handlePasswordSave = async e => {
+    e.preventDefault();
+    if (newPassword.length < 6) { toast.error('Пароль мінімум 6 символів'); return; }
+    setSavingPwd(true);
+    try {
+      await setUserPassword(user.id, newPassword);
+      setNewPassword('');
+      toast.success('Пароль змінено');
+    } catch (err) { toast.error(err.message); }
+    finally { setSavingPwd(false); }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box modal-box--light db-manage-user-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 440, padding: 0, overflow: 'hidden' }}>
+        <div className="db-mu-header">
+          <div className="db-mu-avatar">
+            {(user.username || '?').slice(0,2).toUpperCase()}
+          </div>
+          <div>
+            <div className="db-mu-name">{user.username}</div>
+            <div className="db-mu-email">{user.email}</div>
+          </div>
+          <button className="db-mu-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="db-mu-body">
+          {/* Multi-role */}
+          <div className="db-mu-section">
+            <label className="db-mu-label">Ролі (можна кілька)</label>
+            <div className="db-mu-role-btns">
+              {ROLE_OPTIONS_FULL.map(r => (
+                <button key={r.value}
+                  className={`db-mu-role-btn${currentRoles.includes(r.value) ? ' active' : ''}${r.danger ? ' danger' : ''}`}
+                  onClick={() => toggleRole(r.value)}>
+                  {r.label}
+                </button>
+              ))}
+            </div>
+            <button className="db-btn db-btn-primary db-btn-sm" style={{ marginTop: 10 }}
+              onClick={handleSaveRoles} disabled={savingRoles}>
+              {savingRoles ? '...' : 'Зберегти ролі'}
+            </button>
+          </div>
+          {/* Password */}
+          <div className="db-mu-section">
+            <label className="db-mu-label">Новий пароль</label>
+            <form onSubmit={handlePasswordSave} style={{ display: 'flex', gap: 8 }}>
+              <input className="db-input" type="password" value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+                placeholder="Мінімум 6 символів" style={{ flex: 1 }} />
+              <button type="submit" className="db-btn db-btn-primary db-btn-sm" disabled={savingPwd}>
+                {savingPwd ? '...' : 'Змінити'}
+              </button>
+            </form>
+          </div>
+          {/* Danger zone */}
+          <div className="db-mu-section db-mu-danger">
+            <label className="db-mu-label" style={{ color: '#ef4444' }}>Небезпечна зона</label>
+            <button className="db-btn db-btn-danger db-btn-full" onClick={() => onDelete(user.id, user.username)}>
+              🗑 Видалити акаунт назавжди
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Edit Tournament Modal ──────────────────────────── */
+function EditTournamentModal({ tournament, allTeams, toast, onClose, onSuccess, onDeleteTeam }) {
+  const today = new Date().toISOString().split('T')[0];
+  const [f, setF] = useState({
+    name:               tournament.name               || '',
+    description:        tournament.description        || '',
+    rules:              tournament.rules              || '',
+    start_date:         tournament.start_date         || today,
+    end_date:           tournament.end_date           || '',
+    registration_start: tournament.registration_start || today,
+    registration_end:   tournament.registration_end   || '',
+    teams_limit:        tournament.teams_limit        || '',
+    min_team_size:      tournament.min_team_size      || 2,
+    max_team_size:      tournament.max_team_size      || 5,
+  });
+  const [loading,   setLoading]   = useState(false);
+  const [activeTab, setActiveTab] = useState('info'); // 'info' | 'teams'
+  const [tourTeams, setTourTeams] = useState([]);
+  const [teamsLoading, setTeamsLoading] = useState(false);
+
+  const upd = (k, v) => setF(x => ({ ...x, [k]: v }));
+
+  useEffect(() => {
+    if (activeTab === 'teams') {
+      if (allTeams && allTeams.length > 0) {
+        setTourTeams(allTeams.filter(t => String(t.tournament_id) === String(tournament.id)));
+      } else {
+        setTeamsLoading(true);
+        getAdminTeams()
+          .then(teams => setTourTeams(teams.filter(t => String(t.tournament_id) === String(tournament.id))))
+          .catch(() => {})
+          .finally(() => setTeamsLoading(false));
+      }
+    }
+  }, [activeTab, allTeams, tournament.id]);
+
+  const handleSubmit = async e => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await updateTournament(tournament.id, {
+        ...f,
+        teams_limit:    f.teams_limit  ? Number(f.teams_limit)  : null,
+        min_team_size:  Number(f.min_team_size),
+        max_team_size:  Number(f.max_team_size),
+      });
+      onSuccess();
+    } catch (err) { toast.error(err.message); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="db-et-modal" onClick={e => e.stopPropagation()}>
+        {/* header */}
+        <div className="db-et-header">
+          <div>
+            <div className="db-et-title">{f.name || 'Редагування турніру'}</div>
+            <div className="db-et-subtitle">id #{tournament.id}</div>
+          </div>
+          <button className="db-mu-close" onClick={onClose}>✕</button>
+        </div>
+        {/* sub-tabs */}
+        <div className="db-et-tabs">
+          {[['info','📋 Інформація'], ['teams','👫 Команди']].map(([id, lbl]) => (
+            <button key={id} className={`db-et-tab-btn${activeTab === id ? ' active' : ''}`} onClick={() => setActiveTab(id)}>{lbl}</button>
+          ))}
+        </div>
+        {/* body */}
+        <div className="db-et-body">
+          {activeTab === 'info' && (
+            <form onSubmit={handleSubmit}>
+              <div className="db-form-row"><label>Назва *</label><input className="db-input" value={f.name} onChange={e => upd('name', e.target.value)} required /></div>
+              <div className="db-form-row"><label>Опис</label><textarea className="db-input" rows={2} value={f.description} onChange={e => upd('description', e.target.value)} /></div>
+              <div className="db-form-row"><label>Правила</label><textarea className="db-input" rows={2} value={f.rules} onChange={e => upd('rules', e.target.value)} /></div>
+              <div className="db-form-row-2">
+                <div className="db-form-row"><label>Старт</label><input className="db-input" type="date" value={f.start_date} onChange={e => upd('start_date', e.target.value)} /></div>
+                <div className="db-form-row"><label>Кінець</label><input className="db-input" type="date" value={f.end_date} onChange={e => upd('end_date', e.target.value)} /></div>
+              </div>
+              <div className="db-form-row-2">
+                <div className="db-form-row"><label>Реєстрація від</label><input className="db-input" type="date" value={f.registration_start} onChange={e => upd('registration_start', e.target.value)} /></div>
+                <div className="db-form-row"><label>Реєстрація до</label><input className="db-input" type="date" value={f.registration_end} onChange={e => upd('registration_end', e.target.value)} /></div>
+              </div>
+              <div className="db-form-row-3">
+                <div className="db-form-row"><label>Макс. команд</label><input className="db-input" type="number" min="1" value={f.teams_limit} onChange={e => upd('teams_limit', e.target.value)} placeholder="∞" /></div>
+                <div className="db-form-row"><label>Мін. осіб</label><input className="db-input" type="number" min="1" max="20" value={f.min_team_size} onChange={e => upd('min_team_size', e.target.value)} /></div>
+                <div className="db-form-row"><label>Макс. осіб</label><input className="db-input" type="number" min="1" max="20" value={f.max_team_size} onChange={e => upd('max_team_size', e.target.value)} /></div>
+              </div>
+              <div className="db-form-actions" style={{ marginTop: 16 }}>
+                <button type="button" className="db-btn db-btn-ghost" onClick={onClose}>Скасувати</button>
+                <button type="submit" className="db-btn db-btn-primary" disabled={loading}>{loading ? 'Збереження...' : '💾 Зберегти'}</button>
+              </div>
+            </form>
+          )}
+          {activeTab === 'teams' && (
+            <div>
+              {teamsLoading ? (
+                <div style={{ padding: 24, textAlign: 'center', color: '#aaa' }}>Завантаження...</div>
+              ) : tourTeams.length === 0 ? (
+                <div style={{ padding: 24, textAlign: 'center', color: '#aaa' }}>Немає команд у цьому турнірі</div>
+              ) : (
+                <table className="db-admin-table">
+                  <thead><tr><th>#</th><th>Команда</th><th>Капітан</th><th>Учасників</th><th>Місто</th><th></th></tr></thead>
+                  <tbody>
+                    {tourTeams.map(t => (
+                      <tr key={t.id}>
+                        <td style={{ color: '#bbb', fontSize: 12 }}>{t.id}</td>
+                        <td><strong>{t.name}</strong></td>
+                        <td style={{ fontSize: 13, color: '#666' }}>{t.captain_name}</td>
+                        <td>{t.members_count}</td>
+                        <td style={{ fontSize: 13 }}>{t.city || '—'}</td>
+                        <td>
+                          <button className="db-btn db-btn-danger db-btn-sm" onClick={() => {
+                            onDeleteTeam(t.id, t.name);
+                            setTourTeams(prev => prev.filter(x => x.id !== t.id));
+                          }}>🗑</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CreateTournamentForm({ toast, onSuccess, onCancel }) {
+  const today = new Date().toISOString().split('T')[0];
+  const [f, setF] = useState({ name:'', description:'', rules:'', start_date:today, end_date:'', registration_start:today, registration_end:'', teams_limit:'', rounds_count:1, min_team_size:2, max_team_size:5 });
+  const [loading, setLoading] = useState(false);
+  const upd = (k,v) => setF(x => ({ ...x, [k]: v }));
+  const handleSubmit = async e => {
+    e.preventDefault(); setLoading(true);
+    try {
+      await createTournament({ ...f, teams_limit: f.teams_limit ? Number(f.teams_limit) : null, rounds_count: Number(f.rounds_count), min_team_size: Number(f.min_team_size), max_team_size: Number(f.max_team_size) });
+      onSuccess();
+    } catch (err) { toast.error(err.message); } finally { setLoading(false); }
+  };
+  return (
+    <form className="db-create-form" onSubmit={handleSubmit}>
+      <h3>Новий турнір</h3>
+      <div className="db-form-row"><label>Назва *</label><input value={f.name} onChange={e => upd('name',e.target.value)} required /></div>
+      <div className="db-form-row"><label>Опис</label><textarea rows={2} value={f.description} onChange={e => upd('description',e.target.value)} /></div>
+      <div className="db-form-row"><label>Правила</label><textarea rows={2} value={f.rules} onChange={e => upd('rules',e.target.value)} /></div>
+      <div className="db-form-row-2">
+        <div className="db-form-row"><label>Старт *</label><input type="date" value={f.start_date} onChange={e => upd('start_date',e.target.value)} required /></div>
+        <div className="db-form-row"><label>Кінець *</label><input type="date" value={f.end_date} onChange={e => upd('end_date',e.target.value)} required /></div>
+      </div>
+      <div className="db-form-row-2">
+        <div className="db-form-row"><label>Реєстрація від *</label><input type="date" value={f.registration_start} onChange={e => upd('registration_start',e.target.value)} required /></div>
+        <div className="db-form-row"><label>Реєстрація до *</label><input type="date" value={f.registration_end} onChange={e => upd('registration_end',e.target.value)} required /></div>
+      </div>
+      <div className="db-form-row-3">
+        <div className="db-form-row"><label>Макс. команд</label><input type="number" min="1" value={f.teams_limit} onChange={e => upd('teams_limit',e.target.value)} placeholder="∞" /></div>
+        <div className="db-form-row"><label>Мін. осіб</label><input type="number" min="1" max="20" value={f.min_team_size} onChange={e => upd('min_team_size',e.target.value)} /></div>
+        <div className="db-form-row"><label>Макс. осіб</label><input type="number" min="1" max="20" value={f.max_team_size} onChange={e => upd('max_team_size',e.target.value)} /></div>
+      </div>
+      <div className="db-form-actions">
+        <button type="button" className="db-btn db-btn-ghost" onClick={onCancel}>Скасувати</button>
+        <button type="submit" className="db-btn db-btn-primary" disabled={loading}>{loading ? 'Збереження...' : 'Створити'}</button>
+      </div>
+    </form>
+  );
+}
+
+/* ══════════════════════════════════════════════════
+   TabJury — Перевірка робіт (jury + admin)
+══════════════════════════════════════════════════ */
+const EVAL_CRITERIA = [
+  { key: 'backend',      label: 'Backend / Код',    desc: 'Якість коду, патерни, ООП, тести',   icon: '⚙️', group: 'tech' },
+  { key: 'database',     label: 'База даних',        desc: 'Наявність, структура, налаштування', icon: '🗄️', group: 'tech' },
+  { key: 'frontend',     label: 'Frontend / UX',     desc: 'UI, патерни, відсутність помилок',   icon: '🎨', group: 'tech' },
+  { key: 'requirements', label: 'Вимоги завдання',   desc: 'Виконання must-have критеріїв',      icon: '✅', group: 'func' },
+  { key: 'stability',    label: 'Стабільність',      desc: 'Роботоздатність, відсутність багів', icon: '🛡️', group: 'func' },
+  { key: 'usability',    label: 'Зручність',         desc: 'UX, навігація, зручність роботи',    icon: '👁️', group: 'func' },
+];
+
+function TabJury({ user, toast }) {
+  const [tournaments, setTournaments]     = useState([]);
+  const [loading,     setLoading]         = useState(true);
+  const [expandedT,   setExpandedT]       = useState(null);
+  const [expandedR,   setExpandedR]       = useState(null);
+  const [submissions, setSubmissions]     = useState({});
+  const [loadingR,    setLoadingR]        = useState(null);
+  const [reviewModal, setReviewModal]     = useState(null);
+  const [reviewForm,  setReviewForm]      = useState({ criteria: {}, comment: '' });
+  const [submitting,  setSubmitting]      = useState(false);
+
+  useEffect(() => {
+    getJuryTournaments()
+      .then(setTournaments)
+      .catch(e => toast.error(e.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const toggleT = (id) => { setExpandedT(p => p === id ? null : id); setExpandedR(null); };
+
+  const toggleR = async (roundId) => {
+    if (expandedR === roundId) { setExpandedR(null); return; }
+    setExpandedR(roundId);
+    if (!submissions[roundId]) {
+      setLoadingR(roundId);
+      try { const d = await getJurySubmissions(roundId); setSubmissions(p => ({ ...p, [roundId]: d })); }
+      catch (e) { toast.error(e.message); }
+      finally { setLoadingR(null); }
+    }
+  };
+
+  const openReview = (sub) => {
+    setReviewModal(sub);
+    const criteriaObj = {};
+    if (sub.my_criteria_json) {
+      try { JSON.parse(sub.my_criteria_json).forEach(c => { criteriaObj[c.key] = String(c.score); }); } catch {}
+    }
+    setReviewForm({ criteria: criteriaObj, comment: sub.my_comment ?? '' });
+  };
+
+  const computedTotal = useMemo(() => {
+    const vals = EVAL_CRITERIA.map(c => { const v = parseFloat(reviewForm.criteria[c.key]); return isNaN(v) ? null : v; });
+    const valid = vals.filter(v => v !== null);
+    if (!valid.length) return null;
+    return Math.round(valid.reduce((a, b) => a + b, 0) / EVAL_CRITERIA.length * 10) / 10;
+  }, [reviewForm.criteria]);
+
+  const submitReview = async () => {
+    const entries = EVAL_CRITERIA.map(c => ({ key: c.key, label: c.label, score: Number(reviewForm.criteria[c.key] ?? 0) }));
+    for (const c of entries) {
+      if (isNaN(c.score) || c.score < 0 || c.score > 100) { toast.error(`"${c.label}": оцінка від 0 до 100`); return; }
+    }
+    const total = Math.round(entries.reduce((s, c) => s + c.score, 0) / entries.length * 10) / 10;
+    setSubmitting(true);
+    try {
+      await evaluateSubmission(reviewModal.id, { total_score: total, comment: reviewForm.comment, criteria: entries });
+      toast.success('Оцінку збережено');
+      const cJson = JSON.stringify(entries);
+      const wasNew = !reviewModal.my_evaluation_id;
+      setSubmissions(prev => {
+        const u = { ...prev };
+        for (const rId of Object.keys(u)) {
+          u[rId] = u[rId].map(s =>
+            s.id === reviewModal.id ? { ...s, my_score: total, my_comment: reviewForm.comment, my_criteria_json: cJson, my_evaluation_id: s.my_evaluation_id || 1 } : s
+          );
+        }
+        return u;
+      });
+      if (wasNew) {
+        setTournaments(prev => prev.map(t => ({
+          ...t,
+          rounds: t.rounds.map(r => {
+            if ((submissions[r.id] || []).find(s => s.id === reviewModal.id)) return { ...r, my_eval_count: r.my_eval_count + 1 };
+            return r;
+          }),
+        })));
+      }
+      setReviewModal(null);
+    } catch (e) { toast.error(e.message); }
+    finally { setSubmitting(false); }
+  };
+
+  const setCrit = (key, val) => setReviewForm(p => ({ ...p, criteria: { ...p.criteria, [key]: val } }));
+
+  if (loading) return <div className="db-loading"><div className="db-spinner" /></div>;
+
+  const techCrit = EVAL_CRITERIA.filter(c => c.group === 'tech');
+  const funcCrit = EVAL_CRITERIA.filter(c => c.group === 'func');
+  const allSubs  = tournaments.reduce((s, t) => s + t.rounds.reduce((rs, r) => rs + r.submission_count, 0), 0);
+  const allEvals = tournaments.reduce((s, t) => s + t.rounds.reduce((rs, r) => rs + r.my_eval_count, 0), 0);
+
+  return (
+    <div className="db-jury-wrap">
+      {/* Hero header */}
+      <div className="db-jury-hero">
+        <div className="db-jury-hero-icon">⚖️</div>
+        <div className="db-jury-hero-text">
+          <h2 className="db-jury-hero-title">Перевірка робіт</h2>
+          <p className="db-jury-hero-sub">Оцінюйте роботи команд по 6 критеріях ТЗ</p>
+        </div>
+        <div className="db-jury-hero-stats">
+          <div className="db-jury-hstat"><span className="db-jury-hstat-val">{tournaments.length}</span><span className="db-jury-hstat-lbl">Турніри</span></div>
+          <div className="db-jury-hstat"><span className="db-jury-hstat-val">{allSubs}</span><span className="db-jury-hstat-lbl">Роботи</span></div>
+          <div className="db-jury-hstat"><span className="db-jury-hstat-val">{allEvals}</span><span className="db-jury-hstat-lbl">Оцінено</span></div>
+        </div>
+      </div>
+
+      {tournaments.length === 0 && (
+        <div className="db-jury-empty">
+          <div style={{ fontSize: 48, marginBottom: 12 }}>📭</div>
+          Наразі немає турнірів з поданими роботами
+        </div>
+      )}
+
+      <div className="db-jury-list">
+        {tournaments.map(t => {
+          const tSubs  = t.rounds.reduce((s, r) => s + r.submission_count, 0);
+          const tEvals = t.rounds.reduce((s, r) => s + r.my_eval_count, 0);
+          const tPct   = tSubs ? Math.round(tEvals / tSubs * 100) : 0;
+          return (
+            <div key={t.id} className={`db-jury-tournament${expandedT === t.id ? ' expanded' : ''}`}>
+              <button className="db-jury-t-btn" onClick={() => toggleT(t.id)}>
+                <div className="db-jury-t-icon">🏆</div>
+                <div className="db-jury-t-info">
+                  <div className="db-jury-t-name">{t.name}</div>
+                  <div className="db-jury-t-meta">
+                    <StatusBadge status={t.status} />
+                    <span className="db-jury-t-counts">{t.round_count} раунд{t.round_count === 1 ? '' : 'и'} · {t.team_count} команд{tSubs > 0 ? ` · ${tEvals}/${tSubs} оцінено` : ''}</span>
+                  </div>
+                </div>
+                {tSubs > 0 && (
+                  <div className="db-jury-t-prog">
+                    <div className="db-jury-progbar"><div className="db-jury-progbar-fill" style={{ width: `${tPct}%` }} /></div>
+                    <span className="db-jury-prog-pct">{tPct}%</span>
+                  </div>
+                )}
+                <span className={`db-jury-chevron${expandedT === t.id ? ' open' : ''}`}>▼</span>
+              </button>
+
+              {expandedT === t.id && (
+                <div className="db-jury-rounds">
+                  {t.rounds.length === 0 && <div className="db-jury-no-rounds">Раундів ще немає</div>}
+                  {t.rounds.map(r => {
+                    const rList  = submissions[r.id];
+                    const rSubs  = rList ? rList.length : r.submission_count;
+                    const rEvals = rList ? rList.filter(s => s.my_evaluation_id).length : r.my_eval_count;
+                    const rPct   = rSubs ? Math.round(rEvals / rSubs * 100) : 0;
+                    return (
+                      <div key={r.id} className={`db-jury-round${expandedR === r.id ? ' expanded' : ''}`}>
+                        <button className="db-jury-r-btn" onClick={() => toggleR(r.id)}>
+                          <div className="db-jury-r-info">
+                            <div className="db-jury-r-name">{r.title}</div>
+                            <div className="db-jury-r-sub">{rSubs > 0 ? `${rEvals} з ${rSubs} оцінено` : 'Немає поданих робіт'}</div>
+                          </div>
+                          {rSubs > 0 && (
+                            <div className="db-jury-r-progwrap">
+                              <div className="db-jury-progbar sm"><div className="db-jury-progbar-fill" style={{ width: `${rPct}%` }} /></div>
+                            </div>
+                          )}
+                          <span className={`db-jury-r-badge${rEvals === rSubs && rSubs > 0 ? ' done' : ''}`}>
+                            {rEvals === rSubs && rSubs > 0 ? '✓' : rSubs}
+                          </span>
+                          <span className={`db-jury-chevron${expandedR === r.id ? ' open' : ''}`}>▼</span>
+                        </button>
+
+                        {expandedR === r.id && (
+                          <div className="db-jury-submissions">
+                            {loadingR === r.id && <div className="db-jury-loading"><div className="db-spinner sm" /></div>}
+                            {!loadingR && (submissions[r.id] || []).length === 0 && <div className="db-jury-no-subs">Поданих робіт немає</div>}
+                            {(submissions[r.id] || []).map(sub => {
+                              let criteriaArr = [];
+                              try { if (sub.my_criteria_json) criteriaArr = JSON.parse(sub.my_criteria_json); } catch {}
+                              return (
+                                <div key={sub.id} className={`db-jury-sub-card${sub.my_evaluation_id ? ' reviewed' : ''}`}>
+                                  <div className="db-jury-sub-top">
+                                    <div>
+                                      <div className="db-jury-sub-name">{sub.team_name}</div>
+                                      <div className="db-jury-sub-tags">
+                                        {sub.city && <span className="db-jury-tag">{sub.city}</span>}
+                                        {sub.school && <span className="db-jury-tag">{sub.school}</span>}
+                                      </div>
+                                    </div>
+                                    {sub.my_evaluation_id && (
+                                      <div className="db-jury-score-pill">
+                                        <span className="db-jury-score-num">{sub.my_score}</span>
+                                        <span className="db-jury-score-max">/100</span>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="db-jury-sub-links">
+                                    {sub.github_url && <a href={sub.github_url} target="_blank" rel="noreferrer" className="db-jury-sub-link link-gh">
+                                      <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.942.359.31.678.921.678 1.856 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2z"/></svg>
+                                      GitHub
+                                    </a>}
+                                    {sub.video_url && <a href={sub.video_url} target="_blank" rel="noreferrer" className="db-jury-sub-link link-vid">
+                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                      Відео
+                                    </a>}
+                                    {sub.live_demo_url && <a href={sub.live_demo_url} target="_blank" rel="noreferrer" className="db-jury-sub-link link-demo">
+                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                                      Демо
+                                    </a>}
+                                  </div>
+
+                                  {sub.description && <p className="db-jury-sub-desc">{sub.description}</p>}
+
+                                  {criteriaArr.length > 0 && (
+                                    <div className="db-jury-criteria-mini">
+                                      {criteriaArr.map(c => (
+                                        <div key={c.key} className="db-jury-cm-item">
+                                          <span className="db-jury-cm-score">{c.score}</span>
+                                          <span className="db-jury-cm-label">{c.label}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {sub.my_comment && <p className="db-jury-sub-comment">💬 {sub.my_comment}</p>}
+
+                                  <div className="db-jury-sub-foot">
+                                    <button className="db-jury-eval-btn" onClick={() => openReview(sub)}>
+                                      {sub.my_evaluation_id ? '✏ Змінити оцінку' : '⚖ Оцінити роботу'}
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Review modal */}
+      {reviewModal && createPortal(
+        <div className="db-jury-modal-overlay" onClick={() => setReviewModal(null)}>
+          <div className="db-jury-modal" onClick={e => e.stopPropagation()}>
+            <div className="db-jury-modal-head">
+              <div>
+                <h3 className="db-jury-modal-title">Оцінка роботи</h3>
+                <p className="db-jury-modal-team">{reviewModal.team_name}{reviewModal.city ? ` · ${reviewModal.city}` : ''}</p>
+              </div>
+              <button className="db-jury-modal-x" onClick={() => setReviewModal(null)}>✕</button>
+            </div>
+
+            <div className="db-jury-modal-body">
+              <div className="db-jury-modal-links">
+                {reviewModal.github_url     && <a href={reviewModal.github_url}     target="_blank" rel="noreferrer">🔗 GitHub</a>}
+                {reviewModal.video_url      && <a href={reviewModal.video_url}      target="_blank" rel="noreferrer">▶ Відео</a>}
+                {reviewModal.live_demo_url  && <a href={reviewModal.live_demo_url}  target="_blank" rel="noreferrer">🌐 Демо</a>}
+              </div>
+
+              {reviewModal.description && <p className="db-jury-modal-desc">{reviewModal.description}</p>}
+
+              <div className="db-jury-cgroup">
+                <div className="db-jury-cgroup-label">🔧 Технічна частина</div>
+                {techCrit.map(c => (
+                  <div key={c.key} className="db-jury-crow">
+                    <span className="db-jury-cicon">{c.icon}</span>
+                    <div className="db-jury-cinfo">
+                      <div className="db-jury-cname">{c.label}</div>
+                      <div className="db-jury-cdesc">{c.desc}</div>
+                    </div>
+                    <div className="db-jury-cscore">
+                      <input type="number" min="0" max="100" className="db-jury-cinput"
+                        value={reviewForm.criteria[c.key] ?? ''}
+                        onChange={e => setCrit(c.key, e.target.value)} placeholder="0" />
+                      <span className="db-jury-cmax">/100</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="db-jury-cgroup">
+                <div className="db-jury-cgroup-label">⚡ Функціональність</div>
+                {funcCrit.map(c => (
+                  <div key={c.key} className="db-jury-crow">
+                    <span className="db-jury-cicon">{c.icon}</span>
+                    <div className="db-jury-cinfo">
+                      <div className="db-jury-cname">{c.label}</div>
+                      <div className="db-jury-cdesc">{c.desc}</div>
+                    </div>
+                    <div className="db-jury-cscore">
+                      <input type="number" min="0" max="100" className="db-jury-cinput"
+                        value={reviewForm.criteria[c.key] ?? ''}
+                        onChange={e => setCrit(c.key, e.target.value)} placeholder="0" />
+                      <span className="db-jury-cmax">/100</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="db-jury-total-row">
+                <span className="db-jury-total-lbl">Підсумковий бал (середнє)</span>
+                <span className="db-jury-total-val">{computedTotal !== null ? computedTotal : '—'}</span>
+              </div>
+
+              <div>
+                <label className="db-jury-comment-lbl">Коментар (необов'язково)</label>
+                <textarea className="db-jury-comment-ta" rows={3}
+                  value={reviewForm.comment}
+                  onChange={e => setReviewForm(p => ({ ...p, comment: e.target.value }))}
+                  placeholder="Ваш відгук про роботу команди..." />
+              </div>
+            </div>
+
+            <div className="db-jury-modal-foot">
+              <button className="db-btn db-btn-ghost" onClick={() => setReviewModal(null)}>Скасувати</button>
+              <button className="db-btn db-btn-primary" onClick={submitReview} disabled={submitting}>
+                {submitting ? 'Збереження...' : 'Зберегти оцінку'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}

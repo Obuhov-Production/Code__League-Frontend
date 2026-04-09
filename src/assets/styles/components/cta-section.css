@@ -1,0 +1,163 @@
+/* =============================================
+   CTA Section Styles
+   Component: App.jsx - CTA block
+   ============================================= */
+
+.cta-section {
+    padding: 48px 0;
+}
+
+.cta-section .container {
+    height: 380px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: var(--color_light);
+    border-radius: 25px;
+    padding: 50px 50px;
+    gap: 32px;
+    overflow: visible;
+    position: relative;
+}
+
+/* === Content (left side) === */
+.cta-section_content {
+    flex: 1;
+    max-width: 550px;
+}
+
+.cta-section_title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--color_dark);
+    margin-bottom: 20px;
+    line-height: 1.2;
+}
+
+.cta-section_description {
+    font-family: 'Poppins', sans-serif;
+    font-size: 16px;
+    font-weight: 400;
+    color: var(--color_dark);
+    line-height: 1.7;
+    margin-bottom: 32px;
+    opacity: 0.85;
+}
+
+.cta-section_button {
+    font-family: 'Poppins', sans-serif;
+    font-size: 16px;
+    font-weight: 500;
+    color: white;
+    background-color: var(--color_dark);
+    border: none;
+    border-radius: 14px;
+    padding: 16px 36px;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.15s ease;
+}
+
+.cta-section_button:hover {
+    background-color: #2a2b38;
+}
+
+.cta-section_button:active {
+    transform: scale(0.97);
+}
+
+/* === Image (right side, overflows container) === */
+.cta-section_image {
+    flex-shrink: 0;
+    max-width: 45%;
+    height: auto;
+    object-fit: contain;
+    user-select: none;
+    -webkit-user-drag: none;
+    pointer-events: none;
+    transform: rotate(15deg);
+    margin-top: -64px;
+    margin-bottom: -32px;
+    margin-right: -24px;
+}
+
+/* === Responsive === */
+@media (max-width: 768px) {
+    .cta-section .container {
+        flex-direction: column-reverse;
+        padding: 40px 32px;
+        border-radius: 24px;
+        text-align: center;
+    }
+
+    .cta-section_content {
+        max-width: 100%;
+    }
+
+    .cta-section_image {
+        max-width: 70%;
+    }
+
+    .cta-section_title {
+        font-size: 24px;
+    }
+
+    .cta-decor {
+        display: none;
+    }
+}
+
+/* === CTA Decorative Elements === */
+.cta-decor {
+    position: absolute;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.cta-decor--dots {
+    width: 80px;
+    height: 80px;
+    bottom: 20px;
+    left: 40px;
+    background-image: radial-gradient(circle, var(--main_color) 2px, transparent 2px);
+    background-size: 16px 16px;
+    opacity: 0.25;
+    animation: ctaDotsFloat 7s ease-in-out infinite;
+}
+
+.cta-decor--circle {
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(172, 158, 248, 0.12) 0%, transparent 70%);
+    top: -60px;
+    right: 35%;
+    animation: ctaCircleFloat 9s ease-in-out infinite;
+}
+
+.cta-decor--ring {
+    width: 60px;
+    height: 60px;
+    border: 2px solid var(--main_color);
+    border-radius: 50%;
+    opacity: 0.15;
+    bottom: 30px;
+    right: 25%;
+    animation: ctaRingSpin 12s linear infinite;
+}
+
+@keyframes ctaDotsFloat {
+    0%, 100% { transform: translate(0, 0); }
+    50% { transform: translate(8px, -10px); }
+}
+
+@keyframes ctaCircleFloat {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(-12px, 15px) scale(1.08); }
+}
+
+@keyframes ctaRingSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+

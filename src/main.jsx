@@ -1,0 +1,14 @@
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import './assets/styles/main.css'
+import App from './App.jsx'
+import { initSmoothScroll } from '@utils/smoothScroll'
+
+createRoot(document.getElementById('root')).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+)
+
+// Init smooth scroll after DOM is ready
+initSmoothScroll()

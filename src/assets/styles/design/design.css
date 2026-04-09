@@ -1,0 +1,14 @@
+/* =============================================
+   Design System - CSS Variables & Tokens
+   ============================================= */
+
+:root {
+  --main_color: #AC9EF8;
+  --color_dark: #191A23;
+  --color_light: #F3F3F3;
+}
+
+/* --- Utility spacer --- */
+.clear-space-50px {
+  height: 50px;
+}

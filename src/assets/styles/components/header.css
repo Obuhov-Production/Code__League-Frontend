@@ -1,0 +1,107 @@
+/* =============================================
+   Header Component Styles
+   Component: Header.jsx
+   ============================================= */
+
+.header {
+    background-color: white;
+    padding: 20px 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.header-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 32px;
+}
+
+/* Logo */
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.logo-icon {
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+}
+
+.logo-text {
+    font-family: 'Poppins', sans-serif;
+    font-size: 21px;
+    font-weight: 700;
+    color: var(--color_dark);
+    letter-spacing: -0.02em;
+}
+
+/* Navigation */
+.navigation {
+    display: flex;
+    gap: 32px;
+    align-items: center;
+    margin-left: auto;
+    margin-right: 32px;
+}
+
+.nav-link {
+    color: var(--color_dark);
+    text-decoration: none;
+    font-family: 'Poppins', sans-serif;
+    font-size: 15px;
+    font-weight: 500;
+    transition: color 0.3s ease;
+    position: relative;
+}
+
+.nav-link::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background-color: var(--main_color);
+    transition: width 0.3s ease;
+}
+
+.nav-link:hover {
+    color: var(--main_color);
+}
+
+.nav-link:hover::after {
+    width: 100%;
+}
+
+/* CTA Button */
+.cta-button {
+    font-family: 'Poppins', sans-serif;
+    background-color: transparent;
+    color: var(--color_dark);
+    border: 2px solid var(--color_dark);
+    padding: 10px 28px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+
+.cta-button:hover {
+    background-color: var(--color_dark);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.cta-button:active {
+    transform: translateY(0) scale(0.97);
+    box-shadow: none;
+}

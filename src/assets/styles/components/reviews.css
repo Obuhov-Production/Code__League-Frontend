@@ -1,0 +1,265 @@
+/* =============================================
+   Reviews Section
+   Component: RewiewsSection.jsx
+   ============================================= */
+
+.reviews-section {
+  padding: 48px 0;
+}
+
+.reviews_wrapper {
+  --card-width: 320px;
+  --card-gap: 32px;
+  background-color: var(--color_dark);
+  border-radius: 40px;
+  padding: 48px 0 40px;
+  overflow: hidden;
+}
+
+/* --- Viewport / Track --- */
+.reviews_viewport {
+  overflow: hidden;
+  padding: 0 48px;
+}
+
+.reviews_track {
+  display: flex;
+  gap: var(--card-gap);
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+
+/* --- Card --- */
+.reviews_card {
+  flex: 0 0 var(--card-width);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* --- Speech Bubble --- */
+.reviews_card-bubble {
+  position: relative;
+  border: 1.5px solid rgba(172, 158, 248, 0.35);
+  border-radius: 20px;
+  padding: 28px 24px;
+  background-color: var(--color_dark);
+  min-height: 160px;
+  display: flex;
+  align-items: flex-start;
+}
+
+.reviews_card-text {
+  font-family: 'Poppins', sans-serif;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.65;
+  color: var(--color_light);
+}
+
+/* --- Tail (triangle) --- */
+.reviews_card-tail {
+  position: absolute;
+  bottom: -22px;
+  left: 40px;
+  width: 36px;
+  height: 22px;
+}
+
+.reviews_card-tail svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* --- Author --- */
+.reviews_card-author {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 8px;
+  padding-top: 8px;
+}
+
+.reviews_card-name {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--main_color);
+}
+
+.reviews_card-role {
+  font-family: 'Poppins', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--color_light);
+  opacity: 0.8;
+}
+
+/* --- Controls --- */
+.reviews_controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 80px;
+  padding: 40px 48px 0;
+}
+
+/* --- Arrows --- */
+.reviews_arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: transparent;
+  color: var(--color_light);
+  cursor: pointer;
+  transition: color 0.25s ease, transform 0.2s ease;
+  padding: 0;
+}
+
+.reviews_arrow:hover:not(:disabled) {
+  color: var(--main_color);
+  transform: scale(1.1);
+}
+
+.reviews_arrow--disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* --- Dots --- */
+.reviews_dots {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.reviews_dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--color_light);
+  opacity: 0.45;
+  cursor: pointer;
+  padding: 4px;
+  transition: opacity 0.3s ease, color 0.3s ease, transform 0.25s ease;
+}
+
+.reviews_dot--active {
+  color: var(--main_color);
+  opacity: 1;
+}
+
+.reviews_dot:hover:not(.reviews_dot--active) {
+  opacity: 0.7;
+  transform: scale(1.15);
+}
+
+/* --- CTA Button --- */
+.reviews_cta {
+  display: flex;
+  justify-content: center;
+  padding-top: 32px;
+}
+
+.reviews_cta-btn {
+  font-family: 'Poppins', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--color_light);
+  background-color: var(--color_dark);
+  border: 1.5px solid rgba(172, 158, 248, 0.4);
+  border-radius: 14px;
+  padding: 16px 48px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, border-color 0.3s ease, transform 0.2s ease;
+}
+
+.reviews_cta-btn:hover {
+  background-color: rgba(172, 158, 248, 0.12);
+  border-color: var(--main_color);
+  transform: translateY(-2px);
+}
+
+.reviews_cta-btn:active {
+  transform: translateY(0);
+}
+
+/* =============================================
+   Responsive
+   ============================================= */
+
+@media (max-width: 1024px) {
+  .reviews_wrapper {
+    --card-width: 280px;
+    --card-gap: 24px;
+    border-radius: 28px;
+    padding: 36px 0 32px;
+  }
+
+  .reviews_viewport {
+    padding: 0 32px;
+  }
+
+  .reviews_controls {
+    gap: 40px;
+    padding: 32px 32px 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .reviews_wrapper {
+    --card-width: 260px;
+    --card-gap: 20px;
+    border-radius: 20px;
+    padding: 28px 0 24px;
+  }
+
+  .reviews_viewport {
+    padding: 0 20px;
+  }
+
+  .reviews_card-bubble {
+    padding: 20px 18px;
+    min-height: 130px;
+  }
+
+  .reviews_card-text {
+    font-size: 14px;
+  }
+
+  .reviews_card-name {
+    font-size: 16px;
+  }
+
+  .reviews_controls {
+    gap: 24px;
+    padding: 24px 20px 0;
+  }
+
+  .reviews_cta-btn {
+    font-size: 15px;
+    padding: 14px 36px;
+  }
+}
+
+@media (max-width: 480px) {
+  .reviews_wrapper {
+    --card-width: 240px;
+    --card-gap: 16px;
+  }
+
+  .reviews_dots {
+    gap: 10px;
+  }
+
+  .reviews_dot svg {
+    width: 12px;
+    height: 12px;
+  }
+}
