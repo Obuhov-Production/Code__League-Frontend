@@ -5,6 +5,7 @@
 
 .contact-section {
   padding: 48px 0;
+  border-radius: 40px;
 }
 
 /* --- Header (title + description) --- */
@@ -42,7 +43,7 @@
 
 /* --- Body (form + illustration) --- */
 .contact_body {
-  background-color: var(--color_light);
+  background-color: var(--color_gray);
   border-radius: 40px;
   padding: 48px 0 48px 56px;
   display: flex;

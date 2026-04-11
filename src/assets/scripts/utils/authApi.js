@@ -76,6 +76,7 @@ export function isLoggedIn()       { return !!getToken(); }
 /* ── Tournaments ─────────────────────────────────── */
 
 export async function getTournaments(status = null) {
+  if (!CHECK_BACKEND) return [];
   const url = status ? `${BASE}/tournaments?status=${status}` : `${BASE}/tournaments`;
   return request(url);
 }
@@ -130,6 +131,7 @@ export async function createAnnouncement(tournamentId, title, message) {
 /* ── Teams ───────────────────────────────────────── */
 
 export async function getMyTeams() {
+  if (!CHECK_BACKEND) return [];
   return request(`${BASE}/teams/my`, { headers: authHeaders() });
 }
 
@@ -192,6 +194,7 @@ export async function uploadBanner(file) {
 }
 
 export async function getChatHistory(room) {
+  if (!CHECK_BACKEND) return [];
   return request(`${BASE}/chat/${room}`, { headers: authHeaders() });
 }
 
@@ -256,6 +259,7 @@ export async function uploadChatFile(file) {
 }
 
 export async function getChatReactions(room) {
+  if (!CHECK_BACKEND) return {};
   const res = await fetch(`${BASE}/chat/${encodeURIComponent(room)}/reactions`, {
     headers: authHeaders(),
   });
@@ -309,6 +313,7 @@ export async function createPublicReview(payload) {
 /* ── Admin ────────────────────────────────────────── */
 
 export async function getAdminUsers() {
+  if (!CHECK_BACKEND) return [];
   return request(`${BASE}/admin/users`, { headers: authHeaders() });
 }
 
@@ -321,6 +326,7 @@ export async function setUserRole(id, role) {
 }
 
 export async function getAdminStats() {
+  if (!CHECK_BACKEND) return {};
   return request(`${BASE}/admin/stats`, { headers: authHeaders() });
 }
 
@@ -333,6 +339,7 @@ export async function getPlatformStats() {
 }
 
 export async function getCustomChatRooms() {
+  if (!CHECK_BACKEND) return [];
   return request(`${BASE}/chat/custom-rooms`, { headers: authHeaders() });
 }
 
@@ -386,12 +393,14 @@ export async function unpinChatMessage(msgId) {
 }
 
 export async function getPinnedMessages(room) {
+  if (!CHECK_BACKEND) return [];
   return request(`${BASE}/chat/${encodeURIComponent(room)}/pinned`, { headers: authHeaders() });
 }
 
 /* ── Admin: chat mute ─────────────────────────────── */
 
 export async function getMutedChatUsers() {
+  if (!CHECK_BACKEND) return [];
   return request(`${BASE}/admin/chat/muted`, { headers: authHeaders() });
 }
 
@@ -449,10 +458,12 @@ export async function adminDeleteTeam(id) {
 /* ── Jury ─────────────────────────────────────── */
 
 export async function getJuryTournaments() {
+  if (!CHECK_BACKEND) return [];
   return request(`${BASE}/jury/tournaments`, { headers: authHeaders() });
 }
 
 export async function getJurySubmissions(roundId) {
+  if (!CHECK_BACKEND) return [];
   return request(`${BASE}/jury/rounds/${roundId}/submissions`, { headers: authHeaders() });
 }
 
