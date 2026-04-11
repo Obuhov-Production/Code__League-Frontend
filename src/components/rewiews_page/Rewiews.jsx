@@ -16,6 +16,7 @@ const PRESET_REVIEWS = [
 		id: 'seed-1',
 		author: 'Андрій Коваленко',
 		role: 'Користувач',
+		rating: 5,
 		text: 'Платформа зручна і зрозуміла. Швидко знайшов турнір, підключився і без зайвих кроків пройшов завдання.',
 		createdAt: '2026-03-11T10:00:00.000Z',
 	},
@@ -23,6 +24,7 @@ const PRESET_REVIEWS = [
 		id: 'seed-2',
 		author: 'Марина Савчук',
 		role: 'Користувач',
+		rating: 5,
 		text: 'Подобається, що рейтинг і прогрес видно одразу. Це мотивує закривати задачі до кінця.',
 		createdAt: '2026-03-15T10:00:00.000Z',
 	},
@@ -30,6 +32,7 @@ const PRESET_REVIEWS = [
 		id: 'seed-3',
 		author: 'Дмитро Литвин',
 		role: 'Користувач',
+		rating: 5,
 		text: 'Дизайн акуратний, все працює плавно і без лагів. З мобільного теж комфортно користуватись.',
 		createdAt: '2026-03-20T10:00:00.000Z',
 	},
@@ -37,6 +40,7 @@ const PRESET_REVIEWS = [
 		id: 'seed-4',
 		author: 'Ірина Бойко',
 		role: 'Користувач',
+		rating: 5,
 		text: 'Ми запускали внутрішній командний челендж і всі учасники були залучені від старту до фіналу.',
 		createdAt: '2026-03-22T10:00:00.000Z',
 	},
@@ -44,6 +48,7 @@ const PRESET_REVIEWS = [
 		id: 'seed-5',
 		author: 'Назар Ткаченко',
 		role: 'Користувач',
+		rating: 5,
 		text: 'З телефона теж все ок: адаптивність хороша, нічого не ламається, навігація проста.',
 		createdAt: '2026-03-24T10:00:00.000Z',
 	},
@@ -54,6 +59,7 @@ function normalizeReview(raw, index) {
 		id: String(raw.id ?? raw._id ?? raw.reviewId ?? `generated-${index}`),
 		author: (raw.author ?? raw.name ?? raw.username ?? 'Користувач').trim(),
 		role: 'Користувач',
+		rating: Number(raw.rating ?? 5),
 		text: (raw.text ?? raw.message ?? raw.comment ?? '').trim(),
 		createdAt: raw.createdAt ?? raw.date ?? new Date().toISOString(),
 	}
@@ -94,14 +100,48 @@ function buildFixedCount(items, count = 10) {
 	return out
 }
 
+function Stars({ count }) {
+	return (
+		<div className="reviews-page_stars" aria-label={`${count} з 5`}>
+			{[1, 2, 3, 4, 5].map((n) => (
+				<span key={n} className={`reviews-page_star${n <= count ? ' reviews-page_star--on' : ''}`}>★</span>
+			))}
+		</div>
+	)
+}
+
+function StarPicker({ value, onChange }) {
+	const [hovered, setHovered] = useState(null)
+	return (
+		<div className="reviews-page_star-picker" role="group" aria-label="Оцінка">
+			{[1, 2, 3, 4, 5].map((n) => (
+				<button
+					key={n}
+					type="button"
+					className={`reviews-page_star-btn${(hovered ?? value) >= n ? ' reviews-page_star-btn--on' : ''}`}
+					onClick={() => onChange(n)}
+					onMouseEnter={() => setHovered(n)}
+					onMouseLeave={() => setHovered(null)}
+					aria-label={`${n} зірок`}
+				>
+					★
+				</button>
+			))}
+		</div>
+	)
+}
+
 function ReviewBubble({ review }) {
 	return (
 		<article className="reviews-page_bubble">
 			<p className="reviews-page_bubble-text">{review.text}</p>
 			<div className="reviews-page_bubble-tail" aria-hidden="true" />
 			<div className="reviews-page_meta">
-				<span className="reviews-page_author">{review.author}</span>
-				<span className="reviews-page_role">{review.role}</span>
+				<div className="reviews-page_meta-info">
+					<span className="reviews-page_author">{review.author}</span>
+					<span className="reviews-page_role">{review.role}</span>
+				</div>
+				<Stars count={review.rating ?? 5} />
 			</div>
 		</article>
 	)
@@ -124,6 +164,7 @@ function RewiewsPage() {
 		name: '',
 		email: '',
 		message: '',
+		rating: 5,
 	})
 
 	const loadReviews = async () => {
@@ -252,6 +293,7 @@ function RewiewsPage() {
 			email,
 			text: message,
 			role: 'Користувач',
+			rating: form.rating,
 		}
 
 		try {
@@ -263,7 +305,7 @@ function RewiewsPage() {
 				return merged
 			})
 
-			setForm({ name: '', email: '', message: '' })
+			setForm({ name: '', email: '', message: '', rating: 5 })
 			toast.success('Відгук успішно надіслано')
 
 			loadReviews().catch(() => {})
@@ -318,6 +360,11 @@ function RewiewsPage() {
 										placeholder="Email"
 										required
 									/>
+								</div>
+
+								<div className="contact_field">
+									<label className="contact_label">Оцінка</label>
+									<StarPicker value={form.rating} onChange={(n) => setForm((prev) => ({ ...prev, rating: n }))} />
 								</div>
 
 								<div className="contact_field">

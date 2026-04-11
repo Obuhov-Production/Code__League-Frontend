@@ -62,3 +62,97 @@
         font-size: 15px;
     }
 }
+
+/* === Stats bar === */
+.info-stats {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    margin-top: 40px;
+    border-radius: 20px;
+    border: 1.5px solid rgba(25, 26, 35, 0.1);
+    overflow: hidden;
+    background: white;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.05);
+}
+
+.info-stat {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 28px 16px;
+    position: relative;
+    text-align: center;
+    transition: background 0.25s ease;
+}
+
+.info-stat:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 20%;
+    height: 60%;
+    width: 1.5px;
+    background: rgba(25, 26, 35, 0.1);
+}
+
+.info-stat:hover {
+    background: rgba(172, 158, 248, 0.05);
+}
+
+.info-stat_value {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 36px;
+    font-weight: 700;
+    color: var(--color_dark);
+    line-height: 1;
+    letter-spacing: -0.02em;
+}
+
+.info-stat_label {
+    font-family: 'Poppins', sans-serif;
+    font-size: 13px;
+    font-weight: 400;
+    color: rgba(25, 26, 35, 0.55);
+    line-height: 1.4;
+}
+
+@media (max-width: 768px) {
+    .info-stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        margin-top: 28px;
+        border-radius: 16px;
+    }
+
+    .info-stat {
+        padding: 20px 12px;
+    }
+
+    .info-stat:nth-child(1)::after,
+    .info-stat:nth-child(3)::after {
+        display: block;
+    }
+
+    .info-stat:nth-child(2)::after,
+    .info-stat:nth-child(4)::after {
+        display: none;
+    }
+
+    /* горизонтальні роздільники між рядами сітки */
+    .info-stat:nth-child(3),
+    .info-stat:nth-child(4) {
+        border-top: 1.5px solid rgba(25, 26, 35, 0.1);
+    }
+
+    .info-stat_value {
+        font-size: 28px;
+    }
+
+    .info-stat_label {
+        font-size: 12px;
+    }
+}

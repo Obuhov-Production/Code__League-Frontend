@@ -37,6 +37,7 @@ import {
   updateTeam, getTeamById, deleteAdminUser, setUserPassword, getAdminTeams, adminDeleteTeam,
   getChatReactions,
   API_BASE,
+  CHECK_BACKEND, DEV_MOCK_USER,
 } from '@utils/authApi';
 import { useToast } from '@utils/toast.jsx';
 
@@ -148,6 +149,13 @@ export default function Dashboard() {
   const [chatHasUnread,  setChatHasUnread]  = useState(false);
 
   useEffect(() => {
+    // Dev-режим: VITE_CHECK_BACKEND=false → одразу підставляємо мок-юзера
+    if (!CHECK_BACKEND) {
+      setUser(DEV_MOCK_USER);
+      setLoading(false);
+      return;
+    }
+
     if (!isLoggedIn()) { navigate('/login'); return; }
     getMe()
       .then(setUser)

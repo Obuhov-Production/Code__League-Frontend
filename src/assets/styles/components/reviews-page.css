@@ -83,6 +83,14 @@
 .reviews-page_meta {
   margin-top: 16px;
   display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.reviews-page_meta-info {
+  display: flex;
   flex-direction: column;
   gap: 3px;
 }
@@ -113,6 +121,48 @@
     left: 0;
     margin-right: -24px;
   }
+}
+
+/* ── Stars display (in bubble) ── */
+.reviews-page_stars {
+  display: flex;
+  gap: 3px;
+  margin-bottom: 10px;
+}
+
+.reviews-page_star {
+  font-size: 15px;
+  line-height: 1;
+  color: rgba(243, 243, 243, 0.2);
+}
+
+.reviews-page_star--on {
+  color: #f5c342;
+}
+
+/* ── Star picker (in form) ── */
+.reviews-page_star-picker {
+  display: flex;
+  gap: 4px;
+}
+
+.reviews-page_star-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 30px;
+  line-height: 1;
+  padding: 0 1px;
+  color: rgba(243, 243, 243, 0.2);
+  transition: color 0.13s, transform 0.1s;
+}
+
+.reviews-page_star-btn--on {
+  color: #f5c342;
+}
+
+.reviews-page_star-btn:hover {
+  transform: scale(1.2);
 }
 
 @media (max-width: 768px) {

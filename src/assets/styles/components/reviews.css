@@ -3,6 +3,23 @@
    Component: RewiewsSection.jsx
    ============================================= */
 
+/* ── Stars ── */
+.reviews_stars {
+  display: flex;
+  gap: 3px;
+  margin-bottom: 10px;
+}
+
+.reviews_star {
+  font-size: 14px;
+  line-height: 1;
+  color: rgba(243, 243, 243, 0.18);
+}
+
+.reviews_star--on {
+  color: #f5c342;
+}
+
 .reviews-section {
   padding: 48px 0;
 }
@@ -75,10 +92,17 @@
 /* --- Author --- */
 .reviews_card-author {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
   padding-left: 8px;
   padding-top: 8px;
+}
+
+.reviews_card-author-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .reviews_card-name {
@@ -214,52 +238,104 @@
 
 @media (max-width: 768px) {
   .reviews_wrapper {
-    --card-width: 260px;
+    /* Фіксована ширина — картка повністю видна без обрізки */
+    --card-width: min(320px, calc(100vw - 48px));
     --card-gap: 20px;
-    border-radius: 20px;
-    padding: 28px 0 24px;
+    border-radius: 28px;
+    padding: 32px 0 28px;
   }
 
   .reviews_viewport {
-    padding: 0 20px;
+    /* overflow: hidden, щоб сусідні картки не просвічували */
+    padding: 0 24px;
+    overflow: hidden;
+  }
+
+  /* Карточка — весь вміст помічається, хвіст між bubble і автором */
+  .reviews_card {
+    gap: 28px;
   }
 
   .reviews_card-bubble {
-    padding: 20px 18px;
-    min-height: 130px;
+    padding: 24px 20px 22px;
+    min-height: 0;
+    border: 1.5px solid rgba(172, 158, 248, 0.45);
+    border-radius: 22px;
+    box-shadow: 0 4px 24px rgba(172, 158, 248, 0.08);
   }
 
   .reviews_card-text {
-    font-size: 14px;
+    font-size: 15px;
+    line-height: 1.65;
+  }
+
+  /* Хвіст чуть нижче — щоб не злипався з бордером */
+  .reviews_card-tail {
+    bottom: -20px;
+  }
+
+  /* Автор */
+  .reviews_card-author {
+    padding-top: 4px;
+    padding-left: 4px;
+    gap: 3px;
   }
 
   .reviews_card-name {
-    font-size: 16px;
+    font-size: 17px;
   }
 
+  .reviews_card-role {
+    font-size: 13px;
+    opacity: 0.7;
+  }
+
+  /* Контролс */
   .reviews_controls {
-    gap: 24px;
-    padding: 24px 20px 0;
+    gap: 32px;
+    padding: 28px 24px 0;
+  }
+
+  .reviews_arrow {
+    width: 52px;
+    height: 52px;
+    border: 1.5px solid rgba(243, 243, 243, 0.2);
+    border-radius: 50%;
+  }
+
+  .reviews_dots {
+    gap: 14px;
+  }
+
+  .reviews_dot svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* Кнопка — full-width */
+  .reviews_cta {
+    padding: 20px 24px 0;
   }
 
   .reviews_cta-btn {
-    font-size: 15px;
-    padding: 14px 36px;
+    width: 100%;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 16px 24px;
+    border-radius: 16px;
+    border-color: rgba(172, 158, 248, 0.55);
+    letter-spacing: 0.01em;
   }
 }
 
 @media (max-width: 480px) {
   .reviews_wrapper {
-    --card-width: 240px;
+    --card-width: min(300px, calc(100vw - 40px));
     --card-gap: 16px;
+    border-radius: 24px;
   }
 
-  .reviews_dots {
-    gap: 10px;
-  }
-
-  .reviews_dot svg {
-    width: 12px;
-    height: 12px;
+  .reviews_viewport {
+    padding: 0 20px;
   }
 }

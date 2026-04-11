@@ -226,7 +226,7 @@ function ContactSection() {
             </div>
 
             <button className="contact_submit" type="submit">
-              {formType === 'problem' ? 'Не відправити нам' : 'Отримати пропозицію'}
+              {formType === 'problem' ? 'Відправити нам' : 'Приєднатись до команди'}
             </button>
           </form>
 

@@ -3,35 +3,50 @@ import { useState, useRef, useEffect } from 'react'
 const reviewsData = [
   {
     id: 1,
+    rating: 5,
     text: 'Платформа справді зручна: швидко зареєструвався, одразу приєднався до турніру і без проблем відслідковував свій прогрес.',
     author: 'Андрій Коваленко',
     role: 'Користувач',
   },
   {
     id: 2,
+    rating: 5,
     text: 'Сподобалась структура завдань: є і прості для розігріву, і складніші на логіку. Інтерфейс чистий, нічого не відволікає.',
     author: 'Марина Савчук',
     role: 'Користувач',
   },
   {
     id: 3,
+    rating: 5,
     text: 'Найбільше зайшло те, що результати оновлюються в реальному часі. Видно свій рейтинг і чітко розумієш, що підтягнути.',
     author: 'Дмитро Литвин',
     role: 'Користувач',
   },
   {
     id: 4,
+    rating: 5,
     text: 'Використовували Code League для внутрішнього командного челенджу. Все стабільно працювало, а учасники були реально залучені.',
     author: 'Ірина Бойко',
     role: 'Користувач',
   },
   {
     id: 5,
-    text: 'Окремий плюс за адаптивність: з телефона теж зручно проходити завдання і переглядати статистику без "зламаної" верстки.',
+    rating: 5,
+    text: 'Окремий плюс за адаптивність: з телефона теж зручно проходити завдання і переглядати статистику без зламаної верстки.',
     author: 'Назар Ткаченко',
     role: 'Користувач',
   },
 ]
+
+function Stars({ count }) {
+  return (
+    <div className="reviews_stars">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <span key={n} className={`reviews_star${n <= count ? ' reviews_star--on' : ''}`}>★</span>
+      ))}
+    </div>
+  )
+}
 
 function ReviewCard({ review }) {
   return (
@@ -51,8 +66,11 @@ function ReviewCard({ review }) {
         </div>
       </div>
       <div className="reviews_card-author">
-        <span className="reviews_card-name">{review.author}</span>
-        <span className="reviews_card-role">{review.role}</span>
+        <div className="reviews_card-author-info">
+          <span className="reviews_card-name">{review.author}</span>
+          <span className="reviews_card-role">{review.role}</span>
+        </div>
+        <Stars count={review.rating ?? 5} />
       </div>
     </div>
   )

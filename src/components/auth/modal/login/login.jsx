@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import logoImg from '@images/logos/logo.png';
 import logoIcon from '@images/logos/logo-48.png';
 import Footer from '@components/Footer';
-import { loginUser, saveSession, consumeOAuthTokenFromUrl, OAUTH_URLS } from '@utils/authApi';
+import { loginUser, saveSession, consumeOAuthTokenFromUrl, OAUTH_URLS, CHECK_BACKEND } from '@utils/authApi';
 import { useToast } from '@utils/toast.jsx';
 
 function LoginPage() {
@@ -37,6 +37,14 @@ function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!isActive || loading) return;
+
+    // Dev-режим: VITE_CHECK_BACKEND=false → пропускаємо запит до бекенду
+    if (!CHECK_BACKEND) {
+      toast.success('Dev-режим: вхід без бекенду');
+      navigate('/dashboard');
+      return;
+    }
+
     setLoading(true);
     try {
       const data = await loginUser({ email, password });

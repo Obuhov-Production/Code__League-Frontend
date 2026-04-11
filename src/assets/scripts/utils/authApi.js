@@ -7,6 +7,23 @@ const DIRECT_BACKEND_BASE = (import.meta.env.VITE_BACKEND_URL || 'http://localho
 const BASE = API_PROXY_BASE;
 export const API_BASE = BASE.startsWith('http') ? BASE : DIRECT_BACKEND_BASE;
 
+/**
+ * VITE_CHECK_BACKEND=false → dev-режим без бекенду.
+ * login/register/dashboard працюють з мок-даними.
+ */
+export const CHECK_BACKEND = import.meta.env.VITE_CHECK_BACKEND !== 'false';
+
+/** Мок-юзер для dev-режиму (VITE_CHECK_BACKEND=false) */
+export const DEV_MOCK_USER = {
+  id: 0,
+  username: 'dev_user',
+  email: 'dev@localhost',
+  role: 'admin',
+  user_avatar_url: null,
+  user_banner_url: null,
+  bio: 'Dev mock user — backend is disabled',
+};
+
 export const OAUTH_URLS = {
   google: `${API_BASE}/auth/google`,
   discord: `${API_BASE}/auth/discord`,
@@ -305,6 +322,14 @@ export async function setUserRole(id, role) {
 
 export async function getAdminStats() {
   return request(`${BASE}/admin/stats`, { headers: authHeaders() });
+}
+
+/**
+ * Публічна статистика платформи — використовується для Info-бару на головній сторінці.
+ * Очікується відповідь { users, tasks, tournaments, teams }
+ */
+export async function getPlatformStats() {
+  return request(`${BASE}/stats`);
 }
 
 export async function getCustomChatRooms() {

@@ -11,13 +11,13 @@ function HeroSection() {
           
           <div className="hero-text">
             <h1 className="hero-title">
-              Code League — платформа для турнірів з програмування
+              Code League — арена для справжніх розробників
             </h1>
             <p className="hero-description">
-              Змагайся, розвивайся та доводь свій рівень у чесному код-турнірі. 
-              Реєструй команду, виконуй завдання та піднімайся в таблиці лідерів.
+              Змагайся в реальних турнірах з програмування, збирай команду, 
+              виконуй завдання та доводь свій рівень у чесному коді.
             </p>
-            <a href="/login" className="hero-button">Клік* щоб почати</a>
+            <a href="/login" className="hero-button">Почати змагатись →</a>
           </div>
         </div>
 

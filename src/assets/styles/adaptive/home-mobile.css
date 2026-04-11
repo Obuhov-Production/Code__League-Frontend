@@ -1,12 +1,98 @@
 /* =============================================
    Home Mobile Adaptive Overrides
+   Mobile-first enhancements for phone experience
    ============================================= */
 
+/* -----------------------------------------------
+   Global mobile UX base (all screens ≤ 900px)
+   ----------------------------------------------- */
+@media (max-width: 900px) {
+  /* Remove 300ms tap delay + ugly tap highlight */
+  button,
+  a,
+  input,
+  textarea,
+  label,
+  [role="button"] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Minimum tap target */
+  button,
+  .cta-button,
+  .nav-link,
+  .service-card_link,
+  .footer-nav_link {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* -----------------------------------------------
+   Tablet / large phone  (≤ 768px)
+   ----------------------------------------------- */
 @media (max-width: 768px) {
+
+  /* --- Base --- */
   .container {
     padding: 0 18px;
   }
 
+  /* --- Header --- */
+  .header {
+    padding: 12px 0;
+    /* respect iOS status bar */
+    padding-top: max(12px, env(safe-area-inset-top));
+  }
+
+  /* --- Hero --- */
+  .hero {
+    padding: 32px 0 36px;
+  }
+
+  .hero-content {
+    flex-direction: column-reverse; /* image below text on mobile */
+    gap: 28px;
+    text-align: center;
+    align-items: center;
+  }
+
+  .hero-image {
+    flex: unset;
+    width: 72%;
+    max-width: 300px;
+  }
+
+  .hero-text {
+    flex: unset;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .hero-title {
+    font-size: 34px;
+    line-height: 1.18;
+    margin-bottom: 16px;
+  }
+
+  .hero-description {
+    font-size: 15px;
+    margin-bottom: 28px;
+    max-width: 92%;
+  }
+
+  .hero-button {
+    width: 100%;
+    max-width: 340px;
+    padding: 16px 32px;
+    font-size: 16px;
+    border-radius: 16px;
+  }
+
+  /* --- Info section --- */
   .info-section {
     padding: 22px 0 26px;
   }
@@ -33,6 +119,7 @@
     margin-top: 2px;
   }
 
+  /* --- Services --- */
   .services-section {
     padding: 20px 0 24px;
   }
@@ -90,6 +177,101 @@
     max-height: 104px;
   }
 
+  /* --- CTA section --- */
+  .cta-section {
+    padding: 20px 0 24px;
+  }
+
+  .cta-section .container {
+    flex-direction: column;
+    height: auto;
+    padding: 32px 20px 28px;
+    border-radius: 24px;
+    text-align: center;
+    gap: 24px;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  .cta-section_content {
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .cta-section_title {
+    font-size: 26px;
+  }
+
+  .cta-section_description {
+    font-size: 14px;
+    margin-bottom: 24px;
+  }
+
+  .cta-section_button {
+    width: 100%;
+    max-width: 320px;
+    padding: 15px 24px;
+    font-size: 15px;
+    border-radius: 16px;
+  }
+
+  .cta-section_image {
+    max-width: 55%;
+    transform: rotate(10deg);
+    margin: 0;
+    order: -1;
+  }
+
+  /* --- About section --- */
+  .about-section {
+    padding: 20px 0;
+  }
+
+  .about-container {
+    flex-direction: column;
+    padding: 32px 20px;
+    border-radius: 28px;
+    gap: 0;
+  }
+
+  .about-title {
+    display: block;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 20px;
+    line-height: 1.25;
+  }
+
+  .vertecal-hr {
+    display: none;
+  }
+
+  .about-box {
+    padding: 0;
+    gap: 20px;
+  }
+
+  .about-box + .about-box {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+  }
+
+  .about-description {
+    font-size: 14px;
+    line-height: 1.65;
+    margin-bottom: 20px;
+  }
+
+  .about-link {
+    font-size: 15px;
+  }
+
+  /* --- Accordion --- */
   .accordion-section {
     padding: 24px 0;
   }
@@ -132,6 +314,11 @@
     min-width: 34px;
   }
 
+  /* Прихований subtitle не повинен займати місце в лейауті */
+  .accordion-item_subtitle--hidden {
+    display: none;
+  }
+
   .accordion-item_body {
     padding: 0 16px;
   }
@@ -154,6 +341,57 @@
     line-height: 1.48;
   }
 
+  /* --- Reviews --- */
+  .reviews-section {
+    padding: 20px 0;
+  }
+
+  .reviews_wrapper {
+    --card-width: calc(100vw - 64px);
+    --card-gap: 16px;
+    border-radius: 28px;
+    padding: 32px 0 28px;
+  }
+
+  .reviews_viewport {
+    padding: 0 24px;
+    /* allow horizontal scroll gesture feel */
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .reviews_card-bubble {
+    padding: 22px 18px;
+    min-height: 130px;
+    border-radius: 18px;
+  }
+
+  .reviews_card-text {
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .reviews_controls {
+    gap: 48px;
+    padding: 28px 24px 0;
+  }
+
+  .reviews_arrow {
+    width: 48px;
+    height: 48px;
+  }
+
+  .reviews_cta {
+    padding: 24px 24px 0;
+  }
+
+  .reviews_cta-btn {
+    width: 100%;
+    padding: 15px 24px;
+    font-size: 15px;
+    border-radius: 14px;
+  }
+
+  /* --- Contact --- */
   .contact-section {
     padding: 24px 0;
   }
@@ -167,14 +405,15 @@
   }
 
   .contact_body {
-    padding: 20px 16px;
-    border-radius: 20px;
+    padding: 20px 14px 20px;
+    border-radius: 24px;
+    box-shadow: 0 2px 20px rgba(0, 0, 0, 0.06);
   }
 
   .contact_form {
-    gap: 16px;
+    gap: 18px;
     margin: 0 auto;
-    align-items: center;
+    align-items: stretch;
   }
 
   .contact_radios,
@@ -184,34 +423,119 @@
     width: 100%;
   }
 
+  /* Радіо-кнопки — рядком, рівна ширина */
   .contact_radios {
-    gap: 12px;
+    gap: 10px;
+    flex-direction: row;
+  }
+
+  .contact_radio {
+    flex: 1;
+    justify-content: center;
+    padding: 11px 8px;
+    border: 1.5px solid rgba(25, 26, 35, 0.15);
+    border-radius: 14px;
+    background: white;
+    font-size: 13px;
+    text-align: center;
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+
+  .contact_radio:has(input:checked) {
+    border-color: var(--main_color);
+    background: rgba(172, 158, 248, 0.07);
   }
 
   .contact_label {
     font-size: 14px;
+    font-weight: 500;
+    color: rgba(25, 26, 35, 0.75);
   }
 
   .contact_input,
   .contact_textarea {
-    font-size: 14px;
-    padding: 12px 14px;
-    border-radius: 12px;
+    font-size: 16px; /* prevents iOS auto-zoom on focus */
+    padding: 15px 16px;
+    border-radius: 14px;
+    border-width: 1.5px;
+    background: white;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
   }
 
   .contact_textarea {
-    min-height: 104px;
+    min-height: 120px;
   }
 
   .contact_submit {
-    padding: 14px 0;
-    font-size: 15px;
+    padding: 17px 0;
+    font-size: 16px;
+    font-weight: 600;
+    border-radius: 16px;
+    letter-spacing: 0.01em;
+    box-shadow: 0 4px 16px rgba(25, 26, 35, 0.2);
   }
 
   .contact-section .contact_illustration {
     display: none;
   }
 
+  /* --- Footer --- */
+  .footer {
+    border-radius: 24px 24px 0 0;
+    padding: 36px 0 calc(24px + env(safe-area-inset-bottom));
+  }
+
+  .footer-top {
+    flex-direction: column;
+    gap: 20px;
+    align-items: flex-start;
+    margin-bottom: 32px;
+    padding: 0 20px;
+  }
+
+  .footer-nav {
+    flex-wrap: wrap;
+    gap: 16px 24px;
+  }
+
+  .footer-nav_link {
+    font-size: 15px;
+  }
+
+  .footer-middle {
+    flex-direction: column;
+    gap: 28px;
+    margin-bottom: 32px;
+    padding: 0 20px;
+  }
+
+  .footer-subscribe_form {
+    flex-direction: column;
+    width: 100%;
+    padding: 20px 16px;
+    gap: 12px;
+  }
+
+  .footer-subscribe_input {
+    width: 100%;
+    min-width: unset;
+    font-size: 16px; /* prevents iOS zoom */
+  }
+
+  .footer-subscribe_button {
+    width: 100%;
+    padding: 14px 24px;
+    border-radius: 12px;
+  }
+
+  .footer-bottom {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 24px 20px 0;
+  }
+
+  /* --- Reviews page --- */
   .reviews-page_main {
     padding: 6px 0 26px;
   }
@@ -230,10 +554,7 @@
   }
 
   .reviews-page_illustration {
-    width: 130px;
-    left: 0;
-    margin-right: -6px;
-    align-self: flex-end;
+    display: none;
   }
 
   .reviews-page_bubble {
@@ -257,9 +578,45 @@
   }
 }
 
+/* -----------------------------------------------
+   Phone  (≤ 480px)
+   ----------------------------------------------- */
+@media (max-width: 480px) {
+  .hero-title {
+    font-size: 30px;
+  }
+
+  .hero-image {
+    width: 80%;
+  }
+
+  .cta-section_title {
+    font-size: 22px;
+  }
+
+  .reviews_wrapper {
+    --card-width: calc(100vw - 48px);
+  }
+}
+
+/* -----------------------------------------------
+   Small phone  (≤ 430px)
+   ----------------------------------------------- */
 @media (max-width: 430px) {
+  .container {
+    padding: 0 14px;
+  }
+
   .logo-text {
     font-size: 15px;
+  }
+
+  .hero-title {
+    font-size: 28px;
+  }
+
+  .hero-description {
+    font-size: 14px;
   }
 
   .service-card {
@@ -285,8 +642,42 @@
     font-size: 13px;
   }
 
+  .about-title {
+    font-size: 20px;
+  }
+
   .contact_illustration,
   .reviews-page_illustration {
     width: 112px;
+  }
+
+  .reviews_cta-btn {
+    font-size: 14px;
+  }
+}
+
+/* -----------------------------------------------
+   Tiny phone  (≤ 375px)  iPhone SE, Galaxy A
+   ----------------------------------------------- */
+@media (max-width: 375px) {
+  .hero-title {
+    font-size: 26px;
+  }
+
+  .hero-button {
+    font-size: 15px;
+    padding: 14px 24px;
+  }
+
+  .service-card_title {
+    font-size: 15px;
+  }
+
+  .contact_title-highlight {
+    font-size: 21px;
+  }
+
+  .footer-nav_link {
+    font-size: 14px;
   }
 }

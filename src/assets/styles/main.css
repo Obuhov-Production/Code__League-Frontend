@@ -64,6 +64,30 @@ body {
     color: var(--color_dark);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+}
+
+/* === Custom Scrollbar === */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--color_light);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--main_color);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--main_color) 80%, black);
+}
+
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--main_color) var(--color_light);
 }
 
 a {
