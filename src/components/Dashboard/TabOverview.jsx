@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 
-import StatTrophy   from '@images/dashboard_components/stat_trophy.svg?react';
-import StatTeam     from '@images/dashboard_components/stat_team.svg?react';
-import StatStar     from '@images/dashboard_components/stat_star.svg?react';
-import StatCalendar from '@images/dashboard_components/stat_calendar.svg?react';
+import StatTrophy   from '@images/dashboard_components/icon_stat_trophy.svg?react';
+import StatTeam     from '@images/dashboard_components/icon_stat_team.svg?react';
+import StatStar     from '@images/dashboard_components/icon_stat_star.svg?react';
+import StatCalendar from '@images/dashboard_components/icon_stat_calendar.svg?react';
 import IconTournaments from '@images/dashboard_components/icon_tournaments.svg?react';
 import IconChat        from '@images/dashboard_components/icon_chat.svg?react';
 import IconLeaderboard from '@images/dashboard_components/icon_leaderboard.svg?react';

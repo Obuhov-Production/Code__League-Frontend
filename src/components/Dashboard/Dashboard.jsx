@@ -9,9 +9,11 @@ import IconTeams       from '@images/dashboard_components/icon_teams.svg?react';
 import IconLeaderboard from '@images/dashboard_components/icon_leaderboard.svg?react';
 import IconProfile     from '@images/dashboard_components/icon_profile.svg?react';
 import IconAdmin       from '@images/dashboard_components/icon_admin.svg?react';
+import IconJury        from '@images/dashboard_components/icon_jury.svg?react';
 import IconChat        from '@images/dashboard_components/icon_chat.svg?react';
 import IconBell        from '@images/dashboard_components/icon_bell.svg?react';
 import IconSearch      from '@images/dashboard_components/icon_search.svg?react';
+import IconLogout      from '@images/dashboard_components/icon_logout.svg?react';
 
 import { getMe, clearSession, isLoggedIn, API_BASE, CHECK_BACKEND, DEV_MOCK_USER } from '@utils/authApi';
 import { useToast } from '@utils/toast.jsx';
@@ -58,9 +60,9 @@ export default function Dashboard() {
     { id: 'tournaments', label: 'Турніри',   Icon: IconTournaments },
     { id: 'leaderboard', label: 'Лідерборд', Icon: IconLeaderboard },
     { id: 'teams',       label: 'Команди',   Icon: IconTeams },
-    { id: 'chat',        label: 'Чат',       Icon: IconChat },
+    { id: 'chat',        label: 'Спілкування',       Icon: IconChat },
     { id: 'profile',     label: 'Профіль',   Icon: IconProfile },
-    ...(hasRole(user, 'admin') || hasRole(user, 'jury') ? [{ id: 'jury',  label: 'Журі',  Icon: IconAdmin }] : []),
+    ...(hasRole(user, 'admin') || hasRole(user, 'jury') ? [{ id: 'jury',  label: 'Журі',  Icon: IconJury  }] : []),
     ...(hasRole(user, 'admin')                           ? [{ id: 'admin', label: 'Адмін', Icon: IconAdmin }] : []),
   ];
 
@@ -95,11 +97,7 @@ export default function Dashboard() {
               </span>
             </div>
             <button className="db-sidebar-logout" title="Вийти" onClick={e => { e.stopPropagation(); handleLogout(); }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                <polyline points="16 17 21 12 16 7"/>
-                <line x1="21" y1="12" x2="9" y2="12"/>
-              </svg>
+              <IconLogout />
             </button>
           </button>
         )}

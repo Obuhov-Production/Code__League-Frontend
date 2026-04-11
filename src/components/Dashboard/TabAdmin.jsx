@@ -21,8 +21,8 @@ function ManageUserModal({ user, toast, onClose, onRoleChange, onDelete }) {
 
   const ROLE_OPTIONS_FULL = [
     { value: 'user',   label: '👤 Учасник' },
-    { value: 'jury',   label: '⚖ Журі' },
-    { value: 'admin',  label: '⚙ Адмін' },
+    { value: 'jury',   label: '⚖️ Журі' },
+    { value: 'admin',  label: '🛡️ Адмін', danger: true },
     { value: 'banned', label: '🚫 Бан', danger: true },
   ];
 
@@ -615,7 +615,7 @@ export default function TabAdmin({ toast }) {
                     </div>
                     <div className="db-form-row">
                       <label>Назва для відображення</label>
-                      <input value={newRoomLabel} onChange={e => setNewRoomLabel(e.target.value)} placeholder="Дизайн і UX" />
+                      <input value={newRoomLabel} onChange={e => setNewRoomLabel(e.target.value)} placeholder="Бест чат" />
                     </div>
                   </div>
                   <button type="submit" className="db-btn db-btn-primary" disabled={creatingRoom}>

@@ -86,7 +86,7 @@ export default function TabProfile({ user, setUser, toast, onLogout }) {
         {editing && (
           <div className="db-banner-controls">
             <button className={`db-banner-mode-btn${bannerMode === 'color' ? ' active' : ''}`} onClick={() => setBannerMode('color')}>🎨 Колір</button>
-            <button className={`db-banner-mode-btn${bannerMode === 'image' ? ' active' : ''}`} onClick={() => setBannerMode('image')}>🖼 Фото</button>
+            <button className={`db-banner-mode-btn${bannerMode === 'image' ? ' active' : ''}`} onClick={() => setBannerMode('image')}>📷 Фото</button>
             {user.banner_url && (
               <button className="db-banner-mode-btn db-banner-del-btn" onClick={handleDeleteBanner} title="Видалити банер">❌ Видалити</button>
             )}
@@ -121,9 +121,9 @@ export default function TabProfile({ user, setUser, toast, onLogout }) {
         <div className="db-profile-headings">
           <h2>{user.username || user.email}</h2>
           <div className="db-profile-chips">
-            <span className="db-role-badge">{user.role === 'admin' ? '⚙ Адмін' : '👤 Учасник'}</span>
+            <span className="db-role-badge">{user.role === 'admin' ? '🛡️ Адмін' : '👤 Учасник'}</span>
             <span className="db-chip">🏆 Команд: {myTeams.length}</span>
-            <span className="db-chip">📅 З {formatDate(user.created_at)}</span>
+            <span className="db-chip">📅 Зареєстровано: {formatDate(user.created_at)}</span>
           </div>
         </div>
         <div className="db-profile-actions">
