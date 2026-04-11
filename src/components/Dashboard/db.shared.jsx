@@ -129,10 +129,21 @@ export function UserAvatar({ user, size = 36, onClick, className = '' }) {
   const url = avatarUrl(user);
   const initials = user?.username ? user.username.slice(0,2).toUpperCase() : (user?.email?.[0]?.toUpperCase() ?? '?');
   const style = { width: size, height: size, borderRadius: '50%', cursor: onClick ? 'pointer' : 'default', flexShrink: 0 };
-  if (url) return <img src={url} alt="" style={{ ...style, objectFit: 'cover' }} onClick={onClick} className={className} />;
+  if (url) return <img src={url} alt="" style={{ ...style, objectFit: 'cover', display: 'block' }} onClick={onClick} className={className} />;
   return (
-    <div style={{ ...style, background: 'var(--main_color)', display:'flex', alignItems:'center', justifyContent:'center',
-      fontFamily:'Space Grotesk,sans-serif', fontWeight:700, fontSize: Math.round(size * 0.38), color:'#191A23' }}
+    <div style={{
+      ...style,
+      background: 'var(--main_color)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: '"Space Grotesk", sans-serif',
+      fontWeight: 700,
+      fontSize: Math.round(size * 0.36),
+      lineHeight: 1,
+      letterSpacing: '0.03em',
+      color: '#191A23',
+      userSelect: 'none',
+      WebkitFontSmoothing: 'antialiased',
+    }}
       onClick={onClick} className={className}>
       {initials}
     </div>

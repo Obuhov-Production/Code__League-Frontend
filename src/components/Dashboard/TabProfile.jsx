@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { getMyTeams, updateMe, uploadAvatar, uploadBanner, deleteBanner, API_BASE } from '@utils/authApi';
 import { BANNER_PRESETS, StatusBadge, UserAvatar, formatDate } from './db.shared.jsx';
 
-export default function TabProfile({ user, setUser, toast, onLogout }) {
+export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
   const [myTeams,   setMyTeams]  = useState([]);
   const [editing,   setEditing]  = useState(false);
   const [saving,    setSaving]   = useState(false);
@@ -82,6 +82,12 @@ export default function TabProfile({ user, setUser, toast, onLogout }) {
 
   return (
     <div className="db-tab">
+
+      {/* Hidden file inputs — referenced from multiple places */}
+      <input ref={avatarInputRef} type="file" accept="image/*" style={{ display:'none' }} onChange={handleAvatarPick} />
+      <input ref={bannerInputRef} type="file" accept="image/*" style={{ display:'none' }} onChange={handleBannerPick} />
+
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━ BANNER ━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <div className="db-profile-banner" style={bannerStyle}>
         {editing && (
           <div className="db-banner-controls">
@@ -107,37 +113,72 @@ export default function TabProfile({ user, setUser, toast, onLogout }) {
             📤 Завантажити фото (до 10 МБ)
           </button>
         )}
-        <input ref={bannerInputRef} type="file" accept="image/*" style={{ display:'none' }} onChange={handleBannerPick} />
+
+        {/* ▼ Mobile-only: avatar + username float over banner ▼ */}
+        <div className="db-profile-banner-overlay">
+          <div className="db-profile-banner-avatar-wrap" onClick={editing ? () => avatarInputRef.current?.click() : undefined}
+            style={{ cursor: editing ? 'pointer' : 'default' }} title={editing ? 'Змінити аватар' : undefined}>
+            <UserAvatar user={user} size={60} />
+            {editing && <span className="db-profile-banner-avatar-edit">📷</span>}
+          </div>
+          <div className="db-profile-banner-nameblock">
+            <h2 className="db-profile-banner-name">{user.username || user.email}</h2>
+            <span className="db-role-badge db-role-badge--banner">
+              {user.role === 'admin' ? '🛡️ Адмін' : user.role === 'jury' ? '⚖ Журі' : '👤 Учасник'}
+            </span>
+          </div>
+        </div>
+        {/* ▲ Mobile-only end ▲ */}
       </div>
 
+      {/* ━━━━━━━━━━━━ DESKTOP: avatar row below banner ━━━━━━━━━━━━ */}
       <div className="db-profile-avatar-row">
         <div className="db-profile-avatar-wrap">
           <UserAvatar user={user} size={88} />
           {editing && (
             <button className="db-avatar-edit-btn" onClick={() => avatarInputRef.current?.click()} title="Змінити аватар">📷</button>
           )}
-          <input ref={avatarInputRef} type="file" accept="image/*" style={{ display:'none' }} onChange={handleAvatarPick} />
         </div>
         <div className="db-profile-headings">
           <h2>{user.username || user.email}</h2>
           <div className="db-profile-chips">
-            <span className="db-role-badge">{user.role === 'admin' ? '🛡️ Адмін' : '👤 Учасник'}</span>
+            <span className="db-role-badge">{user.role === 'admin' ? '🛡️ Адмін' : user.role === 'jury' ? '⚖ Журі' : '👤 Учасник'}</span>
             <span className="db-chip">🏆 Команд: {myTeams.length}</span>
             <span className="db-chip">📅 Зареєстровано: {formatDate(user.created_at)}</span>
           </div>
         </div>
-        <div className="db-profile-actions">
+        {/* Desktop action buttons */}
+        <div className="db-profile-actions db-profile-actions--desktop">
           {!editing ? (
-            <button className="db-btn db-btn-primary" onClick={() => setEditing(true)}>Редагувати</button>
+            <button className="db-btn db-btn-primary" onClick={() => setEditing(true)}>✏️ Редагувати</button>
           ) : (
             <>
               <button className="db-btn db-btn-ghost" onClick={() => setEditing(false)} disabled={saving}>Скасувати</button>
-              <button className="db-btn db-btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Збереження...' : 'Зберегти'}</button>
+              <button className="db-btn db-btn-primary" onClick={handleSave} disabled={saving}>{saving ? '⏳...' : '✓ Зберегти'}</button>
             </>
           )}
         </div>
       </div>
 
+      {/* Mobile chips row (shown below banner on mobile, hidden on desktop) */}
+      <div className="db-profile-mobile-chips">
+        <span className="db-chip">🏆 Команд: {myTeams.length}</span>
+        <span className="db-chip">📅 {formatDate(user.created_at)}</span>
+      </div>
+
+      {/* ━━━━━━ STICKY ACTION BUTTONS (mobile only) ━━━━━━ */}
+      <div className="db-profile-sticky-actions">
+        {!editing ? (
+          <button className="db-btn db-btn-primary" style={{ flex: 1 }} onClick={() => setEditing(true)}>✏️ Редагувати профіль</button>
+        ) : (
+          <>
+            <button className="db-btn db-btn-ghost" style={{ flex: 1 }} onClick={() => setEditing(false)} disabled={saving}>Скасувати</button>
+            <button className="db-btn db-btn-primary" style={{ flex: 2 }} onClick={handleSave} disabled={saving}>{saving ? '⏳ Збереження...' : '✓ Зберегти'}</button>
+          </>
+        )}
+      </div>
+
+      {/* ━━━━━━━━━━━━━━━━━ PROFILE CARDS ━━━━━━━━━━━━━━━━━ */}
       <div className="db-profile-cards">
         <div className="db-info-card">
           <h3>Особиста інформація</h3>
@@ -182,7 +223,35 @@ export default function TabProfile({ user, setUser, toast, onLogout }) {
           <h3>Безпека</h3>
           <div className="db-field-row"><label>Статус</label><span style={{ color:'#16a34a', fontWeight:600 }}>● Активний</span></div>
           <div className="db-field-row"><label>Пароль</label><span>••••••••</span></div>
-          <button className="db-btn db-btn-danger db-btn-full" style={{ marginTop:20 }} onClick={onLogout}>Вийти з акаунту</button>
+
+          {/* Panel access buttons (always visible - useful on mobile, convenient on desktop) */}
+          {setTab && (user.role === 'admin' || user.role === 'jury') && (
+            <div className="db-profile-panel-access">
+              <h4 className="db-profile-panel-label">Панелі управління</h4>
+              {(user.role === 'admin' || user.role === 'jury') && (
+                <button className="db-panel-access-btn db-panel-access-btn--jury" onClick={() => setTab('jury')}>
+                  <span className="db-pab-icon">⚖️</span>
+                  <div className="db-pab-text">
+                    <strong>Журі Панель</strong>
+                    <span>Оцінювання і результати</span>
+                  </div>
+                  <span className="db-pab-arrow">→</span>
+                </button>
+              )}
+              {user.role === 'admin' && (
+                <button className="db-panel-access-btn db-panel-access-btn--admin" onClick={() => setTab('admin')}>
+                  <span className="db-pab-icon">🛡️</span>
+                  <div className="db-pab-text">
+                    <strong>Адмін Панель</strong>
+                    <span>Повне управління системою</span>
+                  </div>
+                  <span className="db-pab-arrow">→</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          <button className="db-btn db-btn-danger db-btn-full" style={{ marginTop: 16 }} onClick={onLogout}>Вийти з акаунту</button>
         </div>
       </div>
     </div>

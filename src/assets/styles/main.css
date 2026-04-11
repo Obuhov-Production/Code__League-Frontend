@@ -43,6 +43,7 @@
 
 /* === Adaptive (mobile overrides) === */
 @import url("adaptive/home-mobile.css");
+@import url("adaptive/dashboard-mobile.css");
 
 /* =============================================
    Reset and Base Styles

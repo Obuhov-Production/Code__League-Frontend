@@ -46,6 +46,8 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
   const [roomLocked,  setRoomLocked]  = useState(false);
   const [chatError,   setChatError]   = useState('');
   const [customRooms, setCustomRooms] = useState([]);
+  const [roomsOpen,   setRoomsOpen]   = useState(false);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
 
   async function openChatProfile(basic) {
     setChatProfile({ ...basic, loading: true });
@@ -176,7 +178,28 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
     };
   }, [room, socket, soundOn, meId]);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+  const msgsRef = useRef(null);
+
+  // Auto-scroll to bottom on new messages (only if already near bottom)
+  useEffect(() => {
+    const el = msgsRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (nearBottom) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    else setShowScrollBtn(true);
+  }, [messages]);
+
+  const scrollToBottom = () => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setShowScrollBtn(false);
+  };
+
+  const handleMsgsScroll = () => {
+    const el = msgsRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    setShowScrollBtn(!nearBottom);
+  };
 
   useEffect(() => {
     if (!lightboxImg) return;
@@ -414,13 +437,80 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
         </div>
       )}
 
-      {/* Rooms Sidebar */}
-      <div className="db-chat-rooms">
-        <div className="db-chat-rooms-title">Кімнати</div>
+      {/* ── Mobile rooms drawer ── */}
+      {roomsOpen && (
+        <>
+          <div className="db-rooms-drawer-backdrop" onClick={() => setRoomsOpen(false)} />
+          <div className="db-rooms-drawer" onClick={e => e.stopPropagation()}>
+            <div className="db-rooms-drawer-header">
+              <span className="db-rooms-drawer-title">💬 Кімнати чату</span>
+              <button className="db-rooms-drawer-close" onClick={() => setRoomsOpen(false)}>✕</button>
+            </div>
+            <div className="db-rooms-drawer-body">
+              <div className="db-chat-rooms-group">
+                <div className="db-chat-rooms-group-label">Загальні</div>
+                {BASE_ROOMS.map(r => (
+                  <button key={r.id}
+                    className={`db-chat-room-btn${room === r.id ? ' active' : ''}${unreadCounts[r.id] > 0 && room !== r.id ? ' has-unread' : ''}`}
+                    onClick={() => { setRoom(r.id); setRoomsOpen(false); }}>
+                    <span>{r.label}</span>
+                    {unreadCounts[r.id] > 0 && room !== r.id && (
+                      <span className="db-room-unread">{unreadCounts[r.id] > 99 ? '99+' : unreadCounts[r.id]}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              {customRooms.length > 0 && (
+                <div className="db-chat-rooms-group">
+                  <div className="db-chat-rooms-group-label">Категорії</div>
+                  {customRooms.map(r => (
+                    <button key={r.id}
+                      className={`db-chat-room-btn${room === r.name ? ' active' : ''}${unreadCounts[r.name] > 0 && room !== r.name ? ' has-unread' : ''}`}
+                      onClick={() => { setRoom(r.name); setRoomsOpen(false); }}>
+                      <span># {r.label}</span>
+                      {unreadCounts[r.name] > 0 && room !== r.name && (
+                        <span className="db-room-unread">{unreadCounts[r.name] > 99 ? '99+' : unreadCounts[r.name]}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {myTeams.length > 0 && (
+                <div className="db-chat-rooms-group">
+                  <div className="db-chat-rooms-group-label">Команди</div>
+                  {myTeams.map(t => (
+                    <button key={t.id}
+                      className={`db-chat-room-btn team${room === `team_${t.id}` ? ' active' : ''}${unreadCounts[`team_${t.id}`] > 0 && room !== `team_${t.id}` ? ' has-unread' : ''}`}
+                      onClick={() => { setRoom(`team_${t.id}`); setRoomsOpen(false); }}>
+                      <span>🔒 {t.name}</span>
+                      {unreadCounts[`team_${t.id}`] > 0 && room !== `team_${t.id}` && (
+                        <span className="db-room-unread">{unreadCounts[`team_${t.id}`] > 99 ? '99+' : unreadCounts[`team_${t.id}`]}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="db-rooms-drawer-footer">
+              <button className="db-chat-sound-btn" onClick={() => setSoundOn(p => !p)}
+                title={soundOn ? 'Вимкнути звук' : 'Увімкнути звук'}>{soundOn ? '🔔' : '🔕'}</button>
+              <div className={`db-chat-status${online ? ' online' : ''}`}>
+                <span className="db-chat-dot" />{online ? 'Онлайн' : 'Офлайн'}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Rooms Sidebar / Pill Bar */}
+      <div className="db-chat-rooms">        <div className="db-chat-rooms-title">Кімнати</div>
+
+        {/* General rooms */}
         <div className="db-chat-rooms-group">
           <div className="db-chat-rooms-group-label">Загальні</div>
           {BASE_ROOMS.map(r => (
-            <button key={r.id} className={`db-chat-room-btn${room === r.id ? ' active' : ''}`} onClick={() => setRoom(r.id)}>
+            <button key={r.id} className={`db-chat-room-btn${room === r.id ? ' active' : ''}${unreadCounts[r.id] > 0 && room !== r.id ? ' has-unread' : ''}`}
+              onClick={() => setRoom(r.id)}>
               <span>{r.label}</span>
               {unreadCounts[r.id] > 0 && room !== r.id && (
                 <span className="db-room-unread">{unreadCounts[r.id] > 99 ? '99+' : unreadCounts[r.id]}</span>
@@ -428,12 +518,15 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
             </button>
           ))}
         </div>
+
+        {/* Custom rooms */}
         {customRooms.length > 0 && (
           <div className="db-chat-rooms-group">
             <div className="db-chat-rooms-group-label">Категорії</div>
             {customRooms.map(r => (
-              <button key={r.id} className={`db-chat-room-btn${room === r.name ? ' active' : ''}`} onClick={() => setRoom(r.name)}>
-                <span>🏷 {r.label}</span>
+              <button key={r.id} className={`db-chat-room-btn${room === r.name ? ' active' : ''}${unreadCounts[r.name] > 0 && room !== r.name ? ' has-unread' : ''}`}
+                onClick={() => setRoom(r.name)}>
+                <span># {r.label}</span>
                 {unreadCounts[r.name] > 0 && room !== r.name && (
                   <span className="db-room-unread">{unreadCounts[r.name] > 99 ? '99+' : unreadCounts[r.name]}</span>
                 )}
@@ -441,11 +534,14 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
             ))}
           </div>
         )}
+
+        {/* Team rooms */}
         {myTeams.length > 0 && (
           <div className="db-chat-rooms-group">
-            <div className="db-chat-rooms-group-label">Мої команди</div>
+            <div className="db-chat-rooms-group-label">Команди</div>
             {myTeams.map(t => (
-              <button key={t.id} className={`db-chat-room-btn team${room === `team_${t.id}` ? ' active' : ''}`} onClick={() => setRoom(`team_${t.id}`)}>
+              <button key={t.id} className={`db-chat-room-btn team${room === `team_${t.id}` ? ' active' : ''}${unreadCounts[`team_${t.id}`] > 0 && room !== `team_${t.id}` ? ' has-unread' : ''}`}
+                onClick={() => setRoom(`team_${t.id}`)}>
                 <span>🔒 {t.name}</span>
                 {unreadCounts[`team_${t.id}`] > 0 && room !== `team_${t.id}` && (
                   <span className="db-room-unread">{unreadCounts[`team_${t.id}`] > 99 ? '99+' : unreadCounts[`team_${t.id}`]}</span>
@@ -454,18 +550,28 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
             ))}
           </div>
         )}
+
+        {/* Sound + status (desktop only — hidden on mobile via CSS) */}
         <div style={{ flex: 1 }} />
-        <button className="db-chat-sound-btn" onClick={() => setSoundOn(p => !p)}
-          title={soundOn ? 'Вимкнути звук' : 'Увімкнути звук'}>{soundOn ? '🔔' : '🔕'}</button>
-        <div className={`db-chat-status${online ? ' online' : ''}`}>
-          <span className="db-chat-dot" />{online ? 'Підключено' : 'Відключено'}
+        <div className="db-chat-rooms-footer">
+          <button className="db-chat-sound-btn" onClick={() => setSoundOn(p => !p)}
+            title={soundOn ? 'Вимкнути звук' : 'Увімкнути звук'}>{soundOn ? '🔔' : '🔕'}</button>
+          <div className={`db-chat-status${online ? ' online' : ''}`}>
+            <span className="db-chat-dot" />{online ? 'Онлайн' : 'Офлайн'}
+          </div>
         </div>
       </div>
 
       {/* Main area */}
       <div className="db-chat-main">
         <div className="db-chat-header">
-          <div>
+          <button className="db-chat-rooms-toggle"
+            onClick={e => { e.stopPropagation(); setRoomsOpen(true); }}
+            title="Кімнати чату" aria-label="Відкрити список кімнат">
+            ☰
+            {Object.values(unreadCounts).some(v => v > 0) && <span className="db-rooms-toggle-badge" />}
+          </button>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <strong>{currentRoom?.label ?? room}</strong>
             {currentRoom?.locked && <span className="db-chat-locked-tag">приватна</span>}
             {roomLocked && <span className="db-chat-locked-tag locked">🔒 заблоковано</span>}
@@ -490,7 +596,7 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
           </div>
         )}
 
-        <div className="db-chat-messages">
+        <div className="db-chat-messages" ref={msgsRef} onScroll={handleMsgsScroll}>
           {loading
             ? <div className="db-loading"><div className="db-spinner" /></div>
             : messages.length === 0
@@ -505,6 +611,13 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
           )}
           <div ref={bottomRef} />
         </div>
+
+        {showScrollBtn && (
+          <button className="db-scroll-bottom-btn" onClick={scrollToBottom} title="Прокрутити вниз" aria-label="Прокрутити вниз">
+            ↓
+            {Object.values(unreadCounts).some(v => v > 0) && <span className="db-scroll-btn-dot" />}
+          </button>
+        )}
 
         <div className="db-chat-bottom">
           {replyTo && (
@@ -542,10 +655,26 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
                 <input ref={inputRef} type="text" value={text} onChange={handleInput}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) send(e); }}
                   placeholder={chatError || (online ? 'Написати повідомлення...' : 'Підключення...')}
-                  disabled={!online || uploading} className={`db-chat-input${chatError ? ' error' : ''}`} />
-                <button type="submit" className="db-btn db-btn-primary db-btn-sm"
+                  disabled={!online || uploading} className={`db-chat-input${chatError ? ' error' : ''}`}
+                  maxLength={500} />
+                {text.length > 300 && (
+                  <span className={`db-chat-char-count${text.length >= 480 ? ' danger' : text.length >= 400 ? ' warn' : ''}`}>
+                    {text.length}/500
+                  </span>
+                )}
+                <button type="submit" className="db-btn db-btn-primary db-btn-sm db-send-btn"
                   disabled={!online || (!text.trim() && !imgFiles.length) || uploading}>
-                  {uploading ? '⏳' : 'Надіслати'}
+                  {uploading ? (
+                    '⏳'
+                  ) : (
+                    <>
+                      <svg className="db-send-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path d="M22 2L11 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      <span className="db-send-label">Надіслати</span>
+                    </>
+                  )}
                 </button>
               </>
             )}

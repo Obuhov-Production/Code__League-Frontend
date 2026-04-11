@@ -78,7 +78,9 @@ export default function Dashboard() {
 
         <nav className="db-nav">
           {!loading && TABS.map(({ id, label, Icon }) => (
-            <button key={id} className={`db-nav-item${tab === id ? ' active' : ''}`} onClick={() => setTab(id)}>
+            <button key={id} className={`db-nav-item${tab === id ? ' active' : ''}${
+              id === 'admin' || id === 'jury' ? ' db-nav-admin-only' : ''
+            }`} onClick={() => setTab(id)}>
               <span className="db-nav-icon"><Icon /></span>
               <span className="db-nav-label">{label}</span>
               {id === 'admin' && <span className="db-nav-badge">●</span>}
@@ -147,7 +149,7 @@ export default function Dashboard() {
               {tab === 'teams'       && <TabTeams       toast={toast} />}
               {tab === 'leaderboard' && <TabLeaderboard toast={toast} />}
               {tab === 'chat'        && <TabChat        user={user} toast={toast} userId={user?.id} onUnreadChange={setChatHasUnread} setTab={setTab} />}
-              {tab === 'profile'     && <TabProfile     user={user} setUser={setUser} toast={toast} onLogout={handleLogout} />}
+              {tab === 'profile'     && <TabProfile     user={user} setUser={setUser} toast={toast} onLogout={handleLogout} setTab={setTab} />}
               {tab === 'jury'  && (hasRole(user, 'admin') || hasRole(user, 'jury')) && <TabJury  user={user} toast={toast} />}
               {tab === 'admin' && hasRole(user, 'admin')                            && <TabAdmin toast={toast} />}
             </>
