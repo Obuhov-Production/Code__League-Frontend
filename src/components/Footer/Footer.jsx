@@ -2,33 +2,38 @@ import logoImg from '@images/logos/logo-white.png';
 import iconTelegram from '@images/icons/social-telegram.svg';
 import iconInstagram from '@images/icons/social-instagram.svg';
 import iconYoutube from '@images/icons/social-youtube.svg';
+import { useLocation } from 'react-router-dom';
 
 function Footer({ id }) {
+  const location = useLocation();
+  const rootPrefix = location.pathname === '/' ? '' : '/';
+  const sectionHref = (anchor) => `${rootPrefix}#${anchor}`;
+
   return (
     <footer id={id} className="footer">
       <div className="container">
         {/* Top row: logo + nav + socials */}
         <div className="footer-top">
-          <a href="#home" className="footer-logo">
+          <a href={sectionHref('home')} className="footer-logo">
             <img src={logoImg} alt="Code League" className="footer-logo_icon" />
             <span className="footer-logo_text">Code League</span>
           </a>
 
           <nav className="footer-nav">
-            <a href="#home" className="footer-nav_link">Головна</a>
-            <a href="#services" className="footer-nav_link">Інформація</a>
-            <a href="#reviews" className="footer-nav_link">Відгуки</a>
-            <a href="#contacts" className="footer-nav_link">Контакти</a>
+            <a href={sectionHref('home')} className="footer-nav_link">Головна</a>
+            <a href={sectionHref('services')} className="footer-nav_link">Інформація</a>
+            <a href={sectionHref('reviews')} className="footer-nav_link">Відгуки</a>
+            <a href={sectionHref('contacts')} className="footer-nav_link">Контакти</a>
           </nav>
 
           <div className="footer-socials">
-            <a href="#" className="footer-socials_link" aria-label="Telegram">
+            <a href="https://t.me/codeleague" className="footer-socials_link" aria-label="Telegram">
               <img src={iconTelegram} alt="Telegram" />
             </a>
-            <a href="#" className="footer-socials_link" aria-label="Instagram">
+            <a href="https://www.instagram.com/codeleague" className="footer-socials_link" aria-label="Instagram">
               <img src={iconInstagram} alt="Instagram" />
             </a>
-            <a href="#" className="footer-socials_link" aria-label="YouTube">
+            <a href="https://www.youtube.com/codeleague" className="footer-socials_link" aria-label="YouTube">
               <img src={iconYoutube} alt="YouTube" />
             </a>
           </div>

@@ -1,0 +1,292 @@
+/* =============================================
+   Home Mobile Adaptive Overrides
+   ============================================= */
+
+@media (max-width: 768px) {
+  .container {
+    padding: 0 18px;
+  }
+
+  .info-section {
+    padding: 22px 0 26px;
+  }
+
+  .info-content {
+    gap: 14px;
+    align-items: flex-start;
+  }
+
+  .info-logo {
+    padding: 10px 14px;
+    border-radius: 10px;
+  }
+
+  .info-logo-text {
+    font-size: 20px;
+    line-height: 1.1;
+  }
+
+  .info-content .contact_description {
+    font-size: 14px;
+    line-height: 1.55;
+    padding-left: 14px;
+    margin-top: 2px;
+  }
+
+  .services-section {
+    padding: 20px 0 24px;
+  }
+
+  .services-grid {
+    gap: 16px;
+  }
+
+  .service-card {
+    min-height: 186px;
+    border-radius: 20px;
+    padding: 20px 16px 16px;
+    align-items: center;
+  }
+
+  .service-card_title {
+    font-size: 18px;
+    line-height: 1.24;
+  }
+
+  .service-card_content {
+    gap: 20px;
+  }
+
+  .service-card_link {
+    font-size: 14px;
+    gap: 8px;
+    display: inline-flex;
+    padding: 8px 12px;
+    border: 1px solid rgba(25, 26, 35, 0.2);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.7);
+  }
+
+  .service-card--dark .service-card_link {
+    border-color: rgba(243, 243, 243, 0.36);
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .service-card_arrow {
+    width: 32px;
+    height: 32px;
+  }
+
+  .service-card_image {
+    max-width: 34%;
+    transform: none;
+  }
+
+  .service-card_image img {
+    max-height: 124px;
+  }
+
+  .service-card--dark .service-card_image img {
+    max-height: 104px;
+  }
+
+  .accordion-section {
+    padding: 24px 0;
+  }
+
+  .accordion {
+    gap: 14px;
+  }
+
+  .accordion-item {
+    border-radius: 20px;
+  }
+
+  .accordion-item_header {
+    padding: 16px;
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  .accordion-item_number {
+    font-size: 28px;
+    min-width: 42px;
+    margin-top: 2px;
+  }
+
+  .accordion-item_title {
+    font-size: 14px;
+    line-height: 1.42;
+  }
+
+  .accordion-item_subtitle {
+    display: block;
+    margin-top: 4px;
+    font-size: 14px;
+    line-height: 1.42;
+  }
+
+  .accordion-item_icon {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+  }
+
+  .accordion-item_body {
+    padding: 0 16px;
+  }
+
+  .accordion-item_text {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .accordion-item--active .accordion-item_header {
+    padding-bottom: 12px;
+  }
+
+  .accordion-item--active .accordion-item_divider {
+    margin-bottom: 14px;
+  }
+
+  .accordion-item--active .accordion-item_text {
+    font-size: 15px;
+    line-height: 1.48;
+  }
+
+  .contact-section {
+    padding: 24px 0;
+  }
+
+  .contact_header {
+    margin-bottom: 18px;
+  }
+
+  .contact_title-highlight {
+    font-size: 24px;
+  }
+
+  .contact_body {
+    padding: 20px 16px;
+    border-radius: 20px;
+  }
+
+  .contact_form {
+    gap: 16px;
+    margin: 0 auto;
+    align-items: center;
+  }
+
+  .contact_radios,
+  .contact_fields-animate,
+  .contact_field,
+  .contact_submit {
+    width: 100%;
+  }
+
+  .contact_radios {
+    gap: 12px;
+  }
+
+  .contact_label {
+    font-size: 14px;
+  }
+
+  .contact_input,
+  .contact_textarea {
+    font-size: 14px;
+    padding: 12px 14px;
+    border-radius: 12px;
+  }
+
+  .contact_textarea {
+    min-height: 104px;
+  }
+
+  .contact_submit {
+    padding: 14px 0;
+    font-size: 15px;
+  }
+
+  .contact-section .contact_illustration {
+    display: none;
+  }
+
+  .reviews-page_main {
+    padding: 6px 0 26px;
+  }
+
+  .reviews-page_form-wrap {
+    padding: 12px 0 20px;
+  }
+
+  .reviews-page_contact-body {
+    padding: 18px 14px;
+    border-radius: 20px;
+  }
+
+  .reviews-page_contact-form {
+    gap: 14px;
+  }
+
+  .reviews-page_illustration {
+    width: 130px;
+    left: 0;
+    margin-right: -6px;
+    align-self: flex-end;
+  }
+
+  .reviews-page_bubble {
+    width: 250px;
+    flex-basis: 250px;
+    min-height: 128px;
+    border-radius: 20px;
+    padding: 16px 14px 14px;
+  }
+
+  .reviews-page_bubble-text {
+    font-size: 13px;
+  }
+
+  .reviews-page_author {
+    font-size: 14px;
+  }
+
+  .reviews-page_role {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 430px) {
+  .logo-text {
+    font-size: 15px;
+  }
+
+  .service-card {
+    min-height: 174px;
+    padding: 18px 14px 14px;
+  }
+
+  .service-card_title {
+    font-size: 16px;
+  }
+
+  .service-card_image {
+    max-width: 31%;
+  }
+
+  .accordion-item_header {
+    padding: 14px;
+  }
+
+  .accordion-item_title,
+  .accordion-item_subtitle,
+  .accordion-item_text {
+    font-size: 13px;
+  }
+
+  .contact_illustration,
+  .reviews-page_illustration {
+    width: 112px;
+  }
+}

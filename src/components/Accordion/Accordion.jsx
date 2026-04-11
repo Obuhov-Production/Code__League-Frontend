@@ -1,4 +1,4 @@
-import { useState, useRef, useLayoutEffect } from 'react'
+import { useEffect, useState, useRef, useLayoutEffect } from 'react'
 
 const accordionData = [
   {
@@ -27,13 +27,27 @@ const accordionData = [
 function AccordionItem({ item, isOpen, onToggle }) {
   const bodyRef = useRef(null)
   const [, rerender] = useState()
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 768px)').matches)
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 768px)')
+    const onChange = (e) => setIsMobile(e.matches)
+
+    if (media.addEventListener) media.addEventListener('change', onChange)
+    else media.addListener(onChange)
+
+    return () => {
+      if (media.removeEventListener) media.removeEventListener('change', onChange)
+      else media.removeListener(onChange)
+    }
+  }, [])
 
   // Force re-render after mount so bodyRef.current is available for scrollHeight
   useLayoutEffect(() => { rerender({}) }, [])
 
   const bodyStyle = {
     height: isOpen ? bodyRef.current?.scrollHeight ?? 0 : 0,
-    paddingBottom: isOpen ? 28 : 0,
+    paddingBottom: isOpen ? (isMobile ? 14 : 28) : 0,
   }
 
   return (

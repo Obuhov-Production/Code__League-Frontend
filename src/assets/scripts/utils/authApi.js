@@ -257,6 +257,38 @@ export async function clearChatRoom(room) {
   return data;
 }
 
+/* ── Public Reviews ────────────────────────── */
+
+export async function getPublicReviews(query = '') {
+  const params = new URLSearchParams();
+  if (query?.trim()) params.set('q', query.trim());
+
+  const url = `${BASE}/reviews${params.toString() ? `?${params.toString()}` : ''}`;
+  const res = await fetch(url);
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.message || data.error || 'Не вдалося завантажити відгуки');
+  }
+
+  return data;
+}
+
+export async function createPublicReview(payload) {
+  const res = await fetch(`${BASE}/reviews`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || data.error || 'Не вдалося надіслати відгук');
+  }
+
+  return data;
+}
+
 /* ── Admin ────────────────────────────────────────── */
 
 export async function getAdminUsers() {

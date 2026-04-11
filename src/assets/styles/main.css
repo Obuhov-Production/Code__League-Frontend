@@ -22,6 +22,7 @@
 @import url("components/about-section.css");
 @import url("components/accordion.css");
 @import url("components/reviews.css");
+@import url("components/reviews-page.css");
 @import url("components/contact.css");
 @import url("components/footer.css");
 
@@ -39,6 +40,9 @@
 
 /* === Dashboard === */
 @import url("components/dashboard.css");
+
+/* === Adaptive (mobile overrides) === */
+@import url("adaptive/home-mobile.css");
 
 /* =============================================
    Reset and Base Styles

@@ -11,6 +11,7 @@ import CTASection from '@components/CTASection'
 import AboutSection from '@components/AboutSection'
 import Accordion from '@components/Accordion'
 import RewiewsSection from '@components/rewiewsSection'
+import RewiewsPage from '@components/rewiews_page'
 import ContactSection from '@components/ContactSection'
 
 // Auth Pages
@@ -57,6 +58,7 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/reviews" element={<RewiewsPage />} />
         </Routes>
       </ToastProvider>
     </BrowserRouter>

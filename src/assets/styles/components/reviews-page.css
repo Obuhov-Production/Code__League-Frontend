@@ -1,0 +1,137 @@
+/* =============================================
+   Reviews Page
+   Component: Rewiews.jsx
+   ============================================= */
+
+.reviews-page_main {
+  padding: 10px 0 42px;
+}
+
+.reviews-page_form-wrap {
+  padding: 20px 0 28px;
+}
+
+.reviews-page_contact-body {
+  margin-top: 6px;
+}
+
+.reviews-page_contact-form {
+  max-width: 540px;
+}
+
+.reviews-page_illustration {
+  width: 520px;
+  margin-right: -70px;
+  left: 160px;
+}
+
+.reviews-page_login-hint {
+  margin-top: -8px;
+  font-size: 14px;
+  color: #7c3a3a;
+}
+
+.reviews-page_wall {
+  overflow: hidden;
+  padding: 6px 0 0;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+}
+
+.reviews-page_strip {
+  --duration: 60s;
+  display: flex;
+  align-items: flex-start;
+  gap: 22px;
+  width: max-content;
+  padding: 10px 0 20px 0;
+}
+
+.reviews-page_strip--loop {
+  animation: reviewsLoop var(--duration) linear infinite;
+}
+
+.reviews-page_bubble {
+  position: relative;
+  width: 330px;
+  min-height: 152px;
+  flex: 0 0 330px;
+  border-radius: 26px;
+  padding: 22px 20px 18px;
+  background: var(--color_dark);
+  border: 1px solid rgba(172, 158, 248, 0.24);
+}
+
+.reviews-page_bubble-text {
+  color: var(--color_light);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.reviews-page_bubble-tail {
+  position: absolute;
+  bottom: -10px;
+  left: 26px;
+  width: 20px;
+  height: 20px;
+  background: var(--color_dark);
+  transform: rotate(45deg);
+  border-right: 1px solid rgba(172, 158, 248, 0.24);
+  border-bottom: 1px solid rgba(172, 158, 248, 0.24);
+}
+
+.reviews-page_meta {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.reviews-page_author {
+  color: var(--main_color);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.reviews-page_role {
+  color: rgba(243, 243, 243, 0.82);
+  font-size: 13px;
+}
+
+@keyframes reviewsLoop {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (max-width: 1024px) {
+  .reviews-page_illustration {
+    width: 330px;
+    left: 0;
+    margin-right: -24px;
+  }
+}
+
+@media (max-width: 768px) {
+  .reviews-page_contact-form {
+    max-width: 100%;
+  }
+
+  .reviews-page_strip {
+    gap: 14px;
+  }
+
+  .reviews-page_bubble {
+    width: 280px;
+    min-height: 136px;
+    flex-basis: 280px;
+  }
+
+  .reviews-page_illustration {
+    width: 220px;
+    margin-right: 0;
+  }
+}

@@ -1,18 +1,64 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import logoImg from '@images/logos/logo.png';
 import { isLoggedIn, clearSession } from '@utils/authApi';
 import { useToast } from '@utils/toast.jsx';
 
 function Header() {
   const toast = useToast();
+  const location = useLocation();
   const [loggedIn, setLoggedIn] = useState(isLoggedIn());
+  const [menuOpen, setMenuOpen] = useState(false);
+  const rootPrefix = location.pathname === '/' ? '' : '/';
+
+  const sectionHref = (id) => `${rootPrefix}#${id}`;
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const onResize = () => {
+      if (window.innerWidth > 900) setMenuOpen(false);
+    };
+
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
+    document.body.style.overflow = menuOpen ? 'hidden' : '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [menuOpen]);
 
   const handleLogout = () => {
     clearSession();
     setLoggedIn(false);
+    setMenuOpen(false);
     toast.info('Ви вийшли з акаунту');
   };
+
+  const closeMenu = () => setMenuOpen(false);
+
+  const actions = loggedIn ? (
+    <>
+      <Link to="/dashboard" className="cta-button" style={{ textDecoration: 'none' }} onClick={closeMenu}>
+        Кабінет
+      </Link>
+      <button
+        onClick={handleLogout}
+        className="header-logout-btn"
+      >
+        Вийти
+      </button>
+    </>
+  ) : (
+    <Link to="/login" className="cta-button" style={{ textDecoration: 'none' }} onClick={closeMenu}>
+      Почати зараз
+    </Link>
+  );
 
   return (
     <header className="header">
@@ -23,35 +69,34 @@ function Header() {
             <span className="logo-text">Code League</span>
           </Link>
 
-          <nav className="navigation">
-            <a href="#home" className="nav-link">Головна</a>
-            <a href="#services" className="nav-link">Сервіси</a>
-            <a href="#about" className="nav-link">Про нас</a>
-            <a href="#reviews" className="nav-link">Відгуки</a>
-            <a href="#contacts" className="nav-link">Контакти</a>
+          <button
+            type="button"
+            className={`burger ${menuOpen ? 'burger--open' : ''}`}
+            aria-label="Відкрити меню"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((prev) => !prev)}
+          >
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+
+          <div className={`header-mobile-backdrop ${menuOpen ? 'header-mobile-backdrop--open' : ''}`} onClick={closeMenu} />
+
+          <nav className={`navigation ${menuOpen ? 'navigation--open' : ''}`}>
+            <a href={sectionHref('home')} className="nav-link" onClick={closeMenu}>Головна</a>
+            <a href={sectionHref('services')} className="nav-link" onClick={closeMenu}>Сервіси</a>
+            <a href={sectionHref('about')} className="nav-link" onClick={closeMenu}>Про нас</a>
+            <a href={sectionHref('reviews')} className="nav-link" onClick={closeMenu}>Відгуки</a>
+            <a href={sectionHref('contacts')} className="nav-link" onClick={closeMenu}>Контакти</a>
+            <div className="header-actions header-actions--mobile">
+              {actions}
+            </div>
           </nav>
 
-          {loggedIn ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <Link to="/dashboard" className="cta-button" style={{ textDecoration: 'none' }}>
-                Кабінет
-              </Link>
-              <button
-                onClick={handleLogout}
-                style={{
-                  padding: '10px 20px', borderRadius: 10, border: '1.5px solid #e0e0e0',
-                  background: 'transparent', fontFamily: 'Poppins, sans-serif',
-                  fontSize: 14, fontWeight: 500, cursor: 'pointer',
-                }}
-              >
-                Вийти
-              </button>
-            </div>
-          ) : (
-            <Link to="/login" className="cta-button" style={{ textDecoration: 'none' }}>
-              Почати зараз
-            </Link>
-          )}
+          <div className="header-actions header-actions--desktop">
+            {actions}
+          </div>
         </div>
       </div>
     </header>
