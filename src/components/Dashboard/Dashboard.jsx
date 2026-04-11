@@ -56,7 +56,7 @@ export default function Dashboard() {
   const handleLogout = () => { clearSession(); toast.info('Ви вийшли'); navigate('/'); };
 
   const TABS = [
-    { id: 'overview',    label: 'Огляд',     Icon: IconHome },
+    { id: 'overview',    label: 'Головна',     Icon: IconHome },
     { id: 'tournaments', label: 'Турніри',   Icon: IconTournaments },
     { id: 'leaderboard', label: 'Лідерборд', Icon: IconLeaderboard },
     { id: 'teams',       label: 'Команди',   Icon: IconTeams },

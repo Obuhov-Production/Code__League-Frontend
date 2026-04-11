@@ -16,12 +16,12 @@ export const CHECK_BACKEND = import.meta.env.VITE_CHECK_BACKEND !== 'false';
 /** Мок-юзер для dev-режиму (VITE_CHECK_BACKEND=false) */
 export const DEV_MOCK_USER = {
   id: 0,
-  username: 'dev_user',
-  email: 'dev@localhost',
+  username: 'dev_tester',
+  email: 'dev@local_tester.me',
   role: 'admin',
   user_avatar_url: null,
   user_banner_url: null,
-  bio: 'Dev mock user — backend is disabled',
+  bio: 'dev mock user — backend is disabled',
 };
 
 export const OAUTH_URLS = {

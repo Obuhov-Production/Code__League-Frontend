@@ -9,6 +9,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
   const [saving,    setSaving]   = useState(false);
   const [form,      setForm]     = useState({ username: '', user_description: '', banner_color: '' });
   const [bannerMode, setBannerMode] = useState('color');
+  const [hexInput,  setHexInput]  = useState('#1e1b2e');
   const avatarInputRef = useRef(null);
   const bannerInputRef = useRef(null);
 
@@ -18,7 +19,9 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
 
   useEffect(() => {
     if (user) {
-      setForm({ username: user.username || '', user_description: user.user_description || '', banner_color: user.banner_color || '#1e1b2e' });
+      const bc = user.banner_color || '#1e1b2e';
+      setForm({ username: user.username || '', user_description: user.user_description || '', banner_color: bc });
+      setHexInput(bc);
     }
   }, [user]);
 
@@ -89,29 +92,55 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━ BANNER ━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <div className="db-profile-banner" style={bannerStyle}>
+        {/* ─── Banner editor panel ─── */}
         {editing && (
-          <div className="db-banner-controls">
-            <button className={`db-banner-mode-btn${bannerMode === 'color' ? ' active' : ''}`} onClick={() => setBannerMode('color')}>🎨 Колір</button>
-            <button className={`db-banner-mode-btn${bannerMode === 'image' ? ' active' : ''}`} onClick={() => setBannerMode('image')}>📷 Фото</button>
-            {user.banner_url && (
-              <button className="db-banner-mode-btn db-banner-del-btn" onClick={handleDeleteBanner} title="Видалити банер">❌ Видалити</button>
+          <div className="db-bep">
+            <div className="db-bep-tabs">
+              <button className={`db-bep-tab${bannerMode === 'color' ? ' active' : ''}`}
+                onClick={() => setBannerMode('color')}>🎨 Колір</button>
+              <button className={`db-bep-tab${bannerMode === 'image' ? ' active' : ''}`}
+                onClick={() => setBannerMode('image')}>🖼 Фото</button>
+            </div>
+
+            {bannerMode === 'color' && (
+              <div className="db-bep-color">
+                <div className="db-bep-swatches">
+                  {BANNER_PRESETS.map(c => (
+                    <button key={c} className={`db-bep-dot${form.banner_color === c ? ' sel' : ''}`}
+                      style={{ background: c }}
+                      onClick={() => { setForm(f => ({ ...f, banner_color: c })); setHexInput(c); }} />
+                  ))}
+                </div>
+                <div className="db-bep-sep" />
+                <div className="db-bep-custom">
+                  <label className="db-bep-preview" style={{ background: form.banner_color }}>
+                    <input type="color" value={form.banner_color}
+                      onChange={e => { const c = e.target.value; setForm(f => ({ ...f, banner_color: c })); setHexInput(c); }} />
+                  </label>
+                  <div className="db-bep-hex">
+                    <span>#</span>
+                    <input value={hexInput.replace(/^#/, '')} maxLength={6} spellCheck={false} placeholder="1e1b2e"
+                      onChange={e => {
+                        const raw = e.target.value.replace(/[^0-9a-fA-F]/g, '');
+                        setHexInput('#' + raw);
+                        if (raw.length === 6) setForm(f => ({ ...f, banner_color: '#' + raw }));
+                      }} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {bannerMode === 'image' && (
+              <div className="db-bep-photo">
+                <button className="db-bep-upload" onClick={() => bannerInputRef.current?.click()}>
+                  📤 Завантажити <span>до 10 МБ</span>
+                </button>
+                {user.banner_url && (
+                  <button className="db-bep-del" onClick={handleDeleteBanner}>🗑 Видалити</button>
+                )}
+              </div>
             )}
           </div>
-        )}
-        {editing && bannerMode === 'color' && (
-          <div className="db-color-presets">
-            {BANNER_PRESETS.map(c => (
-              <button key={c} className={`db-color-dot${form.banner_color === c ? ' selected' : ''}`}
-                style={{ background: c }} onClick={() => setForm(f => ({ ...f, banner_color: c }))} />
-            ))}
-            <input type="color" value={form.banner_color} onChange={e => setForm(f => ({ ...f, banner_color: e.target.value }))}
-              className="db-color-custom" title="Свій колір" />
-          </div>
-        )}
-        {editing && bannerMode === 'image' && (
-          <button className="db-banner-upload-btn" onClick={() => bannerInputRef.current?.click()}>
-            📤 Завантажити фото (до 10 МБ)
-          </button>
         )}
 
         {/* ▼ Mobile-only: avatar + username float over banner ▼ */}
@@ -180,8 +209,8 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
 
       {/* ━━━━━━━━━━━━━━━━━ PROFILE CARDS ━━━━━━━━━━━━━━━━━ */}
       <div className="db-profile-cards">
-        <div className="db-info-card">
-          <h3>Особиста інформація</h3>
+        <div className="db-info-card db-info-card--personal">
+          <h3><span className="db-card-icon">👤</span> Особиста інформація</h3>
           {editing ? (
             <>
               <div className="db-field-row">
@@ -199,30 +228,36 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
               </div>
             </>
           ) : (
-            <>
+            <div className="db-field-list">
               <div className="db-field-row"><label>Нікнейм</label><span>{user.username || '—'}</span></div>
               <div className="db-field-row"><label>Email</label><span>{user.email}</span></div>
               <div className="db-field-row"><label>Про себе</label><span>{user.user_description || '—'}</span></div>
               <div className="db-field-row"><label>Реєстрація</label><span>{formatDate(user.created_at)}</span></div>
-            </>
+            </div>
           )}
         </div>
 
-        <div className="db-info-card">
-          <h3>Мої команди</h3>
+        <div className="db-info-card db-info-card--teams">
+          <h3><span className="db-card-icon">🏆</span> Мої команди</h3>
           {myTeams.length === 0 ? <p style={{ color:'#aaa', fontSize:14 }}>Ще немає команд</p>
-            : myTeams.slice(0,5).map(t => (
-              <div key={t.id} className="db-field-row">
-                <label>{t.tournament_name}</label>
-                <span style={{ display:'flex', alignItems:'center', gap:8 }}>{t.name} <StatusBadge status={t.tournament_status} /></span>
+            : (
+              <div className="db-field-list">
+                {myTeams.slice(0,5).map(t => (
+                  <div key={t.id} className="db-field-row">
+                    <label>{t.tournament_name}</label>
+                    <span style={{ display:'flex', alignItems:'center', gap:8 }}>{t.name} <StatusBadge status={t.tournament_status} /></span>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
         </div>
 
-        <div className="db-info-card">
-          <h3>Безпека</h3>
-          <div className="db-field-row"><label>Статус</label><span style={{ color:'#16a34a', fontWeight:600 }}>● Активний</span></div>
-          <div className="db-field-row"><label>Пароль</label><span>••••••••</span></div>
+        <div className="db-info-card db-info-card--security">
+          <h3><span className="db-card-icon">🔒</span> Безпека</h3>
+          <div className="db-field-list">
+            <div className="db-field-row"><label>Статус</label><span style={{ color:'#16a34a', fontWeight:600 }}>● Активний</span></div>
+            <div className="db-field-row"><label>Пароль</label><span>••••••••</span></div>
+          </div>
 
           {/* Panel access buttons (always visible - useful on mobile, convenient on desktop) */}
           {setTab && (user.role === 'admin' || user.role === 'jury') && (
