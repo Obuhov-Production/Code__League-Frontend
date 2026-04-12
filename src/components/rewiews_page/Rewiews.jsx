@@ -52,6 +52,110 @@ const PRESET_REVIEWS = [
 		text: 'З телефона теж все ок: адаптивність хороша, нічого не ламається, навігація проста.',
 		createdAt: '2026-03-24T10:00:00.000Z',
 	},
+	{
+		id: 'seed-6',
+		author: 'Олексій Гриценко',
+		role: 'Користувач',
+		rating: 5,
+		text: 'Реєстрація займає буквально хвилину, а потім одразу можна стартувати. Ніяких зайвих кроків чи підтверджень.',
+		createdAt: '2026-03-26T10:00:00.000Z',
+	},
+	{
+		id: 'seed-7',
+		author: 'Катерина Мороз',
+		role: 'Користувач',
+		rating: 4,
+		text: 'Завдання добре структуровані за складністю. Видно, що автори думали про навчальний процес, а не просто набір тестів.',
+		createdAt: '2026-03-28T10:00:00.000Z',
+	},
+	{
+		id: 'seed-8',
+		author: 'Богдан Ільченко',
+		role: 'Користувач',
+		rating: 5,
+		text: 'Лідерборд в реальному часі — це те, що не вистачало на інших платформах. Одразу видно де стоїш серед команди.',
+		createdAt: '2026-03-30T10:00:00.000Z',
+	},
+	{
+		id: 'seed-9',
+		author: 'Валентина Кузьменко',
+		role: 'Користувач',
+		rating: 5,
+		text: 'Зручна навігація між розділами, все на своєму місці. Не треба гуглити як щось зробити — інтуїтивно зрозуміло.',
+		createdAt: '2026-04-01T10:00:00.000Z',
+	},
+	{
+		id: 'seed-10',
+		author: 'Роман Василенко',
+		role: 'Користувач',
+		rating: 4,
+		text: 'Брав участь у двох турнірах — обидва пройшли без технічних збоїв. Стабільна платформа, що рідкість.',
+		createdAt: '2026-04-02T10:00:00.000Z',
+	},
+	{
+		id: 'seed-11',
+		author: 'Оксана Петренко',
+		role: 'Користувач',
+		rating: 5,
+		text: 'Подобається, що є чат між учасниками прямо на платформі. Можна обговорювати задачі без переходу в окремий месенджер.',
+		createdAt: '2026-04-03T10:00:00.000Z',
+	},
+	{
+		id: 'seed-12',
+		author: 'Михайло Захаренко',
+		role: 'Користувач',
+		rating: 5,
+		text: 'Профіль з прогресом і статистикою дає розуміння де ти зараз і що варто покращити. Дуже мотивує рухатись далі.',
+		createdAt: '2026-04-04T10:00:00.000Z',
+	},
+	{
+		id: 'seed-13',
+		author: 'Людмила Шевченко',
+		role: 'Користувач',
+		rating: 5,
+		text: 'Все завантажується швидко, інтерфейс не перевантажений. Навіть на старому ноутбуці відкривається без проблем.',
+		createdAt: '2026-04-05T10:00:00.000Z',
+	},
+	{
+		id: 'seed-14',
+		author: 'Тарас Олексієнко',
+		role: 'Користувач',
+		rating: 4,
+		text: 'Командний режим — це окремий кайф. Чітко видно внесок кожного учасника, і це не дає розслабитись під час турніру.',
+		createdAt: '2026-04-06T10:00:00.000Z',
+	},
+	{
+		id: 'seed-15',
+		author: 'Надія Романенко',
+		role: 'Користувач',
+		rating: 5,
+		text: 'Форма реєстрації чиста і без зайвих полів. Авторизація через Google теж зайшла — зручно коли не треба ще один пароль.',
+		createdAt: '2026-04-07T10:00:00.000Z',
+	},
+	{
+		id: 'seed-16',
+		author: 'Євген Данченко',
+		role: 'Користувач',
+		rating: 5,
+		text: 'Особисто мені зайшов дизайн: темна тема, акуратні кольори, нічого не ріже очі навіть після кількох годин роботи.',
+		createdAt: '2026-04-08T10:00:00.000Z',
+	},
+	{
+		id: 'seed-17',
+		author: 'Аліна Корнієнко',
+		role: 'Користувач',
+		rating: 5,
+		text: 'Тримала відкритою паралельно з редактором коду — зручно і нічого не гальмує. Ресурсів майже не їсть.',
+		createdAt: '2026-04-09T10:00:00.000Z',
+	},
+	{
+		id: 'seed-18',
+		author: 'Сергій Панченко',
+		role: 'Користувач',
+		rating: 5,
+		text: 'Добра ідея з публічними профілями учасників — можна подивитись на результати інших і підтягнути своє рішення.',
+		createdAt: '2026-04-10T10:00:00.000Z',
+	},
 ]
 
 function normalizeReview(raw, index) {
@@ -75,13 +179,15 @@ function extractReviews(payload) {
 function mergeWithPreset(serverReviews) {
 	const map = new Map()
 
-	for (const item of PRESET_REVIEWS) {
-		map.set(item.id, item)
-	}
-
+	// Спочатку серверні — вони мають пріоритет і йдуть першими
 	for (const item of serverReviews) {
 		if (!item.text) continue
 		map.set(item.id, item)
+	}
+
+	// Пресети доповнюють тільки якщо такого ID ще немає
+	for (const item of PRESET_REVIEWS) {
+		if (!map.has(item.id)) map.set(item.id, item)
 	}
 
 	return Array.from(map.values())
@@ -261,8 +367,20 @@ function RewiewsPage() {
 	checkAuth()
 	}, [toast])
 
-	const rotatingTen = useMemo(() => buildFixedCount(reviews, 10), [reviews])
-	const loopedStrip = useMemo(() => [...rotatingTen, ...rotatingTen], [rotatingTen])
+	const strips = useMemo(() => {
+		const PER_ROW = 6
+		const source = reviews.length ? reviews : PRESET_REVIEWS
+		const rows = []
+		for (let i = 0; i < source.length; i += PER_ROW) {
+			const chunk = source.slice(i, i + PER_ROW)
+			// Якщо останній рядок неповний — добиваємо до 6 з source
+			const padded = chunk.length < PER_ROW
+				? [...chunk, ...source.slice(0, PER_ROW - chunk.length)]
+				: chunk
+			rows.push([...padded, ...padded])
+		}
+		return rows
+	}, [reviews])
 
 	const handleSubmit = async (e) => {
 		e.preventDefault()
@@ -397,16 +515,16 @@ function RewiewsPage() {
 				</section>
 
 				<section className="reviews-page_wall" aria-live="polite">
-					{!loading && (
+					{!loading && strips.map((strip, rowIdx) => (
 						<div
-							className="reviews-page_strip reviews-page_strip--loop"
-							style={{ animationDelay: `-${savedAnimationMs}ms` }}
+							key={rowIdx}
+							className={`reviews-page_strip ${rowIdx % 2 === 0 ? 'reviews-page_strip--loop' : 'reviews-page_strip--reverse'}`}
 						>
-							{loopedStrip.map((review, idx) => (
-								<ReviewBubble key={`loop-${review.id}-${idx}`} review={review} />
+							{strip.map((review, idx) => (
+								<ReviewBubble key={`strip-${rowIdx}-${review.id}-${idx}`} review={review} />
 							))}
 						</div>
-					)}
+					))}
 				</section>
 			</main>
 

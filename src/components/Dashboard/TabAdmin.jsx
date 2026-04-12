@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 
 import {
   getTournaments, getAdminUsers, getAdminStats, getAdminTeams,
@@ -9,6 +9,82 @@ import {
   getChatRoomSettings, setChatRoomSettings, postChatAnnouncement,
 } from '@utils/authApi';
 import { StatusBadge, RoleBadges, CustomSelect, ConfirmModal, formatDate, STATUS_LABEL } from './db.shared.jsx';
+
+/* ── Options for tournament form ───────────────────── */
+const CATEGORY_OPTIONS = [
+  { value: 'hackathon',  label: '⚡ Хакатон' },
+  { value: 'olympiad',   label: '🎓 Олімпіада' },
+  { value: 'marathon',   label: '🏃 Марафон' },
+  { value: 'sprint',     label: '⏱ Спринт' },
+  { value: 'challenge',  label: '🎯 Челендж' },
+  { value: 'other',      label: '📦 Інше' },
+];
+
+const FORMAT_OPTIONS = [
+  { value: 'online',  label: '🌐 Онлайн' },
+  { value: 'offline', label: '📍 Офлайн' },
+  { value: 'hybrid',  label: '🔀 Гібрид' },
+];
+
+const TOUR_STATUS_OPTS = [
+  { value: 'draft',        label: 'Чернетка',   color: '#888' },
+  { value: 'registration', label: 'Реєстрація', color: '#7c5ff5' },
+  { value: 'running',      label: 'Активний',   color: '#16a34a' },
+  { value: 'finished',     label: 'Завершений', color: '#0ea5e9' },
+];
+
+/* ── StatusPicker — custom colored status dropdown ─── */
+function StatusPicker({ value, onChange, compact = false }) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef(null);
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 });
+
+  const current = TOUR_STATUS_OPTS.find(o => o.value === value) || TOUR_STATUS_OPTS[0];
+
+  const handleOpen = () => {
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setDropPos({ top: r.bottom + 6, left: r.left, width: r.width });
+    }
+    setOpen(p => !p);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const fn = e => setOpen(false);
+    document.addEventListener('mousedown', fn);
+    return () => document.removeEventListener('mousedown', fn);
+  }, [open]);
+
+  return (
+    <div className={`db-status-picker${compact ? ' db-status-picker--compact' : ''}`}>
+      <button ref={btnRef} type="button" className="db-status-picker-trigger" onClick={handleOpen}>
+        <span className="db-sp-dot" style={{ background: current.color }} />
+        <span className="db-sp-label" style={{ color: current.color }}>{current.label}</span>
+        <span className="db-cs-arrow">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div
+          className="db-sp-portal-drop"
+          style={{ top: dropPos.top, left: dropPos.left, minWidth: Math.max(dropPos.width, 170) }}
+          onMouseDown={e => e.stopPropagation()}
+        >
+          {TOUR_STATUS_OPTS.map(o => (
+            <div
+              key={o.value}
+              className={`db-sp-option${o.value === value ? ' active' : ''}`}
+              onClick={() => { onChange(o.value); setOpen(false); }}
+            >
+              <span className="db-sp-dot" style={{ background: o.color }} />
+              <span style={{ flex: 1, color: o.color, fontWeight: 500 }}>{o.label}</span>
+              {o.value === value && <span className="db-sp-check">✓</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ── Manage User Modal ──────────────────────────────── */
 function ManageUserModal({ user, toast, onClose, onRoleChange, onDelete }) {
@@ -239,38 +315,118 @@ function EditTournamentModal({ tournament, allTeams, toast, onClose, onSuccess, 
 /* ── Create Tournament Form ─────────────────────────── */
 function CreateTournamentForm({ toast, onSuccess, onCancel }) {
   const today = new Date().toISOString().split('T')[0];
-  const [f, setF] = useState({ name:'', description:'', rules:'', start_date:today, end_date:'', registration_start:today, registration_end:'', teams_limit:'', rounds_count:1, min_team_size:2, max_team_size:5 });
+  const [f, setF] = useState({
+    name: '', description: '', rules: '', prize: '',
+    category: 'hackathon', format: 'online', status: 'draft',
+    start_date: today, end_date: '',
+    registration_start: today, registration_end: '',
+    teams_limit: '', rounds_count: 1, min_team_size: 2, max_team_size: 5,
+  });
   const [loading, setLoading] = useState(false);
-  const upd = (k,v) => setF(x => ({ ...x, [k]: v }));
+  const upd = (k, v) => setF(x => ({ ...x, [k]: v }));
+
   const handleSubmit = async e => {
-    e.preventDefault(); setLoading(true);
+    e.preventDefault();
+    setLoading(true);
     try {
-      await createTournament({ ...f, teams_limit: f.teams_limit ? Number(f.teams_limit) : null, rounds_count: Number(f.rounds_count), min_team_size: Number(f.min_team_size), max_team_size: Number(f.max_team_size) });
+      await createTournament({
+        ...f,
+        teams_limit:   f.teams_limit ? Number(f.teams_limit) : null,
+        rounds_count:  Number(f.rounds_count),
+        min_team_size: Number(f.min_team_size),
+        max_team_size: Number(f.max_team_size),
+      });
       onSuccess();
-    } catch (err) { toast.error(err.message); } finally { setLoading(false); }
+    } catch (err) { toast.error(err.message); }
+    finally { setLoading(false); }
   };
+
   return (
     <form className="db-create-form" onSubmit={handleSubmit}>
-      <h3>Новий турнір</h3>
-      <div className="db-form-row"><label>Назва *</label><input value={f.name} onChange={e => upd('name',e.target.value)} required /></div>
-      <div className="db-form-row"><label>Опис</label><textarea rows={2} value={f.description} onChange={e => upd('description',e.target.value)} /></div>
-      <div className="db-form-row"><label>Правила</label><textarea rows={2} value={f.rules} onChange={e => upd('rules',e.target.value)} /></div>
-      <div className="db-form-row-2">
-        <div className="db-form-row"><label>Старт *</label><input type="date" value={f.start_date} onChange={e => upd('start_date',e.target.value)} required /></div>
-        <div className="db-form-row"><label>Кінець *</label><input type="date" value={f.end_date} onChange={e => upd('end_date',e.target.value)} required /></div>
+
+      {/* Header */}
+      <div className="db-create-form-header">
+        <div className="db-create-form-icon">🏆</div>
+        <div>
+          <h3>Новий турнір</h3>
+          <p>Заповніть інформацію для створення турніру</p>
+        </div>
       </div>
-      <div className="db-form-row-2">
-        <div className="db-form-row"><label>Реєстрація від *</label><input type="date" value={f.registration_start} onChange={e => upd('registration_start',e.target.value)} required /></div>
-        <div className="db-form-row"><label>Реєстрація до *</label><input type="date" value={f.registration_end} onChange={e => upd('registration_end',e.target.value)} required /></div>
+
+      {/* Section: Основна інформація */}
+      <div className="db-cfs-section">
+        <div className="db-cfs-title"><span className="db-cfs-icon">📋</span> Основна інформація</div>
+        <div className="db-form-row">
+          <label>Назва *</label>
+          <input placeholder="Введіть назву турніру" value={f.name} onChange={e => upd('name', e.target.value)} required />
+        </div>
+        <div className="db-form-row-2">
+          <div className="db-form-row">
+            <label>Категорія</label>
+            <CustomSelect value={f.category} onChange={v => upd('category', v)} options={CATEGORY_OPTIONS} placeholder="Оберіть категорію" />
+          </div>
+          <div className="db-form-row">
+            <label>Формат</label>
+            <CustomSelect value={f.format} onChange={v => upd('format', v)} options={FORMAT_OPTIONS} placeholder="Оберіть формат" />
+          </div>
+        </div>
+        <div className="db-form-row">
+          <label>Опис</label>
+          <textarea rows={2} placeholder="Короткий опис турніру..." value={f.description} onChange={e => upd('description', e.target.value)} />
+        </div>
+        <div className="db-form-row">
+          <label>Правила участі</label>
+          <textarea rows={2} placeholder="Умови участі, критерії оцінювання..." value={f.rules} onChange={e => upd('rules', e.target.value)} />
+        </div>
       </div>
-      <div className="db-form-row-3">
-        <div className="db-form-row"><label>Макс. команд</label><input type="number" min="1" value={f.teams_limit} onChange={e => upd('teams_limit',e.target.value)} placeholder="∞" /></div>
-        <div className="db-form-row"><label>Мін. осіб</label><input type="number" min="1" max="20" value={f.min_team_size} onChange={e => upd('min_team_size',e.target.value)} /></div>
-        <div className="db-form-row"><label>Макс. осіб</label><input type="number" min="1" max="20" value={f.max_team_size} onChange={e => upd('max_team_size',e.target.value)} /></div>
+
+      {/* Section: Дати */}
+      <div className="db-cfs-section">
+        <div className="db-cfs-title"><span className="db-cfs-icon">📅</span> Дати</div>
+        <div className="db-form-row-2">
+          <div className="db-form-row"><label>Реєстрація від *</label><input type="date" value={f.registration_start} onChange={e => upd('registration_start', e.target.value)} required /></div>
+          <div className="db-form-row"><label>Реєстрація до *</label><input type="date" value={f.registration_end} onChange={e => upd('registration_end', e.target.value)} required /></div>
+        </div>
+        <div className="db-form-row-2">
+          <div className="db-form-row"><label>Старт *</label><input type="date" value={f.start_date} onChange={e => upd('start_date', e.target.value)} required /></div>
+          <div className="db-form-row"><label>Кінець *</label><input type="date" value={f.end_date} onChange={e => upd('end_date', e.target.value)} required /></div>
+        </div>
       </div>
+
+      {/* Section: Команди */}
+      <div className="db-cfs-section">
+        <div className="db-cfs-title"><span className="db-cfs-icon">👥</span> Команди</div>
+        <div className="db-form-row-3">
+          <div className="db-form-row"><label>Макс. команд</label><input type="number" min="1" value={f.teams_limit} onChange={e => upd('teams_limit', e.target.value)} placeholder="∞" /></div>
+          <div className="db-form-row"><label>Мін. учасників</label><input type="number" min="1" max="20" value={f.min_team_size} onChange={e => upd('min_team_size', e.target.value)} /></div>
+          <div className="db-form-row"><label>Макс. учасників</label><input type="number" min="1" max="20" value={f.max_team_size} onChange={e => upd('max_team_size', e.target.value)} /></div>
+        </div>
+        <div className="db-form-row" style={{ maxWidth: 160 }}>
+          <label>Кількість раундів</label>
+          <input type="number" min="1" max="10" value={f.rounds_count} onChange={e => upd('rounds_count', e.target.value)} />
+        </div>
+      </div>
+
+      {/* Section: Статус та нагорода */}
+      <div className="db-cfs-section">
+        <div className="db-cfs-title"><span className="db-cfs-icon">🏷</span> Статус та нагорода</div>
+        <div className="db-form-row-2">
+          <div className="db-form-row">
+            <label>Початковий статус</label>
+            <StatusPicker value={f.status} onChange={v => upd('status', v)} />
+          </div>
+          <div className="db-form-row">
+            <label>Нагорода / Призи</label>
+            <input placeholder="Опис призів переможцям..." value={f.prize} onChange={e => upd('prize', e.target.value)} />
+          </div>
+        </div>
+      </div>
+
       <div className="db-form-actions">
         <button type="button" className="db-btn db-btn-ghost" onClick={onCancel}>Скасувати</button>
-        <button type="submit" className="db-btn db-btn-primary" disabled={loading}>{loading ? 'Збереження...' : 'Створити'}</button>
+        <button type="submit" className="db-btn db-btn-primary" disabled={loading}>
+          {loading ? 'Збереження...' : '🏆 Створити турнір'}
+        </button>
       </div>
     </form>
   );
@@ -512,9 +668,7 @@ export default function TabAdmin({ toast }) {
                         <td>{t.teams_count || 0}{t.teams_limit ? `/${t.teams_limit}` : ''}</td>
                         <td style={{ fontSize: 13 }}>{formatDate(t.registration_start)} – {formatDate(t.registration_end)}</td>
                         <td>
-                          <select className="db-select db-select-sm" value={t.status} onChange={e => handleStatus(t.id, e.target.value)}>
-                            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{STATUS_LABEL[s]?.label || s}</option>)}
-                          </select>
+                          <StatusPicker compact value={t.status} onChange={status => handleStatus(t.id, status)} />
                         </td>
                         <td style={{ display:'flex', gap:6 }}>
                           <button className="db-btn db-btn-ghost db-btn-sm" onClick={() => setEditTournament(t)}>✏ Редагувати</button>

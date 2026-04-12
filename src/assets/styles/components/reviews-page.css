@@ -51,6 +51,10 @@
   animation: reviewsLoop var(--duration) linear infinite;
 }
 
+.reviews-page_strip--reverse {
+  animation: reviewsLoopReverse var(--duration) linear infinite;
+}
+
 .reviews-page_bubble {
   position: relative;
   width: 330px;
@@ -106,14 +110,7 @@
   font-size: 13px;
 }
 
-@keyframes reviewsLoop {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
+
 
 @media (max-width: 1024px) {
   .reviews-page_illustration {
@@ -163,6 +160,16 @@
 
 .reviews-page_star-btn:hover {
   transform: scale(1.2);
+}
+
+@keyframes reviewsLoop {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+@keyframes reviewsLoopReverse {
+  from { transform: translateX(-50%); }
+  to   { transform: translateX(0); }
 }
 
 @media (max-width: 768px) {

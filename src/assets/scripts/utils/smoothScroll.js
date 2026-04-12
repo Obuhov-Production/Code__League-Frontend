@@ -105,7 +105,31 @@ function addDelta(delta) {
 
 // ============ Mouse Wheel ============
 
+/**
+ * Перевіряє чи елемент (або один з його предків до window) є скролабельним контейнером
+ * з реальним переповненням по вертикалі. Якщо так — smooth scroll не перехоплює подію.
+ */
+function isInsideScrollable(el, deltaY) {
+  let node = el
+  while (node && node !== document.documentElement) {
+    const style = window.getComputedStyle(node)
+    const overflowY = style.overflowY
+    const canScroll = overflowY === 'auto' || overflowY === 'scroll'
+    if (canScroll) {
+      const atTop    = node.scrollTop <= 0
+      const atBottom = node.scrollTop + node.clientHeight >= node.scrollHeight - 1
+      // є куди скролити в потрібному напрямку
+      if (!(deltaY < 0 && atTop) && !(deltaY > 0 && atBottom)) {
+        return true
+      }
+    }
+    node = node.parentElement
+  }
+  return false
+}
+
 function onWheel(e) {
+  if (isInsideScrollable(e.target, e.deltaY)) return  // дозволяємо нативний скрол
   e.preventDefault()
   addDelta(e.deltaY * WHEEL_MULT)
 }
