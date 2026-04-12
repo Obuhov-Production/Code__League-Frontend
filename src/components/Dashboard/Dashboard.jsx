@@ -15,7 +15,7 @@ import IconBell        from '@images/dashboard_components/icon_bell.svg?react';
 import IconSearch      from '@images/dashboard_components/icon_search.svg?react';
 import IconLogout      from '@images/dashboard_components/icon_logout.svg?react';
 
-import { getMe, clearSession, isLoggedIn, API_BASE, CHECK_BACKEND, DEV_MOCK_USER } from '@utils/authApi';
+import { getMe, clearSession, isLoggedIn, API_BASE, CHECK_BACKEND, DEV_MOCK_USER, loadCachedUser, saveUser } from '@utils/authApi';
 import { useToast } from '@utils/toast.jsx';
 import { hasRole, UserAvatar, MiniProfileModal, UserSearchModal, TabTip, formatDate } from './db.shared.jsx';
 
@@ -47,9 +47,15 @@ export default function Dashboard() {
       return;
     }
     if (!isLoggedIn()) { navigate('/login'); return; }
+    // Show cached user instantly (has avatar_url from OAuth)
+    const cached = loadCachedUser();
+    if (cached) { setUser(cached); setLoading(false); }
+    // Always refresh from backend to get the latest data
     getMe()
-      .then(setUser)
-      .catch(() => { clearSession(); toast.error('Сесія закінчилась'); navigate('/login'); })
+      .then(fresh => { saveUser(fresh); setUser(fresh); })
+      .catch(() => {
+        if (!cached) { clearSession(); toast.error('Сесія закінчилась'); navigate('/login'); }
+      })
       .finally(() => setLoading(false));
   }, []); // eslint-disable-line
 

@@ -15,6 +15,7 @@ import {
   isEmojiOnly, compressImage, parseFileUrls,
   getSocket, playMsgSound,
   UserProfileModal,
+  resolveAvatarUrl,
 } from './db.shared.jsx';
 
 export default function TabChat({ user, toast, userId, onUnreadChange, setTab }) {
@@ -89,92 +90,97 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
     setDeletePending(null); setPinnedMsgs([]); setChatError(''); setRoomLocked(false);
     setUnreadCounts(prev => { const n = { ...prev }; delete n[room]; return n; });
     getChatHistory(room)
-      .then(setMessages)
-      .catch(() => toast.error('Не вдалось завантажити чат'))
+      .then(msgs => {
+        if (msgs?.length) setMessages(msgs.map(m => ({
+          ...m,
+          username:        m.username        ?? m.user?.username        ?? 'Anonymous',
+          role:            m.role            ?? m.user?.role            ?? 'user',
+          user_avatar_url: m.user_avatar_url ?? m.user?.user_avatar_url ?? null,
+        })));
+      })
+      .catch(() => {})
       .finally(() => setLoading(false));
+    // reactions and pinned via REST
     getChatReactions(room).then(setReactions).catch(() => {});
     getPinnedMessages(room).then(setPinnedMsgs).catch(() => {});
-    socket?.emit('get_room_settings', { room });
+    // room:history from WebSocket will override when it arrives
   }, [room, toast]);
 
   useEffect(() => {
     if (!socket) return;
-    socket.emit('join_room', room);
+    // Emit room:join after socket is connected (backend event name)
+    const doJoin = () => socket.emit('room:join', { room });
+    if (socket.connected) {
+      doJoin();
+    } else {
+      socket.once('connect', doJoin);
+    }
+
+    // room:history — backend sends full history after room:join
+    const normalizeMsg = msg => ({
+      ...msg,
+      username:        msg.username        ?? msg.user?.username        ?? 'Anonymous',
+      role:            msg.role            ?? msg.user?.role            ?? 'user',
+      user_avatar_url: msg.user_avatar_url ?? msg.user?.user_avatar_url ?? null,
+    });
+    const onHistory = ({ room: r, messages: msgs }) => {
+      if (r === room) { setMessages((msgs || []).map(normalizeMsg)); setLoading(false); }
+    };
+    // message:new — backend event name
     const onMsg = msg => {
-      if (msg.room !== room) {
-        setUnreadCounts(prev => ({ ...prev, [msg.room]: (prev[msg.room] || 0) + 1 }));
+      const m = normalizeMsg(msg);
+      if (m.room !== room) {
+        setUnreadCounts(prev => ({ ...prev, [m.room]: (prev[m.room] || 0) + 1 }));
         if (soundOn) playMsgSound();
         return;
       }
-      setMessages(prev => [...prev, msg]);
-      if (msg.user_id !== meId && soundOn) playMsgSound();
+      setMessages(prev => [...prev, m]);
+      if (m.user_id !== meId && soundOn) playMsgSound();
     };
-    const onEdited  = ({ messageId, newText }) =>
-      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, text: newText, edited_at: 1 } : m));
-    const onDeleted = ({ messageId }) =>
-      setMessages(prev => prev.filter(m => m.id !== messageId));
-    const onCleared = () => { setMessages([]); setReactions({}); };
-    const onConn    = () => setOnline(true);
+    const onConn    = () => { setOnline(true); doJoin(); };
     const onDisconn = () => setOnline(false);
-    const onOnline  = ({ room: r, count }) => { if (r === room) setOnlineCount(count); };
-    const onTyping  = ({ username: u }) => {
-      setTypingUsers(p => p.includes(u) ? p : [...p, u]);
-      clearTimeout(typingRmTimers.current[u]);
-      typingRmTimers.current[u] = setTimeout(() => {
+    // user:typing — backend sends { userId, username, isTyping }
+    const onTyping  = ({ username: u, isTyping }) => {
+      if (isTyping) {
+        setTypingUsers(p => p.includes(u) ? p : [...p, u]);
+        clearTimeout(typingRmTimers.current[u]);
+        typingRmTimers.current[u] = setTimeout(() => {
+          setTypingUsers(p => p.filter(x => x !== u));
+          delete typingRmTimers.current[u];
+        }, 3500);
+      } else {
+        clearTimeout(typingRmTimers.current[u]);
         setTypingUsers(p => p.filter(x => x !== u));
-        delete typingRmTimers.current[u];
-      }, 3500);
+      }
     };
-    const onStopTyping = ({ username: u }) => setTypingUsers(p => p.filter(x => x !== u));
-    const onReaction   = ({ messageId, emoji, username: u }) => {
-      setReactions(prev => {
-        const key = `${messageId}_${emoji}`;
-        const cur = prev[key] || { emoji, count: 0, users: [] };
-        const has = cur.users.includes(u);
-        return { ...prev, [key]: { emoji, count: has ? cur.count - 1 : cur.count + 1, users: has ? cur.users.filter(x => x !== u) : [...cur.users, u] } };
-      });
-    };
-    const onSettings = ({ room: r, locked: lk }) => { if (r === room) setRoomLocked(!!lk); };
-    const onChatError = ({ message: msg }) => { setChatError(msg); setTimeout(() => setChatError(''), 4000); };
-    const onPinned    = ({ room: r }) => {
-      if (r === room) getPinnedMessages(room).then(setPinnedMsgs).catch(() => {});
-    };
-    const onUnpinned  = ({ room: r, messageId }) => {
-      if (r === room) setPinnedMsgs(prev => prev.filter(m => m.id !== messageId));
-    };
-    const onMuteChanged = ({ userId: uid, isMuted }) => {
-      setMutedUsers(prev => {
-        const next = new Set(prev);
-        isMuted ? next.add(uid) : next.delete(uid);
-        return next;
-      });
-    };
-    socket.on('new_message',          onMsg);
-    socket.on('message_edited',       onEdited);
-    socket.on('message_deleted',      onDeleted);
-    socket.on('chat_cleared',         onCleared);
-    socket.on('connect',              onConn);
-    socket.on('disconnect',           onDisconn);
-    socket.on('room_online',          onOnline);
-    socket.on('user_typing',          onTyping);
-    socket.on('user_stop_typing',     onStopTyping);
-    socket.on('reaction',             onReaction);
-    socket.on('room_settings_changed',onSettings);
-    socket.on('chat_error',           onChatError);
-    socket.on('message_pinned',       onPinned);
-    socket.on('message_unpinned',     onUnpinned);
-    socket.on('user_mute_changed',    onMuteChanged);
+    const onError = ({ message: msg }) => setChatError(msg);
+
+    socket.on('room:history',  onHistory);
+    socket.on('message:new',   onMsg);
+    socket.on('connect',       onConn);
+    socket.on('disconnect',    onDisconn);
+    socket.on('user:typing',   onTyping);
+    socket.on('message:deleted', ({ messageId }) =>
+      setMessages(prev => prev.filter(m => m.id !== messageId))
+    );
+    socket.on('message:edited', ({ messageId, newText, edited_at }) =>
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, text: newText, edited_at } : m))
+    );
     if (socket.connected) setOnline(true);
     return () => {
-      socket.emit('leave_room', room);
-      socket.off('new_message', onMsg); socket.off('message_edited', onEdited);
-      socket.off('message_deleted', onDeleted); socket.off('chat_cleared', onCleared);
-      socket.off('connect', onConn); socket.off('disconnect', onDisconn);
-      socket.off('room_online', onOnline); socket.off('user_typing', onTyping);
-      socket.off('user_stop_typing', onStopTyping); socket.off('reaction', onReaction);
-      socket.off('room_settings_changed', onSettings); socket.off('chat_error', onChatError);
-      socket.off('message_pinned', onPinned); socket.off('message_unpinned', onUnpinned);
-      socket.off('user_mute_changed', onMuteChanged);
+      socket.emit('room:leave', { room });
+      socket.off('room:history',  onHistory);
+      socket.off('message:new',   onMsg);
+      socket.off('connect',       onConn);
+      socket.off('disconnect',    onDisconn);
+      socket.off('user:typing',   onTyping);
+      socket.off('error',         onError);
+      socket.off('message:deleted', ({ messageId }) =>
+        setMessages(prev => prev.filter(m => m.id !== messageId))
+      );
+      socket.off('message:edited', ({ messageId, newText, edited_at }) =>
+        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, text: newText, edited_at } : m))
+      );
     };
   }, [room, socket, soundOn, meId]);
 
@@ -238,15 +244,24 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
   const send = async e => {
     e.preventDefault();
     if ((!text.trim() && !imgFiles.length) || !online) return;
-    let fileUrls = [];
+    let file_url;
     if (imgFiles.length > 0) {
       setUploading(true);
-      try { fileUrls = await Promise.all(imgFiles.map(f => uploadChatFile(f.file))); }
+      try {
+        const urls = await Promise.all(imgFiles.map(f => uploadChatFile(f.file)));
+        file_url = urls[0]; // backend accepts single file_url
+      }
       catch { toast.error('Не вдалось завантажити файл'); setUploading(false); return; }
       finally { setUploading(false); }
     }
-    socket.emit('send_message', { room, text: text.trim(), replyToId: replyTo?.id || null, fileUrls });
-    socket.emit('stop_typing', { room });
+    // backend event: message:send, payload uses snake_case
+    socket.emit('message:send', {
+      room,
+      text: text.trim(),
+      reply_to_id: replyTo?.id || undefined,
+      file_url,
+    });
+    socket.emit('message:typing', { room, isTyping: false });
     clearTimeout(typingTimer.current);
     setText(''); setReplyTo(null); setShowEmoji(false); setImgFiles([]);
   };
@@ -254,9 +269,9 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
   const handleInput = e => {
     setText(e.target.value);
     if (!online) return;
-    socket.emit('typing', { room });
+    socket.emit('message:typing', { room, isTyping: true });
     clearTimeout(typingTimer.current);
-    typingTimer.current = setTimeout(() => socket.emit('stop_typing', { room }), 2500);
+    typingTimer.current = setTimeout(() => socket.emit('message:typing', { room, isTyping: false }), 2500);
   };
 
   const addEmoji = emoji => { setText(t => t + emoji); setShowEmoji(false); inputRef.current?.focus(); };
@@ -264,12 +279,22 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
   const startEdit = msg => { setEditingId(msg.id); setEditText(msg.text); setCtxMenu(null); };
   const submitEdit = () => {
     if (!editText.trim() || !online) return;
-    socket.emit('edit_message', { messageId: editingId, newText: editText.trim() });
+    socket.emit('message:edit', { messageId: editingId, room, newText: editText.trim() });
+    // optimistic update
+    setMessages(prev => prev.map(m => m.id === editingId ? { ...m, text: editText.trim(), edited_at: 1 } : m));
     setEditingId(null); setEditText('');
   };
   const cancelEdit = () => { setEditingId(null); setEditText(''); };
   const deleteMsg = msg => { setDeletePending(msg); setCtxMenu(null); };
-  const confirmDelete = () => { if (!deletePending) return; socket.emit('delete_message', { messageId: deletePending.id }); setDeletePending(null); };
+  const confirmDelete = async () => {
+    if (!deletePending) return;
+    try {
+      socket.emit('message:delete', { messageId: deletePending.id, room });
+      // optimistic: remove locally immediately
+      setMessages(prev => prev.filter(m => m.id !== deletePending.id));
+    } catch {}
+    setDeletePending(null);
+  };
   const cancelDelete = () => setDeletePending(null);
   const pinMsg = msg => { socket.emit('pin_message', { messageId: msg.id }); setCtxMenu(null); };
   const unpinMsg = msgId => { socket.emit('unpin_message', { messageId: msgId }); };
@@ -326,14 +351,16 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
           <div className="db-chat-msg-avatar-wrap"
             title={`Профіль ${msg.username}`}
             onClick={() => openChatProfile({ user_id: msg.user_id, username: msg.username, user_avatar_url: msg.user_avatar_url, role: msg.role })}>
-            {msg.user_avatar_url ? (
-              <img src={API_BASE + msg.user_avatar_url} alt={msg.username}
-                className={`db-chat-msg-avatar db-chat-msg-avatar--img${msg.role === 'admin' ? ' admin' : ''}`} />
-            ) : (
-              <div className={`db-chat-msg-avatar${msg.role === 'admin' ? ' admin' : ''}`}>
-                {(msg.username || '?').slice(0, 2).toUpperCase()}
-              </div>
-            )}
+            <img src={resolveAvatarUrl(msg.user_avatar_url)}
+              alt={msg.username}
+              className={`db-chat-msg-avatar db-chat-msg-avatar--img${msg.role === 'admin' ? ' admin' : ''}`}
+              style={{ display: msg.user_avatar_url ? undefined : 'none' }}
+              onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextElementSibling && (e.currentTarget.nextElementSibling.style.removeProperty('display')); }}
+            />
+            <div className={`db-chat-msg-avatar${msg.role === 'admin' ? ' admin' : ''}`}
+              style={{ display: msg.user_avatar_url ? 'none' : undefined }}>
+              {(msg.username || '?').slice(0, 2).toUpperCase()}
+            </div>
           </div>
         )}
         <div className="db-chat-msg-body">
@@ -694,14 +721,16 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
               <button className="db-chat-profile-close" onClick={() => setChatProfile(null)}>✕</button>
             </div>
             <div className="db-cp-avatar-wrap">
-              {chatProfile.user_avatar_url ? (
-                <img src={API_BASE + chatProfile.user_avatar_url} alt={chatProfile.username}
-                  className={`db-cp-avatar db-cp-avatar--img${chatProfile.role === 'admin' ? ' admin' : ''}`} />
-              ) : (
-                <div className={`db-cp-avatar${chatProfile.role === 'admin' ? ' admin' : ''}`}>
-                  {(chatProfile.username || '?').slice(0, 2).toUpperCase()}
-                </div>
-              )}
+              <img src={resolveAvatarUrl(chatProfile.user_avatar_url)}
+                alt={chatProfile.username}
+                className={`db-cp-avatar db-cp-avatar--img${chatProfile.role === 'admin' ? ' admin' : ''}`}
+                style={{ display: chatProfile.user_avatar_url ? undefined : 'none' }}
+                onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextElementSibling && (e.currentTarget.nextElementSibling.style.removeProperty('display')); }}
+              />
+              <div className={`db-cp-avatar${chatProfile.role === 'admin' ? ' admin' : ''}`}
+                style={{ display: chatProfile.user_avatar_url ? 'none' : undefined }}>
+                {(chatProfile.username || '?').slice(0, 2).toUpperCase()}
+              </div>
             </div>
             <div className="db-cp-body">
               <div className="db-cp-name">{chatProfile.username || 'Anonymous'}</div>
@@ -760,7 +789,7 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
         <div className="db-lightbox-overlay" onClick={() => setLightboxImg(null)}>
           <button className="db-lightbox-close" onClick={() => setLightboxImg(null)} aria-label="Закрити перегляд">✕</button>
           <a href={lightboxImg} target="_blank" rel="noreferrer" className="db-lightbox-open" onClick={e => e.stopPropagation()}>
-            Відкрити оригінал
+            Відкрити в браузері
           </a>
           <img src={lightboxImg} alt="Попередній перегляд" className="db-lightbox-img" onClick={e => e.stopPropagation()} />
         </div>,

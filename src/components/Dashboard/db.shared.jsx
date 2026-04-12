@@ -69,10 +69,15 @@ export function daysLeft(dateStr) {
   return Math.ceil((new Date(dateStr) - new Date()) / 86400000);
 }
 
+/** Resolves a raw avatar URL — avoids doubling BASE when URL is already absolute. */
+export function resolveAvatarUrl(url) {
+  if (!url) return null;
+  return url.startsWith('http') ? url : API_BASE + url;
+}
+
 export function avatarUrl(user) {
   if (!user) return null;
-  if (user.user_avatar_url) return API_BASE + user.user_avatar_url;
-  return null;
+  return resolveAvatarUrl(user.user_avatar_url);
 }
 
 export function hasRole(user, role) {
@@ -126,10 +131,11 @@ export function RoleBadges({ role }) {
 }
 
 export function UserAvatar({ user, size = 36, onClick, className = '' }) {
+  const [imgError, setImgError] = useState(false);
   const url = avatarUrl(user);
   const initials = user?.username ? user.username.slice(0,2).toUpperCase() : (user?.email?.[0]?.toUpperCase() ?? '?');
   const style = { width: size, height: size, borderRadius: '50%', cursor: onClick ? 'pointer' : 'default', flexShrink: 0 };
-  if (url) return <img src={url} alt="" style={{ ...style, objectFit: 'cover', display: 'block' }} onClick={onClick} className={className} />;
+  if (url && !imgError) return <img src={url} alt="" style={{ ...style, objectFit: 'cover', display: 'block' }} onClick={onClick} className={className} onError={() => setImgError(true)} />;
   return (
     <div style={{
       ...style,
@@ -359,9 +365,11 @@ export function UserProfileModal({ profile, meId, onClose, onGoOwnProfile }) {
         <div className="db-upm-body">
           <div className={`db-upm-avatar${isAdmin ? ' admin' : ''}`}>
             {profile.user_avatar_url
-              ? <img src={API_BASE + profile.user_avatar_url} alt={profile.username} className="db-upm-avatar-img" />
-              : <span className="db-upm-avatar-initials">{(profile.username || '?').slice(0, 2).toUpperCase()}</span>
+              ? <img src={resolveAvatarUrl(profile.user_avatar_url)} alt={profile.username} className="db-upm-avatar-img"
+                  onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextElementSibling.style.removeProperty('display'); }} />
+              : null
             }
+            <span className="db-upm-avatar-initials" style={profile.user_avatar_url ? { display: 'none' } : undefined}>{(profile.username || '?').slice(0, 2).toUpperCase()}</span>
           </div>
           <div className="db-upm-name-row">
             <span className="db-upm-name">{profile.username || 'Anonymous'}</span>
@@ -393,7 +401,16 @@ let _socket = null;
 
 export function getSocket() {
   if (!CHECK_BACKEND) return null;
-  if (!_socket) _socket = io(API_BASE, { auth: { token: getToken() }, autoConnect: true });
+  if (!_socket) {
+    // Strip accidental "Bearer " prefix — backend jwt expects raw token
+    const raw = (getToken() || '').replace(/^Bearer\s+/i, '');
+    // Connect to /chat namespace — backend @WebSocketGateway({ namespace: '/chat' })
+    _socket = io(`${API_BASE}/chat`, {
+      auth: { token: raw },
+      transports: ['websocket', 'polling'],
+      autoConnect: true,
+    });
+  }
   return _socket;
 }
 

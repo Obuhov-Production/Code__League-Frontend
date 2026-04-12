@@ -613,6 +613,9 @@
   z-index: 1000;
   padding: 20px;
   animation: db-overlay-in .2s ease both;
+  /* mobile safari fix */
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
 }
 @keyframes db-overlay-in {
   from { opacity: 0; }

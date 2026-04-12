@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import logoImg from '@images/logos/logo.png';
 import logoIcon from '@images/logos/logo-48.png';
 import Footer from '@components/Footer';
-import { registerUser, saveSession, OAUTH_URLS, CHECK_BACKEND } from '@utils/authApi';
+import { registerUser, saveSession, saveUser, consumeOAuthTokenFromUrl, OAUTH_URLS, CHECK_BACKEND } from '@utils/authApi';
 import { useToast } from '@utils/toast.jsx';
 
 function RegisterPage() {
@@ -19,6 +19,19 @@ function RegisterPage() {
 
   const isActive =
     email.trim() !== '' && password.trim() !== '' && confirm.trim() !== '';
+
+  useEffect(() => {
+    const oauth = consumeOAuthTokenFromUrl();
+    if (oauth.status === 'success') {
+      if (oauth.user) saveUser(oauth.user);
+      toast.success('Успішний вхід через OAuth');
+      navigate('/dashboard', { replace: true });
+      return;
+    }
+    if (oauth.status === 'error') {
+      toast.error(oauth.message);
+    }
+  }, [navigate, toast]);
 
   const loginWithProvider = (provider) => {
     window.location.href = provider === 'google' ? OAUTH_URLS.google : OAUTH_URLS.discord;

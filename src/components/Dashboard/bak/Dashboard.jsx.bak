@@ -1979,7 +1979,7 @@ function TabChat({ user, toast, userId, onUnreadChange, setTab }) {
             className="db-lightbox-open"
             onClick={e => e.stopPropagation()}
           >
-            Відкрити оригінал
+            Відкрити в браузері
           </a>
           <img
             src={lightboxImg}

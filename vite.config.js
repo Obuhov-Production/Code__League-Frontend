@@ -41,7 +41,19 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: backendUrl,
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api/, ''),
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyReq, req) => {
+              console.log(`[PROXY] ➜  ${req.method} ${req.url}  →  ${backendUrl}${req.url}`);
+            });
+            proxy.on('proxyRes', (proxyRes, req) => {
+              const ok = proxyRes.statusCode < 400;
+              const icon = ok ? '✓' : '✗';
+              console.log(`[PROXY] ${icon}  ${proxyRes.statusCode} ${req.method} ${req.url}`);
+            });
+            proxy.on('error', (err, req) => {
+              console.error(`[PROXY] ERROR ${req.method} ${req.url}`, err.message);
+            });
+          },
         },
       },
     },

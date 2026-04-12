@@ -7,6 +7,18 @@ const DIRECT_BACKEND_BASE = (import.meta.env.VITE_BACKEND_URL || 'http://localho
 const BASE = API_PROXY_BASE;
 export const API_BASE = BASE.startsWith('http') ? BASE : DIRECT_BACKEND_BASE;
 
+export const DEBUG_API = import.meta.env.VITE_DEBUG_API === 'true';
+
+if (DEBUG_API) {
+  console.groupCollapsed('%c[API DEBUG] Config', 'color:#7c3aed;font-weight:bold');
+  console.log('VITE_API_BASE_URL  :', import.meta.env.VITE_API_BASE_URL);
+  console.log('VITE_BACKEND_URL   :', import.meta.env.VITE_BACKEND_URL);
+  console.log('BASE (proxy)       :', BASE);
+  console.log('API_BASE (direct)  :', API_BASE);
+  console.log('CHECK_BACKEND      :', import.meta.env.VITE_CHECK_BACKEND);
+  console.groupEnd();
+}
+
 /**
  * VITE_CHECK_BACKEND=false → dev-режим без бекенду.
  * login/register/dashboard працюють з мок-даними.
@@ -24,9 +36,11 @@ export const DEV_MOCK_USER = {
   bio: 'dev mock user — backend is disabled',
 };
 
+// OAuth: browser redirects go directly to backend (bypass Vite proxy),
+// so must use full backend URL including /api prefix.
 export const OAUTH_URLS = {
-  google: `${API_BASE}/auth/google`,
-  discord: `${API_BASE}/auth/discord`,
+  google: `${DIRECT_BACKEND_BASE}${BASE}/auth/google`,
+  discord: `${DIRECT_BACKEND_BASE}${BASE}/auth/discord`,
 };
 
 /** Build auth headers */
@@ -39,8 +53,41 @@ function authHeaders() {
 }
 
 async function request(url, options = {}) {
-  const res = await fetch(url, options);
-  const data = await res.json();
+  if (DEBUG_API) {
+    console.groupCollapsed(`%c[API] ${options.method || 'GET'} ${url}`, 'color:#2563eb;font-weight:bold');
+    console.log('URL     :', url);
+    console.log('Method  :', options.method || 'GET');
+    console.log('Headers :', options.headers);
+    if (options.body) {
+      try { console.log('Body    :', JSON.parse(options.body)); } catch { console.log('Body    :', options.body); }
+    }
+    console.groupEnd();
+  }
+
+  let res;
+  try {
+    res = await fetch(url, options);
+  } catch (networkErr) {
+    if (DEBUG_API) console.error(`%c[API] NETWORK ERROR → ${url}`, 'color:#dc2626;font-weight:bold', networkErr);
+    throw networkErr;
+  }
+
+  let data;
+  try {
+    data = await res.json();
+  } catch (parseErr) {
+    if (DEBUG_API) console.error(`%c[API] JSON PARSE ERROR (${res.status}) → ${url}`, 'color:#dc2626;font-weight:bold', parseErr);
+    throw new Error(`Non-JSON response: ${res.status} ${res.statusText}`);
+  }
+
+  if (DEBUG_API) {
+    const style = res.ok ? 'color:#16a34a;font-weight:bold' : 'color:#dc2626;font-weight:bold';
+    console.groupCollapsed(`%c[API] ${res.ok ? '✓' : '✗'} ${res.status} ${url}`, style);
+    console.log('Status  :', res.status, res.statusText);
+    console.log('Response:', data);
+    console.groupEnd();
+  }
+
   if (!res.ok) throw new Error(data.message || 'Request failed');
   return data;
 }
@@ -65,13 +112,64 @@ export async function registerUser({ email, password }) {
 }
 
 export async function getMe() {
-  return request(`${BASE}/auth/me`, { headers: authHeaders() });
+  return request(`${BASE}/users/me`, { headers: authHeaders() });
 }
 
 export function saveSession(token) { localStorage.setItem('cl_token', token); }
-export function clearSession()     { localStorage.removeItem('cl_token'); }
+export function clearSession()     { localStorage.removeItem('cl_token'); localStorage.removeItem('cl_user'); }
 export function getToken()         { return localStorage.getItem('cl_token'); }
 export function isLoggedIn()       { return !!getToken(); }
+
+/** Cache user object from OAuth/login response to avoid extra /me request */
+export function saveUser(user)  { if (user) localStorage.setItem('cl_user', JSON.stringify(user)); }
+export function loadCachedUser() {
+  try { const s = localStorage.getItem('cl_user'); return s ? JSON.parse(s) : null; } catch { return null; }
+}
+
+/**
+ * Reads OAuth result from URL query params after backend redirect.
+ * Backend redirects to frontend with:  ?token=JWT&user=JSON  on success
+ *                                  or  ?error=MESSAGE         on failure
+ * Returns { status: 'success'|'error'|'none', user?, message? }
+ * Cleans the URL after reading.
+ */
+export function consumeOAuthTokenFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const token  = params.get('token');
+  const error  = params.get('error');
+
+  const cleanUrl = () => window.history.replaceState({}, '', window.location.pathname);
+
+  if (token) {
+    saveSession(token);
+
+    let user = null;
+    const userRaw = params.get('user');
+    if (userRaw) {
+      try { user = JSON.parse(decodeURIComponent(userRaw)); } catch { /* ignore */ }
+    }
+
+    cleanUrl();
+
+    if (DEBUG_API) {
+      console.groupCollapsed('%c[OAuth] Token consumed from URL', 'color:#16a34a;font-weight:bold');
+      console.log('token (preview):', token.slice(0, 30) + '...');
+      console.log('user            :', user);
+      console.groupEnd();
+    }
+
+    return { status: 'success', user };
+  }
+
+  if (error) {
+    cleanUrl();
+    const message = decodeURIComponent(error);
+    if (DEBUG_API) console.error('%c[OAuth] Error from URL:', 'color:#dc2626;font-weight:bold', message);
+    return { status: 'error', message };
+  }
+
+  return { status: 'none' };
+}
 
 /* ── Tournaments ─────────────────────────────────── */
 
@@ -195,7 +293,7 @@ export async function uploadBanner(file) {
 
 export async function getChatHistory(room) {
   if (!CHECK_BACKEND) return [];
-  return request(`${BASE}/chat/${room}`, { headers: authHeaders() });
+  return request(`${BASE}/chat-messages?room=${encodeURIComponent(room)}`, { headers: authHeaders() });
 }
 
 export async function searchUsers(query) {
@@ -220,26 +318,6 @@ export async function deleteBanner() {
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Delete failed');
   return data;
-}
-
-export function consumeOAuthTokenFromUrl() {
-  const params = new URLSearchParams(window.location.search);
-  const oauth = params.get('oauth');
-  const token = params.get('token');
-  const message = params.get('message');
-
-  if (!oauth) {
-    return { status: 'none' };
-  }
-
-  if (oauth === 'success' && token) {
-    saveSession(token);
-    window.history.replaceState({}, document.title, window.location.pathname);
-    return { status: 'success' };
-  }
-
-  window.history.replaceState({}, document.title, window.location.pathname);
-  return { status: 'error', message: message || 'OAuth login failed' };
 }
 
 /* ── Chat ─────────────────────────────────────────── */

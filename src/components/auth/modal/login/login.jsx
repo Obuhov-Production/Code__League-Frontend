@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import logoImg from '@images/logos/logo.png';
 import logoIcon from '@images/logos/logo-48.png';
 import Footer from '@components/Footer';
-import { loginUser, saveSession, consumeOAuthTokenFromUrl, OAUTH_URLS, CHECK_BACKEND } from '@utils/authApi';
+import { loginUser, saveSession, saveUser, consumeOAuthTokenFromUrl, OAUTH_URLS, CHECK_BACKEND } from '@utils/authApi';
 import { useToast } from '@utils/toast.jsx';
 
 function LoginPage() {
@@ -20,6 +20,7 @@ function LoginPage() {
   useEffect(() => {
     const oauth = consumeOAuthTokenFromUrl();
     if (oauth.status === 'success') {
+      if (oauth.user) saveUser(oauth.user);
       toast.success('Успішний вхід через OAuth');
       navigate('/dashboard', { replace: true });
       return;
@@ -49,6 +50,7 @@ function LoginPage() {
     try {
       const data = await loginUser({ email, password });
       saveSession(data.token);
+      if (data.user) saveUser(data.user);
       toast.success('Вітаємо знову!');
       navigate('/dashboard');
     } catch (err) {
