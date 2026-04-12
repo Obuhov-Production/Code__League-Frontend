@@ -89,7 +89,7 @@ function RegisterPage() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder=""
+                    placeholder="Enter your email"
                     autoComplete="email"
                   />
                 </div>
@@ -103,7 +103,7 @@ function RegisterPage() {
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder=""
+                    placeholder="Enter your password"
                     autoComplete="new-password"
                     style={{ paddingRight: '64px' }}
                   />
@@ -132,14 +132,14 @@ function RegisterPage() {
               </div>
 
               <div className="auth-field" style={{ marginTop: '14px' }}>
-                <label htmlFor="reg-confirm">Password</label>
+                <label htmlFor="reg-confirm">Confirm Password</label>
                 <div className="auth-field-wrap">
                   <input
                     id="reg-confirm"
                     type={showConfirm ? 'text' : 'password'}
                     value={confirm}
                     onChange={(e) => setConfirm(e.target.value)}
-                    placeholder=""
+                    placeholder="Confirm your password"
                     autoComplete="new-password"
                     style={{ paddingRight: '64px' }}
                   />
@@ -213,8 +213,9 @@ function RegisterPage() {
         <div className="auth-below-card">
           <Link to="/login">Have profile?</Link>
           <p>
-            Secure login with reCAPTCHA subject to Google &amp;{' '}
+            Secure registration with CODE LEAGUE:&nbsp;
             <a href="#">Terms</a>
+            <span>&nbsp;|&nbsp;</span>
             <a href="#">Privacy</a>
           </p>
         </div>

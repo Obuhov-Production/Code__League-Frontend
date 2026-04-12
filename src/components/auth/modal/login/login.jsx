@@ -91,7 +91,7 @@ function LoginPage() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder=""
+                    placeholder="Enter your email"
                     autoComplete="email"
                   />
                 </div>
@@ -105,7 +105,7 @@ function LoginPage() {
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder=""
+                    placeholder="Enter your password"
                     autoComplete="current-password"
                     style={{ paddingRight: '64px' }}
                     disabled={loading}
@@ -136,7 +136,7 @@ function LoginPage() {
               </div>
 
               <p className="auth-note" style={{ marginTop: '10px' }}>
-                Don&apos;t have profile?{' '}
+                Don`t have a profile?{' '}
                 <Link to="/register">Register now</Link>
               </p>
 
@@ -190,10 +190,11 @@ function LoginPage() {
 
         {/* Below card */}
         <div className="auth-below-card">
-          <Link to="/register">Don&apos;t have profile?</Link>
+          <Link to="/register">Don`t have a profile?</Link>
           <p>
-            Secure login with reCAPTCHA subject to Google &amp;{' '}
+            Secure login with CODE LEAGUE:&nbsp;
             <a href="/terms">Terms</a>
+            <span>&nbsp;|&nbsp;</span>
             <a href="/privacy">Privacy</a>
           </p>
         </div>

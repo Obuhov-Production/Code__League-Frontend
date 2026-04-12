@@ -590,89 +590,174 @@ export default function TabAdmin({ toast }) {
           {/* ─── CHAT ─── */}
           {adminTab === 'chat' && (
             <div className="db-admin-chat-grid">
+
+              {/* ── CARD 1: Rooms ── */}
               <div className="db-admin-card">
-                <h3>Кімнати чату</h3>
-                <p className="db-admin-hint">Системні та кастомні кімнати. «Очистити» видалить всі повідомлення.</p>
+                <div className="db-admin-card-header">
+                  <div className="db-admin-card-icon" style={{ background: 'rgba(172,158,248,.15)' }}>💬</div>
+                  <div className="db-admin-card-header-text">
+                    <h3 className="db-admin-card-title">Кімнати чату</h3>
+                    <p className="db-admin-card-sub">Системні та кастомні кімнати</p>
+                  </div>
+                  <span className="db-admin-card-badge">{ALL_CHAT_ROOMS.length}</span>
+                </div>
+
                 <div className="db-admin-chat-rooms">
-                  {ALL_CHAT_ROOMS.map(r => (
+                  <div className="db-admin-rooms-group-label">Системні</div>
+                  {ALL_CHAT_ROOMS.filter(r => !r.customId).map(r => (
                     <div key={r.id} className="db-admin-chat-room-row">
-                      <span className="db-admin-chat-room-label">{r.label}</span>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        {r.customId && (
-                          <button className="db-btn db-btn-ghost db-btn-sm" onClick={() => handleDeleteRoom(r.customId, r.label)}>🗑 Видалити</button>
-                        )}
-                        <button className="db-btn db-btn-danger db-btn-sm" onClick={() => handleClearChat(r.id)}>🧹 Очистити</button>
+                      <div className="db-admin-room-info">
+                        <span className="db-admin-chat-room-label">{r.label}</span>
+                        <span className="db-admin-room-tag db-admin-room-tag--sys">Системна</span>
+                        {roomSettings[r.id]?.locked && <span className="db-admin-room-tag db-admin-room-tag--locked">🔒 Заблоковано</span>}
                       </div>
+                      <button className="db-btn db-btn-danger db-btn-sm" onClick={() => handleClearChat(r.id)}>🧹 Очистити</button>
                     </div>
                   ))}
+
+                  {customRooms.length > 0 && <>
+                    <div className="db-admin-rooms-group-label" style={{ marginTop: 10 }}>Кастомні</div>
+                    {ALL_CHAT_ROOMS.filter(r => r.customId).map(r => (
+                      <div key={r.id} className="db-admin-chat-room-row">
+                        <div className="db-admin-room-info">
+                          <span className="db-admin-chat-room-label">{r.label}</span>
+                          <span className="db-admin-room-tag db-admin-room-tag--custom">Кастомна</span>
+                          {roomSettings[r.id]?.locked && <span className="db-admin-room-tag db-admin-room-tag--locked">🔒</span>}
+                        </div>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button className="db-btn db-btn-ghost db-btn-sm" title="Видалити кімнату" onClick={() => handleDeleteRoom(r.customId, r.label)}>🗑</button>
+                          <button className="db-btn db-btn-danger db-btn-sm" onClick={() => handleClearChat(r.id)}>🧹</button>
+                        </div>
+                      </div>
+                    ))}
+                  </>}
                 </div>
-                <form className="db-admin-new-room" onSubmit={handleCreateRoom}>
-                  <h4>+ Нова кімната</h4>
-                  <div className="db-form-row-2">
-                    <div className="db-form-row">
-                      <label>Ідентифікатор (латиниця)</label>
-                      <input value={newRoomName} onChange={e => setNewRoomName(e.target.value)} placeholder="design-talk" pattern="[a-z0-9_-]+" />
-                    </div>
-                    <div className="db-form-row">
-                      <label>Назва для відображення</label>
-                      <input value={newRoomLabel} onChange={e => setNewRoomLabel(e.target.value)} placeholder="Бест чат" />
-                    </div>
+
+                <div className="db-admin-new-room-section">
+                  <div className="db-admin-new-room-header">
+                    <span className="db-admin-new-room-icon">＋</span>
+                    <span>Нова кімната</span>
                   </div>
-                  <button type="submit" className="db-btn db-btn-primary" disabled={creatingRoom}>
-                    {creatingRoom ? 'Створення...' : 'Створити кімнату'}
-                  </button>
-                </form>
+                  <form className="db-admin-new-room" onSubmit={handleCreateRoom}>
+                    <div className="db-admin-new-room-fields">
+                      <div className="db-admin-new-room-field">
+                        <label>Ідентифікатор (латиниця)</label>
+                        <input className="db-input" value={newRoomName} onChange={e => setNewRoomName(e.target.value)} placeholder="design-talk" pattern="[a-z0-9_-]+" />
+                      </div>
+                      <div className="db-admin-new-room-field">
+                        <label>Назва для відображення</label>
+                        <input className="db-input" value={newRoomLabel} onChange={e => setNewRoomLabel(e.target.value)} placeholder="Бест чат" />
+                      </div>
+                    </div>
+                    <button type="submit" className="db-btn db-btn-primary" disabled={creatingRoom || !newRoomName.trim() || !newRoomLabel.trim()}>
+                      {creatingRoom ? 'Створення...' : 'Створити кімнату'}
+                    </button>
+                  </form>
+                </div>
               </div>
 
+              {/* ── CARD 2: Room settings ── */}
               <div className="db-admin-card">
-                <h3>Обмеження кімнати</h3>
-                <p className="db-admin-hint">«Заблокувати» — тільки адмін може писати.</p>
-                <div className="db-form-row" style={{ marginBottom: 14 }}>
-                  <label>Кімната</label>
+                <div className="db-admin-card-header">
+                  <div className="db-admin-card-icon" style={{ background: 'rgba(239,68,68,.1)' }}>⚙️</div>
+                  <div className="db-admin-card-header-text">
+                    <h3 className="db-admin-card-title">Обмеження кімнати</h3>
+                    <p className="db-admin-card-sub">Доступ та часовий графік</p>
+                  </div>
+                </div>
+
+                <div className="db-form-row" style={{ marginBottom: 18 }}>
+                  <label className="db-admin-field-label">КІМНАТА</label>
                   <CustomSelect value={settingsRoom} onChange={v => setSettingsRoom(v)}
                     options={ALL_CHAT_ROOMS.map(r => ({ value: r.id, label: r.label }))} />
                 </div>
-                <form onSubmit={handleSaveSettings} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  <label className="db-admin-toggle-row">
-                    <span>🔒 Заблокувати чат (лише адмін може писати)</span>
+
+                <form onSubmit={handleSaveSettings} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div className="db-admin-setting-row">
+                    <div className="db-admin-setting-info">
+                      <span className="db-admin-setting-icon">🔒</span>
+                      <div>
+                        <div className="db-admin-setting-title">Заблокувати чат</div>
+                        <div className="db-admin-setting-desc">Лише адмін може писати у цій кімнаті</div>
+                      </div>
+                    </div>
                     <button type="button" className={`db-toggle-btn${curSettings.locked ? ' on' : ''}`}
                       onClick={() => updSetting('locked', !curSettings.locked)}>
                       {curSettings.locked ? 'Заблоковано' : 'Увімкнено'}
                     </button>
-                  </label>
-                  <div className="db-form-row-2">
-                    <div className="db-form-row"><label>⏰ Писати від (HH:MM)</label>
-                      <input type="time" value={curSettings.time_from || ''} onChange={e => updSetting('time_from', e.target.value || null)} />
+                  </div>
+
+                  <div className="db-admin-setting-row db-admin-setting-row--block">
+                    <div className="db-admin-setting-info">
+                      <span className="db-admin-setting-icon">⏰</span>
+                      <div>
+                        <div className="db-admin-setting-title">Часові обмеження</div>
+                        <div className="db-admin-setting-desc">Дозволити писати лише у вказаний час</div>
+                      </div>
                     </div>
-                    <div className="db-form-row"><label>До (HH:MM)</label>
-                      <input type="time" value={curSettings.time_to || ''} onChange={e => updSetting('time_to', e.target.value || null)} />
+                    <div className="db-admin-time-range">
+                      <div className="db-admin-time-field">
+                        <label>ПИСАТИ ВІД (ГГ:ХХ)</label>
+                        <input className="db-input" type="time" value={curSettings.time_from || ''} onChange={e => updSetting('time_from', e.target.value || null)} />
+                      </div>
+                      <div className="db-admin-time-sep">—</div>
+                      <div className="db-admin-time-field">
+                        <label>ДО (ГГ:ХХ)</label>
+                        <input className="db-input" type="time" value={curSettings.time_to || ''} onChange={e => updSetting('time_to', e.target.value || null)} />
+                      </div>
                     </div>
                   </div>
-                  <div style={{ fontSize: 12, color: '#888' }}>Якщо поля часу порожні — обмеження за часом вимкнено.</div>
+
+                  {!curSettings.time_from && !curSettings.time_to && (
+                    <div className="db-admin-tip">💡 Поля часу порожні — обмеження за часом вимкнено</div>
+                  )}
+
                   <button type="submit" className="db-btn db-btn-primary" style={{ alignSelf: 'flex-start' }} disabled={savingSettings}>
-                    {savingSettings ? 'Збереження...' : 'Зберегти налаштування'}
+                    {savingSettings ? 'Збереження...' : '💾 Зберегти налаштування'}
                   </button>
                 </form>
               </div>
 
+              {/* ── CARD 3: Announcement ── */}
               <div className="db-admin-card">
-                <h3>📣 Оголошення</h3>
-                <p className="db-admin-hint">Повідомлення виглядатиме як системне оголошення в чаті.</p>
+                <div className="db-admin-card-header">
+                  <div className="db-admin-card-icon" style={{ background: 'rgba(245,158,11,.12)' }}>📣</div>
+                  <div className="db-admin-card-header-text">
+                    <h3 className="db-admin-card-title">Оголошення</h3>
+                    <p className="db-admin-card-sub">Системне повідомлення в чаті</p>
+                  </div>
+                </div>
+
                 <form onSubmit={handleSendAnnouncement} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   <div className="db-form-row">
-                    <label>Кімната</label>
+                    <label className="db-admin-field-label">КІМНАТА</label>
                     <CustomSelect value={announceRoom} onChange={setAnnounceRoom}
                       options={ALL_CHAT_ROOMS.map(r => ({ value: r.id, label: r.label }))} />
                   </div>
                   <div className="db-form-row">
-                    <label>Текст оголошення</label>
-                    <textarea rows={3} value={announceText} onChange={e => setAnnounceText(e.target.value)} placeholder="Шановні учасники..." />
+                    <label className="db-admin-field-label">ТЕКСТ ОГОЛОШЕННЯ</label>
+                    <textarea className="db-input db-announce-textarea" rows={4}
+                      value={announceText} onChange={e => setAnnounceText(e.target.value)}
+                      placeholder="Шановні учасники..." maxLength={500} />
+                    <div className="db-admin-char-count" style={{ color: announceText.length > 450 ? '#ef4444' : undefined }}>
+                      {announceText.length} / 500
+                    </div>
                   </div>
-                  <button type="submit" className="db-btn db-btn-primary" style={{ alignSelf: 'flex-start' }} disabled={!announceText.trim()}>
+
+                  {announceText.trim() && (
+                    <div className="db-admin-announce-preview">
+                      <span className="db-admin-preview-badge">📣 Попередній перегляд</span>
+                      <p>{announceText}</p>
+                    </div>
+                  )}
+
+                  <button type="submit" className="db-btn db-btn-primary" style={{ alignSelf: 'flex-start' }}
+                    disabled={!announceText.trim() || announceText.length > 500}>
                     📣 Надіслати оголошення
                   </button>
                 </form>
               </div>
+
             </div>
           )}
         </>

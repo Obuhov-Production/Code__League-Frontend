@@ -94,7 +94,7 @@ function Header() {
 
           <nav className={`navigation ${menuOpen ? 'navigation--open' : ''}`}>
             <a href={sectionHref('home')} className="nav-link" onClick={closeMenu}>Головна</a>
-            <a href={sectionHref('services')} className="nav-link" onClick={closeMenu}>Сервіси</a>
+            <a href={sectionHref('services')} className="nav-link" onClick={closeMenu}>Переваги</a>
             <a href={sectionHref('about')} className="nav-link" onClick={closeMenu}>Про нас</a>
             <a href={sectionHref('reviews')} className="nav-link" onClick={closeMenu}>Відгуки</a>
             <a href={sectionHref('contacts')} className="nav-link" onClick={closeMenu}>Контакти</a>

@@ -21,7 +21,7 @@ function Footer({ id }) {
 
           <nav className="footer-nav">
             <a href={sectionHref('home')} className="footer-nav_link">Головна</a>
-            <a href={sectionHref('services')} className="footer-nav_link">Інформація</a>
+            <a href={sectionHref('services')} className="footer-nav_link">Переваги</a>
             <a href={sectionHref('reviews')} className="footer-nav_link">Відгуки</a>
             <a href={sectionHref('contacts')} className="footer-nav_link">Контакти</a>
           </nav>
@@ -48,8 +48,8 @@ function Footer({ id }) {
             <p className="footer-contacts_item">Email: code-league@scam.pro</p>
             <p className="footer-contacts_item">Телефон: 228.322.1888.4</p>
             <p className="footer-contacts_item footer-contacts_address">
-              Адреса: 1234 Main St<br />
-              Moonstone City, Stardust State 12345
+              Адреса: Обухівська вулиця будинок 67<br />
+              Обухів, Київська область, Україна, 08700
             </p>
           </div>
 
@@ -61,7 +61,7 @@ function Footer({ id }) {
                 className="footer-subscribe_input"
               />
               <button type="submit" className="footer-subscribe_button">
-                Підписатись на розсилку
+                Підписатись на новини
               </button>
             </form>
           </div>
