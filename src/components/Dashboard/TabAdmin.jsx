@@ -7,8 +7,10 @@ import {
   setUserRole, deleteAdminUser, setUserPassword, adminDeleteTeam,
   clearChatRoom, getCustomChatRooms, createChatRoom, deleteChatRoom,
   getChatRoomSettings, setChatRoomSettings, postChatAnnouncement,
+  getAdminOrganizerApplications, reviewOrganizerApplication,
+  getAdminUserBadges, adminGrantBadge, adminRevokeBadge,
 } from '@utils/authApi';
-import { StatusBadge, RoleBadges, CustomSelect, ConfirmModal, formatDate, STATUS_LABEL } from './db.shared.jsx';
+import { StatusBadge, RoleBadges, CustomSelect, ConfirmModal, formatDate, STATUS_LABEL, UserAvatar, UserProfileModal, ALL_BADGES } from './db.shared.jsx';
 
 /* ── Options for tournament form ───────────────────── */
 const CATEGORY_OPTIONS = [
@@ -27,10 +29,10 @@ const FORMAT_OPTIONS = [
 ];
 
 const TOUR_STATUS_OPTS = [
-  { value: 'draft',        label: 'Чернетка',   color: '#888' },
-  { value: 'registration', label: 'Реєстрація', color: '#7c5ff5' },
-  { value: 'running',      label: 'Активний',   color: '#16a34a' },
-  { value: 'finished',     label: 'Завершений', color: '#0ea5e9' },
+  { value: 'draft',        label: 'Draft',   color: '#888' },
+  { value: 'registration', label: 'Registration', color: '#7c5ff5' },
+  { value: 'running',      label: 'Running',   color: '#16a34a' },
+  { value: 'finished',     label: 'Finished', color: '#0ea5e9' },
 ];
 
 /* ── StatusPicker — custom colored status dropdown ─── */
@@ -94,12 +96,36 @@ function ManageUserModal({ user, toast, onClose, onRoleChange, onDelete }) {
   const [currentRoles, setCurrentRoles] = useState(
     (user.role || 'user').split(',').map(r => r.trim()).filter(Boolean)
   );
+  const [userBadges,   setUserBadges]   = useState([]);
+  const [badgeLoading, setBadgeLoading] = useState(false);
+
+  useEffect(() => {
+    setBadgeLoading(true);
+    getAdminUserBadges(user.id).then(setUserBadges).catch(() => {}).finally(() => setBadgeLoading(false));
+  }, [user.id]);
+
+  const hasBadge = (id) => userBadges.some(b => b.badge_id === id);
+
+  const handleToggleBadge = async (badgeId) => {
+    try {
+      if (hasBadge(badgeId)) {
+        await adminRevokeBadge(user.id, badgeId);
+        setUserBadges(prev => prev.filter(b => b.badge_id !== badgeId));
+        toast.success('Досягнення відкликано');
+      } else {
+        await adminGrantBadge(user.id, badgeId);
+        setUserBadges(prev => [...prev, { badge_id: badgeId }]);
+        toast.success('Досягнення видано');
+      }
+    } catch (err) { toast.error(err.message); }
+  };
 
   const ROLE_OPTIONS_FULL = [
-    { value: 'user',   label: '👤 Учасник' },
-    { value: 'jury',   label: '⚖️ Журі' },
-    { value: 'admin',  label: '🛡️ Адмін', danger: true },
-    { value: 'banned', label: '🚫 Бан', danger: true },
+    { value: 'user',      label: '👤 Учасник' },
+    { value: 'jury',      label: '⚖️ Журі' },
+    { value: 'organizer', label: '🗂️ Організатор' },
+    { value: 'admin',     label: '🛡️ Адмін', danger: true },
+    { value: 'banned',    label: '🚫 Бан', danger: true },
   ];
 
   const toggleRole = (r) => {
@@ -172,6 +198,31 @@ function ManageUserModal({ user, toast, onClose, onRoleChange, onDelete }) {
                 {savingPwd ? '...' : 'Змінити'}
               </button>
             </form>
+          </div>
+          <div className="db-mu-section">
+            <label className="db-mu-label">🏅 Досягнення</label>
+            {badgeLoading ? <div style={{ color: '#888', fontSize: 13 }}>Завантаження...</div> : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                {ALL_BADGES.map(b => (
+                  <button key={b.id}
+                    title={b.name}
+                    style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                      background: hasBadge(b.id) ? 'rgba(124,95,245,.15)' : 'rgba(255,255,255,.05)',
+                      border: `1px solid ${hasBadge(b.id) ? '#7c5ff5' : '#444'}`,
+                      borderRadius: 10, padding: '8px 12px', cursor: 'pointer', minWidth: 80,
+                    }}
+                    onClick={() => handleToggleBadge(b.id)}>
+                    <img src={b.image} alt={b.name}
+                      style={{ width: 36, height: 36, objectFit: 'contain', filter: hasBadge(b.id) ? 'none' : 'grayscale(1) opacity(.4)' }} />
+                    <span style={{ fontSize: 11, color: hasBadge(b.id) ? '#7c5ff5' : '#888', textAlign: 'center' }}>{b.name}</span>
+                    <span style={{ fontSize: 10, color: hasBadge(b.id) ? '#4ade80' : '#f87171' }}>
+                      {hasBadge(b.id) ? '✓ є' : '+ видати'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="db-mu-section db-mu-danger">
             <label className="db-mu-label" style={{ color: '#ef4444' }}>Небезпечна зона</label>
@@ -432,11 +483,74 @@ function CreateTournamentForm({ toast, onSuccess, onCancel }) {
   );
 }
 
+/* ── Application View Modal ──────────────────── */
+function ApplicationViewModal({ app, onClose, onAccept, onDecline }) {
+  const STATUS_COLOR = { pending: '#f59e0b', accepted: '#16a34a', rejected: '#ef4444' };
+  const STATUS_LABEL_MAP = { pending: 'Очікує', accepted: 'Прийнято', rejected: 'Відхилено' };
+  const [viewProfile, setViewProfile] = useState(null);
+
+  return (
+    <>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box modal-box--light" onClick={e => e.stopPropagation()} style={{ maxWidth: 520, padding: 0, overflow: 'hidden' }}>
+        <div className="db-mu-header" style={{ background: 'rgba(124,95,245,.1)' }}>
+          <div style={{ cursor: 'pointer' }} onClick={() => setViewProfile(app)} title="Переглянути профіль">
+            <UserAvatar user={app} size={44} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div className="db-mu-name" style={{ cursor: 'pointer', textDecoration: 'underline dotted' }}
+              onClick={() => setViewProfile(app)} title="Переглянути профіль">
+              {app.username}
+            </div>
+            <div className="db-mu-email">{app.email}</div>
+          </div>
+          <span style={{ fontSize: 12, fontWeight: 600, color: STATUS_COLOR[app.status] || '#888', background: 'rgba(0,0,0,.2)', padding: '3px 10px', borderRadius: 20 }}>
+            {STATUS_LABEL_MAP[app.status] || app.status}
+          </span>
+          <button className="db-mu-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="db-mu-body">
+          <div className="db-mu-section">
+            <label className="db-mu-label">💬 Мотивація</label>
+            <div style={{ background: 'rgba(255,255,255,.04)', borderRadius: 8, padding: '12px 14px', fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+              {app.motivation || '—'}
+            </div>
+          </div>
+          <div className="db-mu-section">
+            <label className="db-mu-label">💼 Досвід та навички</label>
+            <div style={{ background: 'rgba(255,255,255,.04)', borderRadius: 8, padding: '12px 14px', fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap', color: app.experience ? 'inherit' : '#666' }}>
+              {app.experience || '—'}
+            </div>
+          </div>
+          <div className="db-mu-section" style={{ color: '#888', fontSize: 12 }}>
+            📅 Подано: {formatDate(app.created_at)}
+          </div>
+          {app.status === 'pending' && (
+            <div className="db-form-actions" style={{ padding: '0 0 4px' }}>
+              <button className="db-btn db-btn-danger" onClick={() => { onDecline(app.id); onClose(); }}>❌ Відхилити</button>
+              <button className="db-btn db-btn-primary" style={{ background: '#16a34a' }} onClick={() => { onAccept(app.id); onClose(); }}>✓ Прийняти</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+    {viewProfile && (
+      <UserProfileModal
+        profile={{ ...viewProfile, user_id: viewProfile.user_id || viewProfile.id }}
+        meId={-1}
+        onClose={() => setViewProfile(null)}
+        onGoOwnProfile={() => setViewProfile(null)}
+      />
+    )}
+    </>
+  );
+}
+
 /* ══════════════════════════════════════════════════
    TabAdmin — Адмін панель
 ══════════════════════════════════════════════════ */
 export default function TabAdmin({ toast }) {
-  const [adminTab,    setAdminTab]    = useState('tournaments');
+  const [adminTab,    setAdminTab]    = useState('overview');
   const [tournaments, setTournaments] = useState([]);
   const [users,       setUsers]       = useState([]);
   const [adminTeams,  setAdminTeams]  = useState([]);
@@ -448,6 +562,12 @@ export default function TabAdmin({ toast }) {
   const [filterTour,     setFilterTour]     = useState('');
   const [editTournament, setEditTournament] = useState(null);
   const [confirmModal,   setConfirmModal]   = useState(null);
+
+  // Applications state
+  const [applications,        setApplications]        = useState([]);
+  const [applicationsLoading, setApplicationsLoading] = useState(false);
+  const [viewApplication,     setViewApplication]     = useState(null);
+  const [appFilter,           setAppFilter]           = useState('pending');
 
   // Chat management state
   const [customRooms,    setCustomRooms]    = useState([]);
@@ -478,8 +598,15 @@ export default function TabAdmin({ toast }) {
     } catch {}
   }, []);
 
+  const loadApplications = useCallback(async () => {
+    setApplicationsLoading(true);
+    try { setApplications(await getAdminOrganizerApplications()); } catch {}
+    finally { setApplicationsLoading(false); }
+  }, []);
+
   useEffect(() => { if (adminTab === 'chat') loadChatData(); }, [adminTab, loadChatData]);
   useEffect(() => { if (adminTab === 'chat') loadRoomSettings(settingsRoom); }, [adminTab, settingsRoom, loadRoomSettings]);
+  useEffect(() => { if (adminTab === 'applications') loadApplications(); }, [adminTab, loadApplications]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -535,6 +662,22 @@ export default function TabAdmin({ toast }) {
         toast.success('Користувача видалено');
       } catch (err) { toast.error(err.message); }
     });
+  };
+
+  const handleAcceptApplication = async (id) => {
+    try {
+      await reviewOrganizerApplication(id, 'accepted');
+      setApplications(prev => prev.map(a => a.id === id ? { ...a, status: 'accepted' } : a));
+      toast.success('Заявку прийнято — користувач отримав роль Організатора');
+    } catch (err) { toast.error(err.message); }
+  };
+
+  const handleDeclineApplication = async (id) => {
+    try {
+      await reviewOrganizerApplication(id, 'rejected');
+      setApplications(prev => prev.map(a => a.id === id ? { ...a, status: 'rejected' } : a));
+      toast.info('Заявку відхилено');
+    } catch (err) { toast.error(err.message); }
   };
 
   const handleDeleteAdminTeam = async (id, name) => {
@@ -608,14 +751,15 @@ export default function TabAdmin({ toast }) {
   }));
 
   const adminStats = stats ? [
-    { label: 'Користувачів', value: stats.users,      color: '#AC9EF8' },
-    { label: 'Команд',       value: stats.teams,       color: '#7c5ff5' },
-    { label: 'Турнірів',     value: stats.tournaments, color: '#4ade80' },
-    { label: 'Повідомлень',  value: stats.messages,    color: '#0ea5e9' },
-    { label: 'Заблоковано',  value: stats.banned,      color: '#f87171' },
+    { label: 'Користувачів', value: stats.users,      color: '#AC9EF8', icon: '👤' },
+    { label: 'Команд',       value: stats.teams,       color: '#7c5ff5', icon: '👥' },
+    { label: 'Турнірів',     value: stats.tournaments, color: '#4ade80', icon: '🏆' },
+    { label: 'Повідомлень',  value: stats.messages,    color: '#0ea5e9', icon: '💬' },
+    { label: 'Заблоковано',  value: stats.banned,      color: '#f87171', icon: '🚫' },
   ] : [];
 
-  const STATUS_OPTIONS = ['draft','registration','running','finished'];
+  const pendingAppsCount = applications.filter(a => a.status === 'pending').length;
+  const filteredApps = applications.filter(a => appFilter === 'all' || a.status === appFilter);
 
   return (
     <div className="db-tab">
@@ -626,22 +770,26 @@ export default function TabAdmin({ toast }) {
             {showCreate ? '✕ Скасувати' : '+ Новий турнір'}
           </button>
         )}
+        {adminTab === 'applications' && (
+          <button className="db-btn db-btn-ghost" onClick={loadApplications}>↻ Оновити</button>
+        )}
       </div>
 
-      {adminStats.length > 0 && (
-        <div className="db-admin-stats">
-          {adminStats.map(s => (
-            <div key={s.label} className="db-admin-stat" style={{ '--c': s.color }}>
-              <span className="db-admin-stat-val">{s.value}</span>
-              <span className="db-admin-stat-label">{s.label}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
       <div className="db-admin-tabs">
-        {[['tournaments','🏆 Турніри'], ['users','👥 Користувачі'], ['teams','👫 Команди'], ['chat','💬 Чат']].map(([id, lbl]) => (
-          <button key={id} className={`db-admin-tab-btn${adminTab === id ? ' active' : ''}`} onClick={() => setAdminTab(id)}>{lbl}</button>
+        {[
+          ['overview',     '📊 Огляд'],
+          ['applications', '📄 Заявки'],
+          ['tournaments',  '🏆 Турніри'],
+          ['users',        '👥 Користувачі'],
+          ['teams',        '👫 Команди'],
+          ['chat',         '💬 Чат'],
+        ].map(([id, lbl]) => (
+          <button key={id} className={`db-admin-tab-btn${adminTab === id ? ' active' : ''}`} onClick={() => setAdminTab(id)}>
+            {lbl}
+            {id === 'applications' && pendingAppsCount > 0 && (
+              <span className="db-admin-tab-badge">{pendingAppsCount}</span>
+            )}
+          </button>
         ))}
       </div>
 
@@ -649,6 +797,161 @@ export default function TabAdmin({ toast }) {
         <div className="db-team-list">{[1,2,3].map(i => <div key={i} className="db-card-skeleton" style={{ height: 56 }} />)}</div>
       ) : (
         <>
+          {/* ─── OVERVIEW ─── */}
+          {adminTab === 'overview' && (
+            <div>
+              <div className="db-admin-stats" style={{ marginBottom: 24 }}>
+                {adminStats.map(s => (
+                  <div key={s.label} className="db-admin-stat" style={{ '--c': s.color }}>
+                    <span className="db-admin-stat-icon">{s.icon}</span>
+                    <span className="db-admin-stat-val">{s.value ?? '—'}</span>
+                    <span className="db-admin-stat-label">{s.label}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="db-admin-chat-grid">
+                <div className="db-admin-card">
+                  <div className="db-admin-card-header">
+                    <div className="db-admin-card-icon" style={{ background: 'rgba(172,158,248,.15)' }}>🏆</div>
+                    <div className="db-admin-card-header-text">
+                      <h3 className="db-admin-card-title">Турніри</h3>
+                      <p className="db-admin-card-sub">Швидкі дії</p>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <button className="db-panel-access-btn" onClick={() => setAdminTab('tournaments')}>
+                      <span className="db-pab-icon">➕</span>
+                      <div className="db-pab-text"><strong>Створити турнір</strong><span>Відкрити форму створення</span></div>
+                      <span className="db-pab-arrow">→</span>
+                    </button>
+                    <button className="db-panel-access-btn" onClick={() => { setAdminTab('tournaments'); }}>
+                      <span className="db-pab-icon">✏️</span>
+                      <div className="db-pab-text"><strong>Керувати турнірами</strong><span>Редагування, статуси, команди</span></div>
+                      <span className="db-pab-arrow">→</span>
+                    </button>
+                  </div>
+                </div>
+                <div className="db-admin-card">
+                  <div className="db-admin-card-header">
+                    <div className="db-admin-card-icon" style={{ background: 'rgba(74,222,128,.1)' }}>👤</div>
+                    <div className="db-admin-card-header-text">
+                      <h3 className="db-admin-card-title">Користувачі</h3>
+                      <p className="db-admin-card-sub">Швидкі дії</p>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <button className="db-panel-access-btn" onClick={() => setAdminTab('users')}>
+                      <span className="db-pab-icon">👥</span>
+                      <div className="db-pab-text"><strong>Усі користувачі</strong><span>Управління ролями</span></div>
+                      <span className="db-pab-arrow">→</span>
+                    </button>
+                    <button className="db-panel-access-btn" onClick={() => setAdminTab('applications')}>
+                      <span className="db-pab-icon">🗂️</span>
+                      <div className="db-pab-text">
+                        <strong>Заявки організатора{pendingAppsCount > 0 ? ` (${pendingAppsCount})` : ''}</strong>
+                        <span>Очікують розгляду</span>
+                      </div>
+                      <span className="db-pab-arrow">→</span>
+                    </button>
+                  </div>
+                </div>
+                <div className="db-admin-card">
+                  <div className="db-admin-card-header">
+                    <div className="db-admin-card-icon" style={{ background: 'rgba(14,165,233,.1)' }}>💬</div>
+                    <div className="db-admin-card-header-text">
+                      <h3 className="db-admin-card-title">Чат та команди</h3>
+                      <p className="db-admin-card-sub">Швидкі дії</p>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <button className="db-panel-access-btn" onClick={() => setAdminTab('chat')}>
+                      <span className="db-pab-icon">📬</span>
+                      <div className="db-pab-text"><strong>Управління чатом</strong><span>Кімнати, оголошення</span></div>
+                      <span className="db-pab-arrow">→</span>
+                    </button>
+                    <button className="db-panel-access-btn" onClick={() => setAdminTab('teams')}>
+                      <span className="db-pab-icon">👫</span>
+                      <div className="db-pab-text"><strong>Команди</strong><span>Усі учасники</span></div>
+                      <span className="db-pab-arrow">→</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ─── APPLICATIONS ─── */}
+          {adminTab === 'applications' && (
+            <div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span style={{ fontSize: 13, color: '#888' }}>Фільтр:</span>
+                {[['pending','⏳ Очікують'], ['accepted','✓ Прийняті'], ['rejected','✗ Відхилені'], ['all','Усі']].map(([v, l]) => (
+                  <button key={v}
+                    className={`db-admin-tab-btn${appFilter === v ? ' active' : ''}`}
+                    style={{ padding: '4px 12px', fontSize: 13 }}
+                    onClick={() => setAppFilter(v)}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+              {applicationsLoading ? (
+                <div className="db-team-list">{[1,2,3].map(i => <div key={i} className="db-card-skeleton" style={{ height: 56 }} />)}</div>
+              ) : filteredApps.length === 0 ? (
+                <div style={{ padding: 32, textAlign: 'center', color: '#666', fontSize: 14 }}>
+                  {appFilter === 'pending' ? '🎉 Немає нових заявок' : 'Немає заявок в цьому фільтрі'}
+                </div>
+              ) : (
+                <div className="db-admin-table-wrap">
+                  <table className="db-admin-table">
+                    <thead>
+                      <tr>
+                        <th>Користувач</th>
+                        <th>Email</th>
+                        <th>Мотивація</th>
+                        <th>Дата</th>
+                        <th>Статус</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredApps.map(a => (
+                        <tr key={a.id}>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <UserAvatar user={a} size={28} />
+                              <strong>{a.username}</strong>
+                            </div>
+                          </td>
+                          <td style={{ fontSize: 13, color: '#888' }}>{a.email}</td>
+                          <td style={{ maxWidth: 220 }}>
+                            <span style={{ fontSize: 13, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                              {a.motivation}
+                            </span>
+                          </td>
+                          <td style={{ fontSize: 12, color: '#888', whiteSpace: 'nowrap' }}>{formatDate(a.created_at)}</td>
+                          <td>
+                            {a.status === 'pending' && <span style={{ color: '#f59e0b', fontWeight: 600, fontSize: 12 }}>⏳ Очікує</span>}
+                            {a.status === 'accepted' && <span style={{ color: '#16a34a', fontWeight: 600, fontSize: 12 }}>✓ Прийнято</span>}
+                            {a.status === 'rejected' && <span style={{ color: '#ef4444', fontWeight: 600, fontSize: 12 }}>✗ Відхилено</span>}
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <button className="db-btn db-btn-ghost db-btn-sm" onClick={() => setViewApplication(a)}>👁 Переглянути</button>
+                              {a.status === 'pending' && (<>
+                                <button className="db-btn db-btn-sm" style={{ background: '#16a34a', color: '#fff' }} onClick={() => handleAcceptApplication(a.id)}>✓</button>
+                                <button className="db-btn db-btn-danger db-btn-sm" onClick={() => handleDeclineApplication(a.id)}>✗</button>
+                              </>)}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ─── TOURNAMENTS ─── */}
           {adminTab === 'tournaments' && (
             <>
@@ -921,6 +1224,14 @@ export default function TabAdmin({ toast }) {
         <ManageUserModal user={manageUser} toast={toast} onClose={() => setManageUser(null)}
           onRoleChange={(uid, role) => { handleRoleChange(uid, role); setManageUser(u => ({ ...u, role })); }}
           onDelete={handleDeleteUser} />
+      )}
+      {viewApplication && (
+        <ApplicationViewModal
+          app={viewApplication}
+          onClose={() => setViewApplication(null)}
+          onAccept={handleAcceptApplication}
+          onDecline={handleDeclineApplication}
+        />
       )}
       {editTournament && (
         <EditTournamentModal tournament={editTournament} allTeams={adminTeams} toast={toast}

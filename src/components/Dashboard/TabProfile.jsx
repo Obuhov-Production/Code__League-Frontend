@@ -1,29 +1,214 @@
 import { useState, useEffect, useRef } from 'react';
 
-import { getMyTeams, updateMe, uploadAvatar, uploadBanner, deleteBanner, API_BASE } from '@utils/authApi';
-import { BANNER_PRESETS, StatusBadge, UserAvatar, formatDate } from './db.shared.jsx';
+import badge1Img from '@images/pin/bage1.png';
+import badge2Img from '@images/pin/bage2.png';
+
+import { getMyTeams, updateMe, uploadAvatar, uploadBanner, deleteBanner, API_BASE,
+  submitOrganizerApplication, getMyOrganizerApplication, getMyBadges } from '@utils/authApi';
+import { BANNER_PRESETS, StatusBadge, UserAvatar, formatDate, hasRole, displayName } from './db.shared.jsx';
+
+/* ── Badge definitions ────────────────────────── */
+export const ALL_BADGES = [
+  {
+    id: 'identity_confirmed',
+    image: badge1Img,
+    name: 'Підтвердив особу',
+    description: 'Ви заповнили своє ПІБ у профілі.',
+    color: '#7c5ff5',
+    condition: 'Заповніть Прізвище, Ім\'я та По батькові в профілі',
+    secret: false,
+  },
+  {
+    id: 'team_member',
+    image: badge2Img,
+    name: 'Командний гравець',
+    description: 'Ви вступили до своєї першої команди на турнірі.',
+    color: '#16a34a',
+    condition: 'Вступіть до будь-якої команди',
+    secret: false,
+  },
+];
+
+/* ── Badge Modal ──────────────────────────────── */
+function BadgeModal({ badge, onClose }) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box modal-box--light" onClick={e => e.stopPropagation()}
+        style={{ maxWidth: 340, textAlign: 'center', padding: '32px 28px', overflow: 'hidden' }}>
+        <button className="modal-close" onClick={onClose}>✕</button>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+          <img src={badge.image} alt={badge.name}
+            style={{ width: 96, height: 96, objectFit: 'contain', filter: badge.earned ? 'none' : 'grayscale(1) opacity(0.4)' }} />
+          <div>
+            <h3 style={{ margin: '0 0 6px', fontSize: 18 }}>{badge.name}</h3>
+            <span style={{ fontSize: 12, display: 'inline-block', padding: '2px 10px', borderRadius: 20, background: badge.color + '22', color: badge.color, marginBottom: 10 }}>
+              {badge.earned ? '✓ Отримано' : '🔒 Не отримано'}
+            </span>
+            <p style={{ fontSize: 14, color: '#ccc', lineHeight: 1.5, margin: '0 0 10px' }}>{badge.description}</p>
+            {!badge.secret && (
+              <p style={{ fontSize: 12, color: '#888', margin: 0 }}>📋 {badge.condition}</p>
+            )}
+            {badge.secret && (
+              <p style={{ fontSize: 12, color: '#888', margin: 0 }}>🔐 Секретне досягнення</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Organizer Application Modal ─────────────────── */
+function OrganizerApplyModal({ onClose, onSubmit }) {
+  const [form, setForm] = useState({ motivation: '', experience: '' });
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async e => {
+    e.preventDefault();
+    if (!form.motivation.trim()) return;
+    setSaving(true);
+    try { await onSubmit(form); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box modal-box--light" onClick={e => e.stopPropagation()} style={{ maxWidth: 500, padding: 0, overflow: 'hidden' }}>
+        <div className="db-mu-header">
+          <div style={{ fontSize: 28 }}>🗂️</div>
+          <div>
+            <div className="db-mu-name">Заявка на організатора</div>
+            <div className="db-mu-email">Розкажіть про себе та свою мотивацію</div>
+          </div>
+          <button className="db-mu-close" onClick={onClose}>✕</button>
+        </div>
+        <form className="db-mu-body" onSubmit={handleSubmit}>
+          <div className="db-mu-section">
+            <label className="db-mu-label">Мотивація *</label>
+            <textarea
+              className="db-input"
+              rows={4}
+              value={form.motivation}
+              onChange={e => setForm(f => ({ ...f, motivation: e.target.value }))}
+              placeholder="Чому ви хочете стати організатором? Які заходи плануєте провести?"
+              maxLength={1000}
+              required
+            />
+            <div style={{ fontSize: 12, color: '#888', textAlign: 'right' }}>{form.motivation.length} / 1000</div>
+          </div>
+          <div className="db-mu-section">
+            <label className="db-mu-label">Досвід та навички</label>
+            <textarea
+              className="db-input"
+              rows={3}
+              value={form.experience}
+              onChange={e => setForm(f => ({ ...f, experience: e.target.value }))}
+              placeholder="Попередній досвід у організації заходів, хакатонів, олімпіад..."
+              maxLength={500}
+            />
+          </div>
+          <div className="db-form-actions" style={{ padding: '0 20px 20px' }}>
+            <button type="button" className="db-btn db-btn-ghost" onClick={onClose}>Скасувати</button>
+            <button type="submit" className="db-btn db-btn-primary" disabled={saving || !form.motivation.trim()}>
+              {saving ? '⏳ Надсилання...' : '📤 Подати заявку'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
   const [myTeams,   setMyTeams]  = useState([]);
+  const [myBadges,  setMyBadges] = useState([]);
   const [editing,   setEditing]  = useState(false);
   const [saving,    setSaving]   = useState(false);
+  const [savingPib, setSavingPib] = useState(false);
   const [form,      setForm]     = useState({ username: '', user_description: '', banner_color: '' });
+  const [pibForm,   setPibForm]  = useState({ first_name: '', last_name: '', middle_name: '' });
+  const [pinnedBadge, setPinnedBadge] = useState(null);
   const [bannerMode, setBannerMode] = useState('color');
   const [hexInput,  setHexInput]  = useState('#1e1b2e');
+  const [applyModal, setApplyModal] = useState(false);
+  const [myApplication, setMyApplication] = useState(undefined);
+  const [selectedBadge, setSelectedBadge] = useState(null);
   const avatarInputRef = useRef(null);
   const bannerInputRef = useRef(null);
 
+  // Determine which badges are earned based on DB-loaded badges
+  const earnedBadges = ALL_BADGES.map(b => ({
+    ...b,
+    earned: b.id === 'team_member'
+      ? myTeams.length > 0 || myBadges.some(mb => mb.badge_id === b.id)
+      : myBadges.some(mb => mb.badge_id === b.id),
+  }));
+
+  const pinnedBadgeDef = pinnedBadge ? ALL_BADGES.find(b => b.id === pinnedBadge) : null;
+
   useEffect(() => {
     getMyTeams().then(setMyTeams).catch(() => {});
+    getMyBadges().then(setMyBadges).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (user && user.role === 'user') {
+      getMyOrganizerApplication().then(setMyApplication).catch(() => setMyApplication(null));
+    }
+  }, [user]);
 
   useEffect(() => {
     if (user) {
       const bc = user.banner_color || '#1e1b2e';
       setForm({ username: user.username || '', user_description: user.user_description || '', banner_color: bc });
       setHexInput(bc);
+      setPibForm({
+        first_name: user.first_name || '',
+        last_name: user.last_name || '',
+        middle_name: user.middle_name || '',
+      });
+      setPinnedBadge(user.pinned_badge || null);
     }
   }, [user]);
+
+  const handleSavePib = async () => {
+    setSavingPib(true);
+    try {
+      const updated = await updateMe({
+        first_name: pibForm.first_name.trim(),
+        last_name: pibForm.last_name.trim(),
+        middle_name: pibForm.middle_name.trim(),
+      });
+      setUser(updated);
+      const allFilled = pibForm.first_name.trim() && pibForm.last_name.trim() && pibForm.middle_name.trim();
+      if (allFilled && !myBadges.some(b => b.badge_id === 'identity_confirmed')) {
+        setMyBadges(prev => [...prev, { badge_id: 'identity_confirmed' }]);
+        toast.success('🏅 Отримано нове досягнення: «Підтвердив особу»!');
+      } else {
+        toast.success('ПІБ збережено!');
+      }
+    } catch (err) { toast.error(err.message); }
+    finally { setSavingPib(false); }
+  };
+
+  const handlePinBadge = async (badgeId) => {
+    const newPin = pinnedBadge === badgeId ? null : badgeId;
+    try {
+      const updated = await updateMe({ pinned_badge: newPin });
+      setUser(updated);
+      setPinnedBadge(newPin);
+      toast.success(newPin ? '📌 Бейдж закріплено!' : 'Бейдж відкріплено');
+    } catch (err) { toast.error(err.message); }
+  };
+
+  const handleApply = async (data) => {
+    try {
+      const result = await submitOrganizerApplication(data);
+      setMyApplication(result);
+      setApplyModal(false);
+      toast.success('Заявку подано! Очікуйте розгляду адміністратором.');
+    } catch (err) { toast.error(err.message); }
+  };
 
   if (!user) return null;
 
@@ -151,9 +336,12 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
             {editing && <span className="db-profile-banner-avatar-edit">📷</span>}
           </div>
           <div className="db-profile-banner-nameblock">
-            <h2 className="db-profile-banner-name">{user.username || user.email}</h2>
+            <h2 className="db-profile-banner-name" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {displayName(user)}
+              {pinnedBadgeDef && <img src={pinnedBadgeDef.image} alt={pinnedBadgeDef.name} title={pinnedBadgeDef.name} style={{ width: 20, height: 20, objectFit: 'contain' }} />}
+            </h2>
             <span className="db-role-badge db-role-badge--banner">
-              {user.role === 'admin' ? '🛡️ Адмін' : user.role === 'jury' ? '⚖ Журі' : '👤 Учасник'}
+              {hasRole(user, 'admin') ? '🛡️ Адмін' : hasRole(user, 'organizer') ? '🗂️ Організатор' : hasRole(user, 'jury') ? '⚖ Журі' : '👤 Учасник'}
             </span>
           </div>
         </div>
@@ -169,9 +357,13 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
           )}
         </div>
         <div className="db-profile-headings">
-          <h2>{user.username || user.email}</h2>
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {displayName(user)}
+            {pinnedBadgeDef && <img src={pinnedBadgeDef.image} alt={pinnedBadgeDef.name} title={pinnedBadgeDef.name} style={{ width: 22, height: 22, objectFit: 'contain' }} />}
+            {displayName(user) !== (user.username || user.email) && <span style={{ fontSize: 13, color: '#aaa', fontWeight: 400 }}>@{user.username}</span>}
+          </h2>
           <div className="db-profile-chips">
-            <span className="db-role-badge">{user.role === 'admin' ? '🛡️ Адмін' : user.role === 'jury' ? '⚖ Журі' : '👤 Учасник'}</span>
+            <span className="db-role-badge">{hasRole(user, 'admin') ? '🛡️ Адмін' : hasRole(user, 'organizer') ? '🗂️ Організатор' : hasRole(user, 'jury') ? '⚖ Журі' : '👤 Учасник'}</span>
             <span className="db-chip">🏆 Команд: {myTeams.length}</span>
             <span className="db-chip">📅 Зареєстровано: {formatDate(user.created_at)}</span>
           </div>
@@ -226,11 +418,48 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
                   onChange={e => setForm(f => ({ ...f, user_description: e.target.value }))}
                   placeholder="Розкажіть про себе..." />
               </div>
+              {/* ── ПІБ inline (edit mode) ── */}
+              <div className="db-pib-section">
+                <div className="db-pib-header">
+                  <span>ПІБ</span>
+                  <span className="db-pib-hint">потрібно для заявок на турніри</span>
+                </div>
+                <div className="db-field-row">
+                  <label>Прізвище</label>
+                  <input className="db-field-input" value={pibForm.last_name}
+                    onChange={e => setPibForm(f => ({ ...f, last_name: e.target.value }))}
+                    placeholder="Іванов" />
+                </div>
+                <div className="db-field-row">
+                  <label>Ім'я</label>
+                  <input className="db-field-input" value={pibForm.first_name}
+                    onChange={e => setPibForm(f => ({ ...f, first_name: e.target.value }))}
+                    placeholder="Іван" />
+                </div>
+                <div className="db-field-row">
+                  <label>По батькові</label>
+                  <input className="db-field-input" value={pibForm.middle_name}
+                    onChange={e => setPibForm(f => ({ ...f, middle_name: e.target.value }))}
+                    placeholder="Іванович" />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+                  <button className="db-btn db-btn-primary" style={{ fontSize: 13, padding: '5px 16px' }}
+                    onClick={handleSavePib} disabled={savingPib}>
+                    {savingPib ? '⏳...' : '💾 Зберегти ПІБ'}
+                  </button>
+                </div>
+              </div>
             </>
           ) : (
             <div className="db-field-list">
               <div className="db-field-row"><label>Нікнейм</label><span>{user.username || '—'}</span></div>
               <div className="db-field-row"><label>Email</label><span>{user.email}</span></div>
+              <div className="db-field-row">
+                <label>ПІБ</label>
+                <span style={{ color: (user.last_name || user.first_name) ? undefined : '#aaa' }}>
+                  {[user.last_name, user.first_name, user.middle_name].filter(Boolean).join(' ') || 'Не вказано'}
+                </span>
+              </div>
               <div className="db-field-row"><label>Про себе</label><span>{user.user_description || '—'}</span></div>
               <div className="db-field-row"><label>Реєстрація</label><span>{formatDate(user.created_at)}</span></div>
             </div>
@@ -253,17 +482,16 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
         </div>
 
         <div className="db-info-card db-info-card--security">
-          <h3><span className="db-card-icon">🔒</span> Безпека</h3>
-          <div className="db-field-list">
+          <h3><span className="db-card-icon">🔒</span> Безпека</h3>          <div className="db-field-list">
             <div className="db-field-row"><label>Статус</label><span style={{ color:'#16a34a', fontWeight:600 }}>● Активний</span></div>
             <div className="db-field-row"><label>Пароль</label><span>••••••••</span></div>
           </div>
 
           {/* Panel access buttons (always visible - useful on mobile, convenient on desktop) */}
-          {setTab && (user.role === 'admin' || user.role === 'jury') && (
+          {setTab && (hasRole(user, 'admin') || hasRole(user, 'jury') || hasRole(user, 'organizer')) && (
             <div className="db-profile-panel-access">
               <h4 className="db-profile-panel-label">Панелі управління</h4>
-              {(user.role === 'admin' || user.role === 'jury') && (
+              {(hasRole(user, 'admin') || hasRole(user, 'jury')) && (
                 <button className="db-panel-access-btn db-panel-access-btn--jury" onClick={() => setTab('jury')}>
                   <span className="db-pab-icon">⚖️</span>
                   <div className="db-pab-text">
@@ -273,12 +501,12 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
                   <span className="db-pab-arrow">→</span>
                 </button>
               )}
-              {user.role === 'admin' && (
-                <button className="db-panel-access-btn db-panel-access-btn--admin" onClick={() => setTab('admin')}>
-                  <span className="db-pab-icon">🛡️</span>
+              {(hasRole(user, 'admin') || hasRole(user, 'organizer')) && (
+                <button className="db-panel-access-btn" style={{ borderColor: '#7c5ff5' }} onClick={() => setTab(hasRole(user, 'admin') ? 'admin' : 'organizer')}>
+                  <span className="db-pab-icon">{hasRole(user, 'admin') ? '🛡️' : '🗂️'}</span>
                   <div className="db-pab-text">
-                    <strong>Адмін Панель</strong>
-                    <span>Повне управління системою</span>
+                    <strong>{hasRole(user, 'admin') ? 'Адмін Панель' : 'Панель Організатора'}</strong>
+                    <span>{hasRole(user, 'admin') ? 'Повне управління системою' : 'Турніри та команди'}</span>
                   </div>
                   <span className="db-pab-arrow">→</span>
                 </button>
@@ -286,9 +514,86 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
             </div>
           )}
 
+          {/* Organizer application — only for plain users */}
+          {user.role === 'user' && (
+            <div className="db-profile-panel-access" style={{ marginTop: 12 }}>
+              <h4 className="db-profile-panel-label">📄 Заявка на організатора</h4>
+              {myApplication === undefined && (
+                <div style={{ fontSize: 13, color: '#888', padding: '6px 0' }}>Завантаження...</div>
+              )}
+              {myApplication === null && (
+                <button className="db-panel-access-btn" style={{ borderColor: '#4ade80' }} onClick={() => setApplyModal(true)}>
+                  <span className="db-pab-icon">🗂️</span>
+                  <div className="db-pab-text">
+                    <strong>Стати організатором</strong>
+                    <span>Подайте заявку — адмін розгляне і надасть доступ</span>
+                  </div>
+                  <span className="db-pab-arrow">→</span>
+                </button>
+              )}
+              {myApplication?.status === 'pending' && (
+                <div className="db-admin-tip" style={{ margin: 0 }}>
+                  ⏳ Заявка на розгляді — чекайте рішення адміністратора
+                </div>
+              )}
+              {myApplication?.status === 'rejected' && (
+                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                  <div className="db-admin-tip" style={{ margin: 0, color: '#f87171', background: 'rgba(248,113,113,.1)' }}>
+                    ❌ Заявку відхилено
+                  </div>
+                  <button className="db-panel-access-btn" style={{ borderColor: '#4ade80' }} onClick={() => setApplyModal(true)}>
+                    <span className="db-pab-icon">🔄</span>
+                    <div className="db-pab-text"><strong>Подати нову заявку</strong><span>Можна заповнити знову</span></div>
+                    <span className="db-pab-arrow">→</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           <button className="db-btn db-btn-danger db-btn-full" style={{ marginTop: 16 }} onClick={onLogout}>Вийти з акаунту</button>
         </div>
+
+        {/* ── Badges card ─────────────────────────── */}
+        <div className="db-info-card db-info-card--badges">
+          <h3><span className="db-card-icon">🏅</span> Досягнення</h3>
+          <div className="db-badges-list">
+            {earnedBadges.map(b => (
+              <button key={b.id}
+                className={`db-badge-row${b.earned ? ' earned' : ' locked'}${pinnedBadge === b.id ? ' pinned' : ''}`}
+                onClick={() => setSelectedBadge(b)}>
+                <div className="db-badge-row-icon">
+                  <img src={b.image} alt={b.name}
+                    style={{ filter: b.earned ? 'none' : 'grayscale(1) opacity(0.3)' }} />
+                  {b.earned && <span className="db-badge-row-glow" style={{ background: b.color + '28' }} />}
+                </div>
+                <div className="db-badge-row-info">
+                  <span className="db-badge-row-name">{b.name}</span>
+                  <span className="db-badge-row-desc">{b.description}</span>
+                </div>
+                <div className="db-badge-row-right">
+                  {b.earned
+                    ? pinnedBadge === b.id
+                      ? <span className="db-badge-row-tag pinned">📌 Закріплено</span>
+                      : <span className="db-badge-row-tag earned">✓ Є</span>
+                    : <span className="db-badge-row-tag locked">🔒</span>
+                  }
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
       </div>
+
+      {selectedBadge && <BadgeModal badge={selectedBadge} pinnedBadge={pinnedBadge} onPin={handlePinBadge} onClose={() => setSelectedBadge(null)} />}
+
+      {applyModal && (
+        <OrganizerApplyModal
+          onClose={() => setApplyModal(false)}
+          onSubmit={handleApply}
+        />
+      )}
     </div>
   );
 }

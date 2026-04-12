@@ -533,6 +533,62 @@ export async function adminDeleteTeam(id) {
   });
 }
 
+/* ── Organizer Applications ────────────────────────── */
+
+export async function submitOrganizerApplication(data) {
+  return request(`${BASE}/applications/organizer`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getMyOrganizerApplication() {
+  if (!CHECK_BACKEND) return null;
+  return request(`${BASE}/applications/organizer/my`, { headers: authHeaders() });
+}
+
+export async function getAdminOrganizerApplications() {
+  if (!CHECK_BACKEND) return [];
+  return request(`${BASE}/admin/applications/organizer`, { headers: authHeaders() });
+}
+
+export async function reviewOrganizerApplication(id, status) {
+  return request(`${BASE}/admin/applications/organizer/${id}`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify({ status }),
+  });
+}
+
+/* ── Notifications ────────────────────────────── */
+
+export async function getNotifications() {
+  if (!CHECK_BACKEND) return [];
+  return request(`${BASE}/notifications`, { headers: authHeaders() });
+}
+
+export async function markNotificationRead(id) {
+  return request(`${BASE}/notifications/${id}/read`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+  });
+}
+
+export async function deleteNotification(id) {
+  return request(`${BASE}/notifications/${id}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+}
+
+export async function markAllNotificationsRead() {
+  return request(`${BASE}/notifications/read-all`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+  });
+}
+
 /* ── Jury ─────────────────────────────────────── */
 
 export async function getJuryTournaments() {
@@ -550,5 +606,32 @@ export async function evaluateSubmission(submissionId, data) {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify(data),
+  });
+}
+
+/* ── Badges ───────────────────────────────────────── */
+
+export async function getMyBadges() {
+  if (!CHECK_BACKEND) return [];
+  return request(`${BASE}/badges/my`, { headers: authHeaders() });
+}
+
+export async function getAdminUserBadges(userId) {
+  if (!CHECK_BACKEND) return [];
+  return request(`${BASE}/admin/users/${userId}/badges`, { headers: authHeaders() });
+}
+
+export async function adminGrantBadge(userId, badgeId) {
+  return request(`${BASE}/admin/users/${userId}/badges`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ badge_id: badgeId }),
+  });
+}
+
+export async function adminRevokeBadge(userId, badgeId) {
+  return request(`${BASE}/admin/users/${userId}/badges/${badgeId}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
   });
 }

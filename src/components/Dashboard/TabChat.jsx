@@ -16,6 +16,8 @@ import {
   getSocket, playMsgSound,
   UserProfileModal,
   resolveAvatarUrl,
+  STICKERS, STICKER_PREFIX,
+  ALL_BADGES, displayName,
 } from './db.shared.jsx';
 
 export default function TabChat({ user, toast, userId, onUnreadChange, setTab }) {
@@ -29,6 +31,7 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
   const [onlineCount, setOnlineCount] = useState(0);
   const [typingUsers, setTypingUsers] = useState([]);
   const [showEmoji,   setShowEmoji]   = useState(false);
+  const [emojiTab,    setEmojiTab]    = useState('emoji'); // 'emoji' | 'stickers'
   const [replyTo,     setReplyTo]     = useState(null);
   const [editingId,   setEditingId]   = useState(null);
   const [editText,    setEditText]    = useState('');
@@ -94,6 +97,9 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
         if (msgs?.length) setMessages(msgs.map(m => ({
           ...m,
           username:        m.username        ?? m.user?.username        ?? 'Anonymous',
+          first_name:      m.first_name      ?? m.user?.first_name      ?? null,
+          last_name:       m.last_name       ?? m.user?.last_name       ?? null,
+          pinned_badge:    m.pinned_badge    ?? m.user?.pinned_badge    ?? null,
           role:            m.role            ?? m.user?.role            ?? 'user',
           user_avatar_url: m.user_avatar_url ?? m.user?.user_avatar_url ?? null,
         })));
@@ -119,8 +125,9 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
     // room:history — backend sends full history after room:join
     const normalizeMsg = msg => ({
       ...msg,
-      username:        msg.username        ?? msg.user?.username        ?? 'Anonymous',
-      role:            msg.role            ?? msg.user?.role            ?? 'user',
+      username:        msg.username        ?? msg.user?.username        ?? 'Anonymous',          first_name:      msg.first_name      ?? msg.user?.first_name      ?? null,
+          last_name:       msg.last_name       ?? msg.user?.last_name       ?? null,
+          pinned_badge:    msg.pinned_badge    ?? msg.user?.pinned_badge    ?? null,      role:            msg.role            ?? msg.user?.role            ?? 'user',
       user_avatar_url: msg.user_avatar_url ?? msg.user?.user_avatar_url ?? null,
     });
     const onHistory = ({ room: r, messages: msgs }) => {
@@ -154,12 +161,19 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
       }
     };
     const onError = ({ message: msg }) => setChatError(msg);
+    const onReactionUpdate = ({ messageId, emoji, count, users }) => {
+      setReactions(prev => ({
+        ...prev,
+        [`${messageId}_${emoji}`]: { count, users: users || [] },
+      }));
+    };
 
     socket.on('room:history',  onHistory);
     socket.on('message:new',   onMsg);
     socket.on('connect',       onConn);
     socket.on('disconnect',    onDisconn);
     socket.on('user:typing',   onTyping);
+    socket.on('reaction:update', onReactionUpdate);
     socket.on('message:deleted', ({ messageId }) =>
       setMessages(prev => prev.filter(m => m.id !== messageId))
     );
@@ -175,6 +189,7 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
       socket.off('disconnect',    onDisconn);
       socket.off('user:typing',   onTyping);
       socket.off('error',         onError);
+      socket.off('reaction:update', onReactionUpdate);
       socket.off('message:deleted', ({ messageId }) =>
         setMessages(prev => prev.filter(m => m.id !== messageId))
       );
@@ -275,6 +290,16 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
   };
 
   const addEmoji = emoji => { setText(t => t + emoji); setShowEmoji(false); inputRef.current?.focus(); };
+  const sendSticker = stickerUrl => {
+    if (!online) return;
+    socket.emit('message:send', {
+      room,
+      text: STICKER_PREFIX + stickerUrl,
+      reply_to_id: replyTo?.id || undefined,
+    });
+    setShowEmoji(false);
+    setReplyTo(null);
+  };
   const sendReaction = (messageId, emoji) => { if (online) socket.emit('react', { room, messageId, emoji }); };
   const startEdit = msg => { setEditingId(msg.id); setEditText(msg.text); setCtxMenu(null); };
   const submitEdit = () => {
@@ -327,7 +352,9 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
       .filter(r => r.count > 0);
     const isEditing  = editingId === msg.id;
     const fileUrls   = parseFileUrls(msg.file_url);
-    const bigEmoji   = !fileUrls.length && isEmojiOnly(msg.text);
+    const isSticker  = msg.text && msg.text.startsWith(STICKER_PREFIX);
+    const stickerSrc = isSticker ? msg.text.slice(STICKER_PREFIX.length) : null;
+    const bigEmoji   = !fileUrls.length && !isSticker && isEmojiOnly(msg.text);
 
     if (msg.msg_type === 'announcement') {
       return (
@@ -367,8 +394,12 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
           {!isMe && (
             <span className={`db-chat-msg-name db-chat-msg-name-link${msg.role === 'admin' ? ' admin-name' : ''}`}
               onClick={() => openChatProfile({ user_id: msg.user_id, username: msg.username, user_avatar_url: msg.user_avatar_url, role: msg.role })}>
-              {msg.username || 'Anonymous'}
+              {displayName(msg)}
               {msg.role === 'admin' && <span className="db-chat-admin-badge" title="Адміністратор">👑</span>}
+              {msg.pinned_badge && (() => {
+                const bd = ALL_BADGES.find(b => b.id === msg.pinned_badge);
+                return bd ? <img src={bd.image} alt={bd.name} title={bd.name} className="db-chat-badge-pin" /> : null;
+              })()}
             </span>
           )}
           {msg.reply_to_id && (
@@ -388,22 +419,28 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
               </div>
             </div>
           ) : (
-            <div className={`db-chat-bubble${bigEmoji ? ' big-emoji' : ''}${hoveredMsg === msg.id && ctxMenu?.msg?.id !== msg.id ? ' show-react' : ''}`}>
-              {fileUrls.length > 0 && (
-                <div className={`db-chat-imgs${fileUrls.length > 1 ? ' db-chat-imgs--grid' : ''}`}>
-                  {fileUrls.map((url, i) => (
-                    <button key={i} type="button" className="db-chat-img-link"
-                      onClick={e => { e.preventDefault(); e.stopPropagation(); setLightboxImg(API_BASE + url); }}
-                      aria-label="Переглянути зображення">
-                      <img src={API_BASE + url} className="db-chat-img" alt="файл"
-                        onError={e => { e.target.style.display = 'none'; }} />
-                    </button>
-                  ))}
-                </div>
+            <div className={`db-chat-bubble${bigEmoji ? ' big-emoji' : ''}${isSticker ? ' sticker-bubble' : ''}${hoveredMsg === msg.id && ctxMenu?.msg?.id !== msg.id ? ' show-react' : ''}`}>
+              {isSticker ? (
+                <img src={stickerSrc} alt="sticker" className="db-chat-sticker" />
+              ) : (
+                <>
+                  {fileUrls.length > 0 && (
+                    <div className={`db-chat-imgs${fileUrls.length > 1 ? ' db-chat-imgs--grid' : ''}`}>
+                      {fileUrls.map((url, i) => (
+                        <button key={i} type="button" className="db-chat-img-link"
+                          onClick={e => { e.preventDefault(); e.stopPropagation(); setLightboxImg(API_BASE + url); }}
+                          aria-label="Переглянути зображення">
+                          <img src={API_BASE + url} className="db-chat-img" alt="файл"
+                            onError={e => { e.target.style.display = 'none'; }} />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {msg.text && <span className="db-chat-text">{msg.text}</span>}
+                  {msg.edited_at && !bigEmoji && <span className="db-chat-edited"> (ред.)</span>}
+                </>
               )}
-              {msg.text && <span className="db-chat-text">{msg.text}</span>}
-              {msg.edited_at && !bigEmoji && <span className="db-chat-edited"> (ред.)</span>}
-              {!bigEmoji && (
+              {!bigEmoji && !isSticker && (
                 <div className="db-chat-react-row">
                   {EMOJI_REACT.map(emoji => (
                     <button key={emoji} className="db-react-btn" onClick={() => sendReaction(msg.id, emoji)}>{emoji}</button>
@@ -667,8 +704,26 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
             </div>
           )}
           {showEmoji && (
-            <div className="db-emoji-picker">
-              {EMOJI_QUICK.map(e => <button key={e} className="db-emoji-btn" onClick={() => addEmoji(e)}>{e}</button>)}
+            <div className="db-emoji-picker db-emoji-picker--tabbed">
+              <div className="db-emoji-picker-tabs">
+                <button className={`db-emoji-picker-tab${emojiTab === 'emoji' ? ' active' : ''}`}
+                  onClick={() => setEmojiTab('emoji')}>😊 Емодзі</button>
+                <button className={`db-emoji-picker-tab${emojiTab === 'stickers' ? ' active' : ''}`}
+                  onClick={() => setEmojiTab('stickers')}>🎭 Стікери</button>
+              </div>
+              {emojiTab === 'emoji' ? (
+                <div className="db-emoji-picker-grid">
+                  {EMOJI_QUICK.map(e => <button key={e} className="db-emoji-btn" onClick={() => addEmoji(e)}>{e}</button>)}
+                </div>
+              ) : (
+                <div className="db-sticker-grid">
+                  {STICKERS.map((src, i) => (
+                    <button key={i} className="db-sticker-btn" onClick={() => sendSticker(src)}>
+                      <img src={src} alt={`sticker-${i + 1}`} />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           <form className="db-chat-input-row" onSubmit={send}>

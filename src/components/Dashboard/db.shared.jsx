@@ -6,14 +6,27 @@ import { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { searchUsers, API_BASE, CHECK_BACKEND, getToken } from '@utils/authApi';
 
+import emote1 from '@images/emote/emote.png';
+import emote2 from '@images/emote/emote2.png';
+import emote3 from '@images/emote/emote3.png';
+import emote4 from '@images/emote/emote4.png';
+import emote5 from '@images/emote/emote5.png';
+import emote6 from '@images/emote/emote6.png';
+
+import badge1Img from '@images/pin/bage1.png';
+import badge2Img from '@images/pin/bage2.png';
+
+export const STICKERS = [emote1, emote2, emote3, emote4, emote5, emote6];
+export const STICKER_PREFIX = '__sticker__:';
+
 /* ══════════════════════════════════════════════════
    CONSTANTS
 ══════════════════════════════════════════════════ */
 export const STATUS_LABEL = {
-  draft:        { label: 'Чернетка',   color: '#888',    bg: '#f0f0f0' },
-  registration: { label: 'Реєстрація', color: '#7c5ff5', bg: '#eee9ff' },
-  running:      { label: 'Активний',   color: '#16a34a', bg: '#dcfce7' },
-  finished:     { label: 'Завершений', color: '#0ea5e9', bg: '#e0f2fe' },
+  draft:        { label: 'Draft',   color: '#888',    bg: '#f0f0f0' },
+  registration: { label: 'Registration', color: '#7c5ff5', bg: '#eee9ff' },
+  running:      { label: 'Running',   color: '#16a34a', bg: '#dcfce7' },
+  finished:     { label: 'Finished', color: '#0ea5e9', bg: '#e0f2fe' },
 };
 
 export const ACCENT = {
@@ -25,7 +38,7 @@ export const ACCENT = {
 
 export const BANNER_PRESETS = ['#1e1b2e','#0f172a','#0d1117','#16213e','#1a1a2e','#0e2240','#2d1b69','#1b4332'];
 
-export const ROLE_LABELS = { user: '👤 Учасник', jury: '⚖️ Журі', admin: '⚙️ Адмін', banned: '🚫 Бан' };
+export const ROLE_LABELS = { user: '👤 User', jury: '⚖️ Jury', organizer: '🗂️ Organizer', admin: '⚙️ Admin', banned: '🚫 Banned' };
 
 export const BASE_ROOMS = [
   { id: 'general',     label: '# загальний',  locked: false },
@@ -35,6 +48,27 @@ export const BASE_ROOMS = [
 
 export const EMOJI_QUICK = ['😀','😂','❤️','🔥','👍','🎉','😮','👏','😢','🤔','😎','👀','🙌','🤩','💯','🫡'];
 export const EMOJI_REACT = ['👍','❤️','🔥','😂','😮','👏','😢','🎉'];
+
+export const ALL_BADGES = [
+  {
+    id: 'identity_confirmed',
+    image: badge1Img,
+    name: 'Підтвердив особу',
+    description: 'Ви заповнили своє ПІБ у профілі.',
+    color: '#7c5ff5',
+    condition: 'Заповніть Прізвище, Ім\'я та По батькові в профілі',
+    secret: false,
+  },
+  {
+    id: 'team_member',
+    image: badge2Img,
+    name: 'Командний гравець',
+    description: 'Ви вступили до своєї першої команди на турнірі.',
+    color: '#16a34a',
+    condition: 'Вступіть до будь-якої команди',
+    secret: false,
+  },
+];
 export const EMOJI_RE = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}|\uFE0F|\u200D|\u20E3|\p{Emoji_Modifier_Base}\p{Emoji_Modifier}?)+$/u;
 
 export const EVAL_CRITERIA = [
@@ -53,7 +87,8 @@ export const TAB_TIPS = {
   leaderboard: { icon: '📊', title: 'Лідерборд', text: 'Рейтинг команд по кожному турніру. Оберіть турнір щоб побачити результати.' },
   chat:        { icon: '💬', title: 'Чат',       text: 'Загальний чат та приватні кімнати для вашої команди. ПКМ на повідомлення — дії.' },
   profile:     { icon: '👤', title: 'Профіль',   text: 'Налаштуйте нікнейм, аватар, банер та опис профілю.' },
-  admin:       { icon: '⚙️', title: 'Адмін',     text: 'Управляйте турнірами, користувачами та чатом платформи.' },
+  admin:       { icon: '⚙️', title: 'Адмін',        text: 'Управляйте турнірами, користувачами та чатом платформи.' },
+  organizer:   { icon: '🗂️', title: 'Організатор', text: 'Створюйте турніри, керуйте раундами та переглядайте команди.' },
 };
 
 /* ══════════════════════════════════════════════════
@@ -82,6 +117,13 @@ export function avatarUrl(user) {
 
 export function hasRole(user, role) {
   return !!(user?.role?.split(',').map(r => r.trim()).includes(role));
+}
+
+/** Returns PIB (last + first) if available, otherwise username, otherwise email. */
+export function displayName(user) {
+  if (!user) return 'Anonymous';
+  const pib = [user.last_name, user.first_name].filter(Boolean).join(' ');
+  return pib || user.username || user.email || 'Anonymous';
 }
 
 export function isEmojiOnly(text) {
@@ -240,7 +282,8 @@ export function MiniProfileModal({ user, onClose, onGoProfile }) {
       <div className="db-mp-body">
         <div className="db-mp-avatar-wrap"><UserAvatar user={user} size={56} /></div>
         <div className="db-mp-info">
-          <strong>{user.username || user.email}</strong>
+          <strong>{displayName(user)}</strong>
+          {(user.first_name || user.last_name) && <span style={{ fontSize: 12, color: '#aaa', display: 'block' }}>@{user.username}</span>}
           <span className="db-role-badge" style={{ display:'inline-block', marginTop:4 }}>{user.role}</span>
         </div>
         {user.user_description && <p className="db-mp-desc">{user.user_description}</p>}
@@ -266,7 +309,7 @@ function UserProfileViewModal({ user, onClose }) {
           <div className="db-upv-head">
             <UserAvatar user={user} size={64} />
             <div>
-              <h3 style={{ margin: 0 }}>{user.username}</h3>
+              <h3 style={{ margin: 0 }}>{displayName(user)}</h3>
               <span className="db-role-badge">{user.role}</span>
             </div>
           </div>
@@ -372,7 +415,8 @@ export function UserProfileModal({ profile, meId, onClose, onGoOwnProfile }) {
             <span className="db-upm-avatar-initials" style={profile.user_avatar_url ? { display: 'none' } : undefined}>{(profile.username || '?').slice(0, 2).toUpperCase()}</span>
           </div>
           <div className="db-upm-name-row">
-            <span className="db-upm-name">{profile.username || 'Anonymous'}</span>
+            <span className="db-upm-name">{displayName(profile)}</span>
+            {(profile.first_name || profile.last_name) && <span style={{ fontSize: 12, color: '#aaa', marginLeft: 6 }}>@{profile.username}</span>}
             {isAdmin && <span className="db-upm-badge admin">⚙ Admin</span>}
           </div>
           {profile.user_description && <p className="db-upm-desc">{profile.user_description}</p>}
