@@ -44,7 +44,7 @@ function HomePage() {
         <div className="clear-space-50px"></div>
       </main>
 
-      <Footer id="contacts" />
+      <Footer />
     </div>
   )
 }

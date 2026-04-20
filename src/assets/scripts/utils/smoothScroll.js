@@ -1,22 +1,23 @@
 /**
- * Smooth Scroll Engine v2
- * - Плавний скрол мишкою та touchpad (lerp-based)
- * - Touch підтримка (mobile swipe)
+ * Smooth Scroll Engine v2 by Abetik:)
+ * - Плавний скрол мишкою та touchpad (lerp-based) for pc and laptop
+ * - Touch підтримка (mobile swipe) Тож скрол плавний
  * - Keyboard navigation (Space, PageDown, Home/End, стрілки)
  * - Плавне переміщення по якорях
  * - destroy() для повного відключення
  * - Захист від подвійної ініціалізації
- * - prefers-reduced-motion підтримка
+ * - prefers-reduced-motion Короче Хелпер для плавного скролу з підтримкою різних методів введення та врахуванням налаштувань користувача щодо анімації. Ідеально підходить для сайтів, де хочеться покращити UX при навігації, не вдаючись до важких бібліотек. Просто виклич initSmoothScroll() і все готово!
  */
 
 // ============ Constants ============
 
-const LERP        = 0.08   // Плавність (0.05 = дуже плавно, 0.15 = швидше)
-const WHEEL_MULT  = 1.2    // Множник швидкості колеса
-const KEY_STEP    = 120    // px — крок при натисканні стрілок
-const PAGE_MULT   = 0.85   // частка viewport для PageUp/PageDown
+const LERP        = 0.10   // Плавність (0.05 = дуже плавно, 0.15 = швидше буде)
+const WHEEL_MULT  = 1.2    // Множник швидкості колеса (спешал фор ю)
+const KEY_STEP    = 120    // px — крок при натисканні стрілок ( Доволі плавно і не много)
+const PAGE_MULT   = 0.85   // частка viewport для PageUp/PageDown ( Темка под клави 80%+ с нам падом ну якщо вобще хтось так скролить)
 
 // ============ State ============
+/* якщо будеш шось мінять суда не треба лізти */
 
 let currentScroll = 0
 let targetScroll  = 0
@@ -34,11 +35,11 @@ let touchTimestamp = 0
 let touchActive    = false   // чи це вертикальний свайп (не горизонтальний)
 let touchLocked    = false   // напрямок заблоковано після перших px руху
 
-// Velocity history для більш точного momentum (останні N семплів)
+// Velocity history для більш точного moment (останні {n} семплів)
 const VEL_SAMPLES  = 5
 const velHistory   = []  // [{ v, t }]
 
-// Callbacks
+// Callbacks нужна тема бо на ютубі так казали
 const listeners = { scrollEnd: [] }
 
 // ============ Utils ============
@@ -74,8 +75,6 @@ function lerpLoop() {
     window.scrollTo(0, currentScroll)
     isLerping = false
     rafId = null
-
-    // Сповіщаємо підписників
     listeners.scrollEnd.forEach(fn => fn(currentScroll))
     return
   }
@@ -85,7 +84,7 @@ function lerpLoop() {
 }
 
 function startLerp() {
-  if (isAnchorScroll) return // Якірний скрол має пріоритет
+  if (isAnchorScroll) return // Пріорітет для якорів
   if (!isLerping) {
     isLerping = true
     rafId = requestAnimationFrame(lerpLoop)
@@ -135,7 +134,6 @@ function onWheel(e) {
 }
 
 // ============ Touch ============
-
 // Константи touch
 const TOUCH_LOCK_THRESHOLD   = 8    // px — після яких вирішуємо вертикальний чи горизонтальний
 const TOUCH_MOMENTUM_MULT    = 18   // множник momentum при відпусканні

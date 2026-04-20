@@ -528,7 +528,7 @@ function RewiewsPage() {
 				</section>
 			</main>
 
-			<Footer id="contacts" />
+			<Footer />
 		</div>
 	)
 }

@@ -1,5 +1,6 @@
 import { useState, useRef, useLayoutEffect } from 'react'
 import illustrationSvg from '@images/contact/Illustration.svg'
+import { useToast } from '@utils/toast.jsx'
 
 function ProblemForm({ formData, handleChange }) {
   return (
@@ -124,9 +125,11 @@ function QuoteForm({ formData, handleChange }) {
 }
 
 function ContactSection() {
+  const toast = useToast()
   const [formType, setFormType] = useState('problem')
   const [problemData, setProblemData] = useState({ name: '', email: '', message: '' })
-  const [quoteData, setQuoteData] = useState({ name: '', email: '', company: '', budget: '', details: '' })
+  const [joinTeamData, setJoinTeamData] = useState({ name: '', email: '', company: '', budget: '', details: '' })
+  const [loading, setLoading] = useState(false)
   const fieldsRef = useRef(null)
   const [fieldsHeight, setFieldsHeight] = useState('auto')
   const isFirstRender = useRef(true)
@@ -164,16 +167,36 @@ function ContactSection() {
     setProblemData({ ...problemData, [e.target.name]: e.target.value })
   }
 
-  const handleQuoteChange = (e) => {
-    setQuoteData({ ...quoteData, [e.target.name]: e.target.value })
+  const handleJoinTeamChange = (e) => {
+    setJoinTeamData({ ...joinTeamData, [e.target.name]: e.target.value })
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
+    const activeData = formType === 'problem' ? problemData : joinTeamData
+    setLoading(true)
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: formType, ...activeData }),
+      })
+      if (!res.ok) throw new Error('Server error')
+      toast.success(formType === 'problem' ? 'Повідомлення відправлено!' : 'Заявку відправлено!')
+      if (formType === 'problem') {
+        setProblemData({ name: '', email: '', message: '' })
+      } else {
+        setJoinTeamData({ name: '', email: '', company: '', budget: '', details: '' })
+      }
+    } catch {
+      toast.error('Щось пішло не так. Спробуйте ще раз.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
-    <section className="contact-section" id="contact">
+    <section className="contact-section" id="contacts">
       <div className="container">
         <div className="contact_header">
           <h2 className="contact_title">
@@ -204,9 +227,9 @@ function ContactSection() {
                 <input
                   type="radio"
                   name="type"
-                  value="quote"
-                  checked={formType === 'quote'}
-                  onChange={() => setFormType('quote')}
+                  value="join_team"
+                  checked={formType === 'join_team'}
+                  onChange={() => setFormType('join_team')}
                 />
                 <span className="contact_radio-custom"></span>
                 <span className="contact_radio-label">Стати частиною команди</span>
@@ -221,12 +244,12 @@ function ContactSection() {
               {formType === 'problem' ? (
                 <ProblemForm formData={problemData} handleChange={handleProblemChange} />
               ) : (
-                <QuoteForm formData={quoteData} handleChange={handleQuoteChange} />
+                <QuoteForm formData={joinTeamData} handleChange={handleJoinTeamChange} />
               )}
             </div>
 
-            <button className="contact_submit" type="submit">
-              {formType === 'problem' ? 'Відправити нам' : 'Приєднатись до команди'}
+            <button className="contact_submit" type="submit" disabled={loading}>
+              {loading ? 'Відправляємо...' : formType === 'problem' ? 'Відправити нам' : 'Приєднатись до команди'}
             </button>
           </form>
 
