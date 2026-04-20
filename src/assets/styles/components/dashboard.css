@@ -4347,17 +4347,19 @@
    PROFILE  —  badges
 ═══════════════════════════════════════════════════ */
 .db-info-card--badges h3 { margin-bottom: 16px; }
+.db-info-card--badges { grid-column: 2; }
 /* ────────────────── BADGES LIST ────────────────── */
 .db-badges-list { display: flex; flex-direction: column; gap: 8px; }
 .db-badge-row {
   display: flex; align-items: center; gap: 14px;
-  background: #fafafa; border: 1.5px solid #ebebf0;
+  background: #faf8ff; border: 1.5px solid #ddd8fc;
   border-radius: 12px; padding: 10px 14px;
   cursor: pointer; text-align: left;
+  box-shadow: 0 1px 6px rgba(124,95,245,.07);
   transition: background .12s, border-color .12s, box-shadow .12s;
 }
-.db-badge-row:hover { background: #f3f0ff; border-color: #c4b5fd; box-shadow: 0 2px 12px rgba(124,95,245,.1); }
-.db-badge-row.earned { border-color: #d8cffc; }
+.db-badge-row:hover { background: #f3f0ff; border-color: #a78bfa; box-shadow: 0 2px 14px rgba(124,95,245,.15); }
+.db-badge-row.earned { border-color: #c4b5fd; }
 .db-badge-row.locked { opacity: .6; }
 .db-badge-row.pinned { border-color: #7c5ff5; background: #f5f2ff; box-shadow: 0 0 0 2px rgba(124,95,245,.18); }
 .db-badge-row-icon {

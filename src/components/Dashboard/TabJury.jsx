@@ -95,6 +95,7 @@ export default function TabJury({ user, toast }) {
 
   const techCrit = EVAL_CRITERIA.filter(c => c.group === 'tech');
   const funcCrit = EVAL_CRITERIA.filter(c => c.group === 'func');
+  const softCrit = EVAL_CRITERIA.filter(c => c.group === 'soft');
   const allSubs  = tournaments.reduce((s, t) => s + t.rounds.reduce((rs, r) => rs + r.submission_count, 0), 0);
   const allEvals = tournaments.reduce((s, t) => s + t.rounds.reduce((rs, r) => rs + r.my_eval_count, 0), 0);
 
@@ -104,7 +105,7 @@ export default function TabJury({ user, toast }) {
         <div className="db-jury-hero-icon">⚖️</div>
         <div className="db-jury-hero-text">
           <h2 className="db-jury-hero-title">Перевірка робіт</h2>
-          <p className="db-jury-hero-sub">Оцінюйте роботи команд по 6 критеріях ТЗ</p>
+          <p className="db-jury-hero-sub">Оцінюйте роботи команд по {EVAL_CRITERIA.length} критеріях</p>
         </div>
         <div className="db-jury-hero-stats">
           <div className="db-jury-hstat"><span className="db-jury-hstat-val">{tournaments.length}</span><span className="db-jury-hstat-lbl">Турніри</span></div>
@@ -288,6 +289,25 @@ export default function TabJury({ user, toast }) {
               <div className="db-jury-cgroup">
                 <div className="db-jury-cgroup-label">⚡ Функціональність</div>
                 {funcCrit.map(c => (
+                  <div key={c.key} className="db-jury-crow">
+                    <span className="db-jury-cicon">{c.icon}</span>
+                    <div className="db-jury-cinfo">
+                      <div className="db-jury-cname">{c.label}</div>
+                      <div className="db-jury-cdesc">{c.desc}</div>
+                    </div>
+                    <div className="db-jury-cscore">
+                      <input type="number" min="0" max="100" className="db-jury-cinput"
+                        value={reviewForm.criteria[c.key] ?? ''}
+                        onChange={e => setCrit(c.key, e.target.value)} placeholder="0" />
+                      <span className="db-jury-cmax">/100</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="db-jury-cgroup">
+                <div className="db-jury-cgroup-label">🎤 Захист та подача</div>
+                {softCrit.map(c => (
                   <div key={c.key} className="db-jury-crow">
                     <span className="db-jury-cicon">{c.icon}</span>
                     <div className="db-jury-cinfo">

@@ -36,7 +36,7 @@ export const ACCENT = {
   finished:     ['#0ea5e9','#0c2a3b'],
 };
 
-export const BANNER_PRESETS = ['#1e1b2e','#0f172a','#0d1117','#16213e','#1a1a2e','#0e2240','#2d1b69','#1b4332'];
+export const BANNER_PRESETS = ['#0d1117', '#191A23', '#1a1a2e', '#1e1b2e', '#231b2e', '#2e231b', '#1b3b2e', '#2e1b3b'];
 
 export const ROLE_LABELS = { user: '👤 User', jury: '⚖️ Jury', organizer: '🗂️ Organizer', admin: '⚙️ Admin', banned: '🚫 Banned' };
 
@@ -46,8 +46,19 @@ export const BASE_ROOMS = [
   { id: 'offtopic',    label: '# офф-топік',  locked: false },
 ];
 
-export const EMOJI_QUICK = ['😀','😂','❤️','🔥','👍','🎉','😮','👏','😢','🤔','😎','👀','🙌','🤩','💯','🫡'];
-export const EMOJI_REACT = ['👍','❤️','🔥','😂','😮','👏','😢','🎉'];
+export const EMOJI_QUICK = [
+  // Емоції
+  '😀','😂','😭','🥹','😤','😡','🤯','🥵','🥶','😴','🤢','🤮','😱','🤩','😎','🤓',
+  // Жести
+  '👍','👎','👏','🙌','🤝','💪','🫡','🫶','✌️','🤙','☝️','🖕',
+  // Серця та символи
+  '❤️','🧡','💛','💚','💙','💜','🖤','💯','⭐','✨','🔥','⚡','💥','❄️','🌊','💫',
+  // Геймінг / змагання
+  '🏆','🥇','🥈','🥉','🎯','🎮','🕹️','⚔️','🛡️','🧠','💻','🐛','💀','👑','🚀','🤖',
+  // Святкування
+  '🎉','🎊','🎁','🎈','🥳','🍾','🥂','🎶',
+];
+export const EMOJI_REACT = ['👍','❤️','🔥','😂','😮','😭','👏','🎉','💯','🏆','⚡','🤯'];
 
 export const ALL_BADGES = [
   {
@@ -72,16 +83,22 @@ export const ALL_BADGES = [
 export const EMOJI_RE = /^(\p{Emoji_Presentation}|\p{Extended_Pictographic}|\uFE0F|\u200D|\u20E3|\p{Emoji_Modifier_Base}\p{Emoji_Modifier}?)+$/u;
 
 export const EVAL_CRITERIA = [
-  { key: 'backend',      label: 'Backend / Код',    desc: 'Якість коду, патерни, ООП, тести',   icon: '⚙️', group: 'tech' },
-  { key: 'database',     label: 'База даних',        desc: 'Наявність, структура, налаштування', icon: '🗄️', group: 'tech' },
-  { key: 'frontend',     label: 'Frontend / UX',     desc: 'UI, патерни, відсутність помилок',   icon: '🎨', group: 'tech' },
-  { key: 'requirements', label: 'Вимоги завдання',   desc: 'Виконання must-have критеріїв',      icon: '✅', group: 'func' },
-  { key: 'stability',    label: 'Стабільність',      desc: 'Роботоздатність, відсутність багів', icon: '🛡️', group: 'func' },
-  { key: 'usability',    label: 'Зручність',         desc: 'UX, навігація, зручність роботи',    icon: '👁️', group: 'func' },
+  // tech — технічна якість
+  { key: 'backend',       label: 'Backend / Код',    desc: 'Якість коду, патерни, ООП, тести',        icon: '⚙️',  group: 'tech' },
+  { key: 'database',      label: 'База даних',        desc: 'Наявність, структура, налаштування',      icon: '🗄️',  group: 'tech' },
+  { key: 'frontend',      label: 'Frontend / UX',     desc: 'UI, патерни, відсутність помилок',        icon: '🎨',  group: 'tech' },
+  { key: 'documentation', label: 'Документація',      desc: 'README, коментарі, опис API та рішень',   icon: '📝',  group: 'tech' },
+  // func — функціональна відповідність
+  { key: 'requirements',  label: 'Вимоги завдання',   desc: 'Виконання must-have критеріїв ТЗ',        icon: '✅',  group: 'func' },
+  { key: 'stability',     label: 'Стабільність',      desc: 'Роботоздатність, відсутність багів',      icon: '🛡️',  group: 'func' },
+  { key: 'usability',     label: 'Зручність',         desc: 'UX, навігація, зручність роботи',         icon: '👁️',  group: 'func' },
+  // soft — захист та подача
+  { key: 'presentation',  label: 'Презентація',       desc: 'Якість захисту, демо та пояснень команди', icon: '🎤', group: 'soft' },
+  { key: 'creativity',    label: 'Оригінальність',    desc: 'Нестандартні рішення, інноваційний підхід',icon: '💡', group: 'soft' },
 ];
 
 export const TAB_TIPS = {
-  overview:    { icon: '🏠', title: 'Огляд',     text: 'Тут зібрана вся важлива інформація: ваші турніри, команди та швидка навігація.' },
+  overview:    { icon: '🏠', title: 'Головна',     text: 'Тут зібрана вся важлива інформація: ваші турніри, команди та швидка навігація.' },
   tournaments: { icon: '🏆', title: 'Турніри',   text: 'Переглядайте актуальні змагання, фільтруйте за статусом та реєструйте команди.' },
   teams:       { icon: '👥', title: 'Команди',   text: 'Усі ваші команди в одному місці. Команди прив\'язані до конкретних турнірів.' },
   leaderboard: { icon: '📊', title: 'Лідерборд', text: 'Рейтинг команд по кожному турніру. Оберіть турнір щоб побачити результати.' },
