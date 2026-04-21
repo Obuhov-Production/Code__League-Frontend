@@ -65,8 +65,8 @@ export default function TabOverview({ user, toast, onNavigate }) {
   const STATS = [
     { label: 'Усього турнірів',  value: tournaments.length,       Icon: StatTrophy,   color: '#AC9EF8' },
     { label: 'Мої команди',      value: myTeams.length,           Icon: StatTeam,     color: '#4ade80' },
-    { label: 'Активні зараз',    value: activeTournaments.length, Icon: StatStar,     color: '#f59e0b' },
-    { label: 'Відкрита реєстр.', value: openRegistrations.length, Icon: StatCalendar, color: '#0ea5e9' },
+    { label: 'Активні турніри',    value: activeTournaments.length, Icon: StatStar,     color: '#f59e0b' },
+    { label: 'Відкрита реєстрація', value: openRegistrations.length, Icon: StatCalendar, color: '#0ea5e9' },
   ];
 
   return (
@@ -75,7 +75,7 @@ export default function TabOverview({ user, toast, onNavigate }) {
         <div className="db-welcome-text">
           <span className="db-welcome-hi">Привіт,</span>
           <h2>{user?.username || user?.email}! 👋</h2>
-          <p>Тут зібрано все про ваші турніри та команди.</p>
+          <p>Тут показано всі ваші турніри та ваші команди.</p>
         </div>
         <UserAvatar user={user} size={72} />
       </div>
