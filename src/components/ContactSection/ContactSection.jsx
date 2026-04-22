@@ -171,9 +171,26 @@ function ContactSection() {
     setJoinTeamData({ ...joinTeamData, [e.target.name]: e.target.value })
   }
 
+  const validate = (data) => {
+    if (!data.name?.trim()) return "Введіть ваше ім'я"
+    if (!data.email?.trim()) return 'Введіть електронну пошту'
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email.trim())) return 'Невірний формат email'
+    if (formType === 'problem' && !data.message?.trim()) return 'Опишіть вашу проблему'
+    if (formType === 'join_team' && !data.budget?.trim()) return 'Вкажіть рівень компетенції'
+    if (formType === 'join_team' && !data.details?.trim()) return 'Розкажіть трохи про себе'
+    return null
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     const activeData = formType === 'problem' ? problemData : joinTeamData
+
+    const validationError = validate(activeData)
+    if (validationError) {
+      toast.error(validationError)
+      return
+    }
+
     setLoading(true)
     try {
       const res = await fetch('/api/contact', {
@@ -181,15 +198,22 @@ function ContactSection() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: formType, ...activeData }),
       })
-      if (!res.ok) throw new Error('Server error')
-      toast.success(formType === 'problem' ? 'Повідомлення відправлено!' : 'Заявку відправлено!')
-      if (formType === 'problem') {
-        setProblemData({ name: '', email: '', message: '' })
+
+      if (res.ok) {
+        toast.success(formType === 'problem' ? 'Повідомлення відправлено!' : 'Заявку відправлено!')
+        if (formType === 'problem') {
+          setProblemData({ name: '', email: '', message: '' })
+        } else {
+          setJoinTeamData({ name: '', email: '', company: '', budget: '', details: '' })
+        }
+      } else if (res.status < 500) {
+        const body = await res.json().catch(() => null)
+        toast.error(body?.error ?? 'Перевірте введені дані')
       } else {
-        setJoinTeamData({ name: '', email: '', company: '', budget: '', details: '' })
+        toast.error('Серверна помилка, спробуй пізніше')
       }
     } catch {
-      toast.error('Щось пішло не так. Спробуйте ще раз.')
+      toast.error('Серверна помилка, спробуй пізніше')
     } finally {
       setLoading(false)
     }
