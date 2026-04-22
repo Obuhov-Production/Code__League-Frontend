@@ -720,7 +720,7 @@
 .db-reg-form { margin-top: 22px; border-top: 1px solid #ededf5; padding-top: 22px; display: flex; flex-direction: column; gap: 14px; }
 .db-reg-form h4 { font-size: 15px; font-weight: 700; margin: 0 0 4px; color: #191A23; }
 .db-form-row { display: flex; flex-direction: column; gap: 6px; width: 100%; }
-.db-form-row label { font-size: 11.5px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: .4px; }
+.db-form-row label { font-size: 11.5px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: .05em; }
 .db-form-row input, .db-form-row textarea {
   height: 40px;
   padding: 0 14px;
@@ -1017,23 +1017,31 @@
   letter-spacing: .1px;
 }
 .db-chat-bubble {
-  padding: 10px 14px;
-  border-radius: 18px 18px 18px 4px;
+  padding: 11px 16px;
+  border-radius: 18px 18px 14px 14px;
   background: #fff;
-  border: 1px solid #eaebf5;
+  border: 1.5px solid #eaebf5;
   font-size: 14px;
   color: #191A23;
   line-height: 1.55;
   word-break: break-word;
-  box-shadow: 0 1px 3px rgba(0,0,0,.04);
-  transition: background .1s;
+  box-shadow: 0 2px 8px rgba(172,158,248,.08);
+  transition: background .1s, box-shadow .13s;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 36px;
+  max-width: 420px;
+  width: fit-content;
+  text-align: left;
 }
 .db-chat-msg.me .db-chat-bubble {
-  border-radius: 18px 18px 4px 18px;
+  border-radius: 18px 18px 14px 14px;
   background: linear-gradient(135deg, #AC9EF8 0%, #9b8cf5 100%);
   color: #1a1035;
   border-color: transparent;
-  box-shadow: 0 2px 8px rgba(172,158,248,.35);
+  box-shadow: 0 2px 12px rgba(172,158,248,.18);
+  align-items: flex-end;
 }
 .db-chat-time {
   font-size: 10px;
@@ -2085,27 +2093,27 @@
 
 /* Emoji reactions on messages */
 .db-chat-bubble { position: relative; }
-/* JS-controlled show via .show-react class */
-.db-chat-bubble.show-react .db-chat-react-row { opacity: 1; pointer-events: auto; }
-/* Also keep CSS hover as fallback */
-.db-chat-bubble:hover .db-chat-react-row { opacity: 1; pointer-events: auto; }
 .db-chat-msg:hover .db-chat-bubble { background: #f0edfd; }
 .db-chat-msg.me:hover .db-chat-bubble { background: #c5b9fc; }
-.db-chat-react-row {
-  display: flex; gap: 2px;
-  position: absolute; bottom: 100%; left: 0;
-  background: #fff; border: 1px solid #ebebf0;
-  border-radius: 20px; padding: 4px 8px 10px;
-  box-shadow: 0 4px 16px rgba(0,0,0,.1);
-  opacity: 0; pointer-events: none;
-  transition: opacity .12s;
-  white-space: nowrap; z-index: 10;
+
+/* React row rendered via portal at body level (position: fixed) */
+.db-chat-react-portal {
+  position: fixed;
+  display: flex;
+  gap: 2px;
+  background: #fff;
+  border: 1px solid #ebebf0;
+  border-radius: 20px;
+  padding: 4px 8px;
+  box-shadow: 0 4px 18px rgba(0,0,0,.13);
+  z-index: 99999;
+  white-space: nowrap;
+  animation: db-react-portal-in .1s ease;
 }
-.db-chat-msg.me .db-chat-react-row { left: auto; right: 0; }
-/* Keep react row visible when hovering over it */
-.db-chat-react-row:hover { opacity: 1 !important; pointer-events: auto !important; }
-.db-chat-bubble:has(.db-chat-react-row:hover) .db-chat-react-row { opacity: 1; pointer-events: auto; }
-/* Hide emoji row when context menu is open for this message (handled by JS show-react) */
+@keyframes db-react-portal-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 .db-react-btn {
   font-size: 15px; background: none; border: none; cursor: pointer; padding: 1px 3px;
   border-radius: 6px; transition: transform .12s, background .12s;
@@ -2189,7 +2197,7 @@
 }
 .db-usm-input:focus {
   border-color: #AC9EF8;
-  background-color: #fff;
+  background: #fff;
   box-shadow: 0 0 0 3px rgba(172,158,248,.18);
 }
 .db-usm-results {
@@ -2291,23 +2299,33 @@
 /* ═══════════════════════════════════════════════════
    CHAT: CONTEXT MENU
 ═══════════════════════════════════════════════════ */
+@keyframes db-ctx-open {
+  from { opacity: 0; transform: scale(.94) translateY(-6px); }
+  to   { opacity: 1; transform: scale(1)   translateY(0); }
+}
 .db-ctx-menu {
   position: fixed;
   z-index: 9999;
   background: #fff;
   border: 1px solid #e8e8ee;
   border-radius: 14px;
-  box-shadow: 0 8px 40px rgba(0,0,0,.15);
+  box-shadow: 0 8px 40px rgba(0,0,0,.16);
   padding: 6px;
-  width: 220px;
+  min-width: 210px;
+  max-width: 240px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
+  animation: db-ctx-open .13s cubic-bezier(.2,0,.2,1.3) both;
+  transform-origin: top left;
 }
-.db-ctx-menu button {
+.db-ctx-btn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   background: none;
   border: none;
-  padding: 9px 14px;
+  padding: 8px 12px;
   font-size: 13.5px;
   font-family: inherit;
   text-align: left;
@@ -2315,24 +2333,45 @@
   border-radius: 9px;
   color: #191A23;
   transition: background .1s;
+  width: 100%;
 }
-.db-ctx-menu button:hover { background: #f5f5fa; }
-.db-ctx-menu button.danger { color: #ef4444; }
-.db-ctx-menu button.danger:hover { background: #fff0f0; }
-.db-ctx-sep { height: 1px; background: #f0f0f5; margin: 4px 0; }
-.db-ctx-react-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 2px;
-  padding: 4px 6px;
-}
-.db-ctx-emoji {
-  font-size: 18px;
-  padding: 5px !important;
-  border-radius: 8px !important;
-  line-height: 1;
+.db-ctx-btn:hover { background: #f5f5fa; }
+.db-ctx-btn.danger { color: #ef4444; }
+.db-ctx-btn.danger:hover { background: #fff0f0; }
+.db-ctx-icon {
+  font-size: 15px;
+  width: 20px;
   text-align: center;
   flex-shrink: 0;
+  opacity: .75;
+}
+.db-ctx-sep { height: 1px; background: #f0f0f5; margin: 3px 2px; }
+
+/* Quick emoji reactions — top of menu */
+.db-ctx-react-row {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  gap: 0;
+  padding: 4px 4px 2px;
+  scrollbar-width: none;
+}
+.db-ctx-react-row::-webkit-scrollbar { display: none; }
+.db-ctx-emoji {
+  background: none;
+  border: none;
+  font-size: 20px;
+  padding: 5px 4px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform .12s, background .1s;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.db-ctx-emoji:hover { background: #f0edfd; transform: scale(1.25); }
+.db-ctx-emoji.active {
+  background: #ede8ff;
+  box-shadow: inset 0 0 0 1.5px #AC9EF8;
 }
 
 /* ═══════════════════════════════════════════════════

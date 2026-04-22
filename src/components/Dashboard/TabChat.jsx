@@ -52,6 +52,7 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
   const [customRooms, setCustomRooms] = useState([]);
   const [roomsOpen,   setRoomsOpen]   = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [reactPos,    setReactPos]    = useState(null); // { msgId, top, left, right, showBelow, isMe }
 
   async function openChatProfile(basic) {
     setChatProfile({ ...basic, loading: true });
@@ -72,6 +73,7 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
   const fileRef        = useRef(null);
   const inputRef       = useRef(null);
   const ctxRef         = useRef(null);
+  const reactHideTimer = useRef(null);
   const meId        = user?.id ?? userId;
   const isAdmin     = user?.role === 'admin';
 
@@ -108,7 +110,12 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
       .finally(() => setLoading(false));
     // reactions and pinned via REST
     getChatReactions(room).then(setReactions).catch(() => {});
-    getPinnedMessages(room).then(setPinnedMsgs).catch(() => {});
+    getPinnedMessages(room)
+      .then(setPinnedMsgs)
+      .catch(() => {
+        // fallback: не очищати pinnedMsgs при помилці
+        setChatError('Не вдалося завантажити закріплені повідомлення');
+      });
     // room:history from WebSocket will override when it arrives
   }, [room, toast]);
 
@@ -180,6 +187,10 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
     socket.on('message:edited', ({ messageId, newText, edited_at }) =>
       setMessages(prev => prev.map(m => m.id === messageId ? { ...m, text: newText, edited_at } : m))
     );
+    const onPinned   = ({ message }) => setPinnedMsgs(prev => prev.some(p => p.id === message.id) ? prev : [...prev, message]);
+    const onUnpinned = ({ messageId }) => setPinnedMsgs(prev => prev.filter(p => p.id !== messageId));
+    socket.on('message:pinned',   onPinned);
+    socket.on('message:unpinned', onUnpinned);
     if (socket.connected) setOnline(true);
     return () => {
       socket.emit('room:leave', { room });
@@ -190,12 +201,10 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
       socket.off('user:typing',   onTyping);
       socket.off('error',         onError);
       socket.off('reaction:update', onReactionUpdate);
-      socket.off('message:deleted', ({ messageId }) =>
-        setMessages(prev => prev.filter(m => m.id !== messageId))
-      );
-      socket.off('message:edited', ({ messageId, newText, edited_at }) =>
-        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, text: newText, edited_at } : m))
-      );
+      socket.off('message:deleted');
+      socket.off('message:edited');
+      socket.off('message:pinned',   onPinned);
+      socket.off('message:unpinned', onUnpinned);
     };
   }, [room, socket, soundOn, meId]);
 
@@ -321,8 +330,17 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
     setDeletePending(null);
   };
   const cancelDelete = () => setDeletePending(null);
-  const pinMsg = msg => { socket.emit('pin_message', { messageId: msg.id }); setCtxMenu(null); };
-  const unpinMsg = msgId => { socket.emit('unpin_message', { messageId: msgId }); };
+  const pinMsg = msg => {
+    socket.emit('pin_message', { messageId: msg.id });
+    setCtxMenu(null);
+    // optimistic: add immediately, backend will confirm via message:pinned
+    setPinnedMsgs(prev => prev.some(p => p.id === msg.id) ? prev : [...prev, msg]);
+  };
+  const unpinMsg = msgId => {
+    socket.emit('unpin_message', { messageId: msgId });
+    // optimistic: remove immediately
+    setPinnedMsgs(prev => prev.filter(p => p.id !== msgId));
+  };
 
   const handleFileChange = async e => {
     const selected = Array.from(e.target.files || []);
@@ -340,7 +358,13 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
     setImgFiles(prev => [...prev, ...newItems]);
   };
 
-  const handleMsgContextMenu = (e, msg) => { e.preventDefault(); setCtxMenu({ msg, x: e.clientX, y: e.clientY }); };
+  const handleMsgContextMenu = (e, msg) => {
+    e.preventDefault();
+    const MENU_W = 232, MENU_H = 320;
+    const x = e.clientX + MENU_W > window.innerWidth  ? e.clientX - MENU_W : e.clientX;
+    const y = e.clientY + MENU_H > window.innerHeight ? e.clientY - MENU_H : e.clientY;
+    setCtxMenu({ msg, x: Math.max(4, x), y: Math.max(4, y) });
+  };
   const currentRoom = ROOMS.find(r => r.id === room);
 
   /* ── Inner ChatMsg component ─────────────────── */
@@ -368,6 +392,17 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
         </div>
       );
     }
+
+    const bubbleRef = useRef(null);
+    const handleBubbleEnter = () => {
+      clearTimeout(reactHideTimer.current);
+      if (!bubbleRef.current) return;
+      const rect = bubbleRef.current.getBoundingClientRect();
+      setReactPos({ msgId: msg.id, rect, isMe, showBelow: rect.top < 60 });
+    };
+    const handleBubbleLeave = () => {
+      reactHideTimer.current = setTimeout(() => setReactPos(null), 180);
+    };
 
     return (
       <div className={`db-chat-msg${isMe ? ' me' : ''}${msg.role === 'admin' ? ' from-admin' : ''}`}
@@ -419,7 +454,10 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
               </div>
             </div>
           ) : (
-            <div className={`db-chat-bubble${bigEmoji ? ' big-emoji' : ''}${isSticker ? ' sticker-bubble' : ''}${hoveredMsg === msg.id && ctxMenu?.msg?.id !== msg.id ? ' show-react' : ''}`}>
+            <div ref={bubbleRef}
+            className={`db-chat-bubble${bigEmoji ? ' big-emoji' : ''}${isSticker ? ' sticker-bubble' : ''}`}
+            onMouseEnter={handleBubbleEnter}
+            onMouseLeave={handleBubbleLeave}>
               {isSticker ? (
                 <img src={stickerSrc} alt="sticker" className="db-chat-sticker" />
               ) : (
@@ -440,13 +478,7 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
                   {msg.edited_at && !bigEmoji && <span className="db-chat-edited"> (ред.)</span>}
                 </>
               )}
-              {!bigEmoji && !isSticker && (
-                <div className="db-chat-react-row">
-                  {EMOJI_REACT.map(emoji => (
-                    <button key={emoji} className="db-react-btn" onClick={() => sendReaction(msg.id, emoji)}>{emoji}</button>
-                  ))}
-                </div>
-              )}
+
             </div>
           )}
           {msgReactions.length > 0 && (
@@ -468,36 +500,59 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
 
       {ctxMenu && (
         <div ref={ctxRef} className="db-ctx-menu"
-          style={{ top: ctxMenu.y, left: Math.min(ctxMenu.x, window.innerWidth - 200) }}
+          style={{ top: ctxMenu.y, left: ctxMenu.x }}
           onClick={e => e.stopPropagation()}>
-          <button onClick={() => { setReplyTo({ id: ctxMenu.msg.id, text: ctxMenu.msg.text, username: ctxMenu.msg.username }); setCtxMenu(null); inputRef.current?.focus(); }}>↩ Відповісти</button>
-          <button onClick={() => { navigator.clipboard?.writeText(ctxMenu.msg.text); setCtxMenu(null); toast.success('Скопійовано'); }}>📋 Копіювати</button>
-          {(ctxMenu.msg.user_id === meId) && (
-            <button onClick={() => startEdit(ctxMenu.msg)}>✏️ Редагувати</button>
+
+          {/* ── Quick reactions row (top) ── */}
+          <div className="db-ctx-react-row">
+            {EMOJI_REACT.map(e => {
+              const already = reactions[`${ctxMenu.msg.id}_${e}`]?.users?.includes(meId);
+              return (
+                <button key={e}
+                  className={`db-ctx-emoji${already ? ' active' : ''}`}
+                  title={already ? 'Зняти реакцію' : 'Поставити реакцію'}
+                  onClick={() => { sendReaction(ctxMenu.msg.id, e); setCtxMenu(null); }}>
+                  {e}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="db-ctx-sep" />
+
+          {/* ── Actions ── */}
+          <button className="db-ctx-btn" onClick={() => { setReplyTo({ id: ctxMenu.msg.id, text: ctxMenu.msg.text, username: ctxMenu.msg.username }); setCtxMenu(null); inputRef.current?.focus(); }}>
+            <span className="db-ctx-icon">↩</span> Відповісти
+          </button>
+          <button className="db-ctx-btn" onClick={() => { navigator.clipboard?.writeText(ctxMenu.msg.text); setCtxMenu(null); toast.success('Скопійовано'); }}>
+            <span className="db-ctx-icon">📋</span> Копіювати
+          </button>
+          {ctxMenu.msg.user_id === meId && (
+            <button className="db-ctx-btn" onClick={() => startEdit(ctxMenu.msg)}>
+              <span className="db-ctx-icon">✏️</span> Редагувати
+            </button>
           )}
           {isAdmin && (
             <>
               {pinnedMsgs.some(p => p.id === ctxMenu.msg.id)
-                ? <button onClick={() => { unpinMsg(ctxMenu.msg.id); setCtxMenu(null); }}>📌 Відкріпити</button>
-                : <button onClick={() => pinMsg(ctxMenu.msg)}>📌 Закріпити</button>
+                ? <button className="db-ctx-btn" onClick={() => { unpinMsg(ctxMenu.msg.id); setCtxMenu(null); }}><span className="db-ctx-icon">📌</span> Відкріпити</button>
+                : <button className="db-ctx-btn" onClick={() => pinMsg(ctxMenu.msg)}><span className="db-ctx-icon">📌</span> Закріпити</button>
               }
               {ctxMenu.msg.user_id !== meId && (
                 mutedUsers.has(ctxMenu.msg.user_id)
-                  ? <button onClick={() => handleMuteToggle(ctxMenu.msg.user_id)}>🔊 Розблокувати чат</button>
-                  : <button className="danger" onClick={() => handleMuteToggle(ctxMenu.msg.user_id)}>🔇 Вимкнути чат</button>
+                  ? <button className="db-ctx-btn" onClick={() => handleMuteToggle(ctxMenu.msg.user_id)}><span className="db-ctx-icon">🔊</span> Розблокувати чат</button>
+                  : <button className="db-ctx-btn danger" onClick={() => handleMuteToggle(ctxMenu.msg.user_id)}><span className="db-ctx-icon">🔇</span> Вимкнути чат</button>
               )}
             </>
           )}
           {(ctxMenu.msg.user_id === meId || isAdmin) && (
-            <button className="danger" onClick={() => deleteMsg(ctxMenu.msg)}>🗑 Видалити</button>
+            <>
+              <div className="db-ctx-sep" />
+              <button className="db-ctx-btn danger" onClick={() => deleteMsg(ctxMenu.msg)}>
+                <span className="db-ctx-icon">🗑</span> Видалити
+              </button>
+            </>
           )}
-          <div className="db-ctx-sep" />
-          <div className="db-ctx-react-row">
-            {EMOJI_REACT.map(e => (
-              <button key={e} className="db-ctx-emoji"
-                onClick={() => { sendReaction(ctxMenu.msg.id, e); setCtxMenu(null); }}>{e}</button>
-            ))}
-          </div>
         </div>
       )}
 
@@ -647,15 +702,19 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
           <div className="db-chat-pinned-bar">
             <span className="db-chat-pinned-icon">📌</span>
             <div className="db-chat-pinned-content">
-              {pinnedMsgs.map(p => (
-                <div key={p.id} className="db-chat-pinned-item">
-                  <span className="db-chat-pinned-author">{p.username}:</span>
-                  <span className="db-chat-pinned-text">{(p.text || '').slice(0, 100)}{p.text?.length > 100 ? '…' : ''}</span>
-                  {isAdmin && (
-                    <button className="db-chat-pinned-unpin" onClick={() => unpinMsg(p.id)} title="Відкріпити">✕</button>
-                  )}
-                </div>
-              ))}
+              {pinnedMsgs.length === 0 ? (
+                <div className="db-chat-pinned-empty">Немає закріплених</div>
+              ) : (
+                pinnedMsgs.map(p => (
+                  <div key={p.id} className="db-chat-pinned-item">
+                    <span className="db-chat-pinned-author">{p.username}:</span>
+                    <span className="db-chat-pinned-text">{(p.text || '').slice(0, 100)}{p.text?.length > 100 ? '…' : ''}</span>
+                    {isAdmin && (
+                      <button className="db-chat-pinned-unpin" onClick={() => unpinMsg(p.id)} title="Відкріпити">✕</button>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
@@ -840,8 +899,28 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
         document.body
       )}
 
-      {lightboxImg && createPortal(
-        <div className="db-lightbox-overlay" onClick={() => setLightboxImg(null)}>
+      {reactPos && ctxMenu?.msg?.id !== reactPos.msgId && createPortal(
+        <div
+          className="db-chat-react-portal"
+          style={{
+            top:   reactPos.showBelow ? reactPos.rect.bottom + 4 : reactPos.rect.top - 48,
+            left:  reactPos.isMe ? 'auto' : reactPos.rect.left,
+            right: reactPos.isMe ? window.innerWidth - reactPos.rect.right : 'auto',
+          }}
+          onMouseEnter={() => clearTimeout(reactHideTimer.current)}
+          onMouseLeave={() => { reactHideTimer.current = setTimeout(() => setReactPos(null), 180); }}
+        >
+          {EMOJI_REACT.map(emoji => (
+            <button key={emoji} className="db-react-btn"
+              onClick={() => { sendReaction(reactPos.msgId, emoji); setReactPos(null); }}>
+              {emoji}
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
+
+      {lightboxImg && createPortal(        <div className="db-lightbox-overlay" onClick={() => setLightboxImg(null)}>
           <button className="db-lightbox-close" onClick={() => setLightboxImg(null)} aria-label="Закрити перегляд">✕</button>
           <a href={lightboxImg} target="_blank" rel="noreferrer" className="db-lightbox-open" onClick={e => e.stopPropagation()}>
             Відкрити в браузері

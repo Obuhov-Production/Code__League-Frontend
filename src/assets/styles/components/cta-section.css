@@ -56,14 +56,34 @@
     padding: 16px 36px;
     cursor: pointer;
     transition: background-color 0.2s ease, transform 0.15s ease;
+    text-decoration: none;
+    display: inline-block;
 }
 
 .cta-section_button:hover {
     background-color: #2a2b38;
+    transform: translateY(-1px);
 }
 
 .cta-section_button:active {
     transform: scale(0.97);
+}
+
+.cta-section_button--outline {
+    background-color: transparent;
+    border: 2px solid var(--color_dark);
+    color: var(--color_dark);
+}
+
+.cta-section_button--outline:hover {
+    background-color: var(--color_dark);
+    color: #fff;
+}
+
+.cta-section_actions {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
 }
 
 /* === Image (right side, overflows container) === */

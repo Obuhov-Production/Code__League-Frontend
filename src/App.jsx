@@ -18,6 +18,7 @@ import ContactSection from '@components/ContactSection'
 import LoginPage from '@components/auth/modal/login'
 import RegisterPage from '@components/auth/modal/register'
 import Dashboard from '@components/Dashboard'
+import LeaderboardPage from '@components/LeaderboardPage'
 
 function HomePage() {
   return (
@@ -59,6 +60,7 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/reviews" element={<RewiewsPage />} />
+          <Route path="/leaderboard" element={<LeaderboardPage />} />
         </Routes>
       </ToastProvider>
     </BrowserRouter>

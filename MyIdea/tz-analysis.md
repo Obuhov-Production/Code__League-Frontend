@@ -174,3 +174,54 @@
 8. **Realtime лідерборд** — підписка через WebSocket (socket вже є)
 9. **Архів турнірів** — окрема секція з завершеними
 10. **Розклад** — Calendar view з дедлайнами раундів
+
+---
+
+## 🐛 Відомі баги та що треба на бекенді
+
+### 🔴 БАГ: Реакції в чаті зникають після перезавантаження сторінки
+
+**Симптом:** Emoji-реакції на повідомлення відображаються поки сесія активна (через WebSocket broadcast), але зникають після refresh.
+
+**Причина:** Бекенд приймає `socket.emit('react', ...)` і розсилає `reaction:update` всім клієнтам **без збереження в БД**. Тобто реакції живуть тільки в пам'яті процесу.
+
+**Як має бути (flow):**
+```
+Client → socket.emit('react', { room, messageId, emoji })
+Backend:
+  1. Upsert/toggle реакцію в БД (таблиця chat_reactions або json-поле в messages)
+  2. Перерахувати count + зібрати список userId
+  3. Broadcast: socket.to(room).emit('reaction:update', { messageId, emoji, count, users })
+```
+
+**Фронт вже готовий:**
+- При завантаженні кімнати: `getChatReactions(room)` → `GET /api/chat/:room/reactions` — завантажує всі реакції кімнати
+- При react: `socket.emit('react', { room, messageId, emoji })` — надсилає дію
+- При отриманні broadcast: `reaction:update` → оновлює стан `reactions`
+
+**Що треба зробити на бекенді:**
+
+| Що | Деталі |
+|----|--------|
+| Таблиця/колекція `chat_reactions` | поля: `id`, `message_id`, `user_id`, `emoji`, `created_at` (або зберігати як JSON в `messages`) |
+| Socket handler `react` | toggle: якщо такий рядок вже є — видалити, якщо немає — додати. Потім порахувати count і зробити broadcast |
+| REST `GET /api/chat/:room/reactions` | повертає `{ "msgId_emoji": { emoji, count, users: [userId, ...] }, ... }` для всіх повідомлень кімнати |
+
+---
+
+### ✅ Публічний лідерборд — фронт готовий, бекенд потрібен
+
+Сторінка `/leaderboard` вже є. Перемикається через `.env`:
+
+```env
+# false = статичні mock-дані (без бекенду)
+# true  = тягнути з бекенду
+VITE_LEADERBOARD_FROM_BACKEND=false
+```
+
+**Що треба на бекенді коли буде `true`:**
+
+| Ендпоінт | Відповідь | Примітка |
+|----------|-----------|---------|
+| `GET /api/public/tournaments` | `[{ id, name, status }]` | Тільки `finished` + `running`; **без авторизації** |
+| `GET /api/public/leaderboard/:tournamentId` | `[{ team_id, team_name, city, total_score }]` | Відсортовано за `total_score DESC`; **без авторизації** |
