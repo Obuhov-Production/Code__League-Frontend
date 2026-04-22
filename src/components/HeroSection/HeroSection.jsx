@@ -11,7 +11,7 @@ function HeroSection() {
           
           <div className="hero-text">
             <h1 className="hero-title">
-              Code League — арена для справжніх розробників
+              Code League — арена для справжніх розробників!
             </h1>
             <p className="hero-description">
               Змагайся в турнірах з програмування, збирай команду, 

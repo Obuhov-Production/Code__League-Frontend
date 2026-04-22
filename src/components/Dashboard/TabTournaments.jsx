@@ -81,12 +81,12 @@ function TeamRegForm({ tournament, toast, onSuccess, onCancel, user }) {
   return (
     <form className="db-reg-form" onSubmit={handleSubmit}>
       <h4>Реєстрація команди</h4>
-      <div className="db-form-row"><label>Назва *</label><input className="db-input" value={teamName} onChange={e => setTeamName(e.target.value)} required placeholder="Назва команди" /></div>
+      <div className="db-form-row"><label>Назва команди</label><input className="db-input" value={teamName} onChange={e => setTeamName(e.target.value)} required placeholder="Назва команди" /></div>
       <div className="db-form-row-2">
         <div className="db-form-row"><label>Місто</label><input className="db-input" value={city} onChange={e => setCity(e.target.value)} placeholder="Київ" /></div>
-        <div className="db-form-row"><label>Школа</label><input className="db-input" value={school} onChange={e => setSchool(e.target.value)} placeholder="КПІ..." /></div>
+        <div className="db-form-row"><label>Навчальний заклад</label><input className="db-input" value={school} onChange={e => setSchool(e.target.value)} placeholder="ОМФК..." /></div>
       </div>
-      <div className="db-form-row"><label>Telegram</label><input className="db-input" value={telegram} onChange={e => setTelegram(e.target.value)} placeholder="@username" /></div>
+      <div className="db-form-row"><label>Telegram (лідера)</label><input className="db-input" value={telegram} onChange={e => setTelegram(e.target.value)} placeholder="@username" /></div>
       <div className="db-members-section">
         <div className="db-members-header">
           <h5>Учасники ({members.length}/{max})</h5>
