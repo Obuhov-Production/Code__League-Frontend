@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import logoImg from '@images/logos/logo.png';
 import logoIcon from '@images/logos/logo-48.png';
-import matrixFrame from '@images/decorations/big-matrix-frame.png';
+import matrixFrame from '@images/decorations/matrix_biger.png';
 import { getTournaments, registerUser, saveSession, saveUser, consumeOAuthTokenFromUrl, OAUTH_URLS, CHECK_BACKEND } from '@utils/authApi';
 import { useToast } from '@utils/toast.jsx';
 
@@ -94,12 +94,12 @@ function RegisterPage() {
         <div className="auth-card auth-card--compact">
           {/* Left — form */}
           <div className="auth-form-col auth-form-col--compact">
-            <button className="auth-back-btn" type="button" onClick={() => window.history.back()} title="Назад">
+            <button className="auth-back-btn" type="button" onClick={() => navigate('/')} title="Назад">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#222" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
             </button>
-            <div className="auth-logo-top">
+            <button className="auth-logo-top" type="button" onClick={() => navigate('/')} title="Назад">
               <img src={logoIcon} alt="Code League" />
-            </div>
+            </button>
             <h2 className="auth-title-main">Create account</h2>
             <p className="auth-subtitle-main">Start your Code League journey</p>
             <div className="auth-social-group">
@@ -117,6 +117,12 @@ function RegisterPage() {
                   <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.05-.02-2.06-3.34.73-4.04-1.61-4.04-1.61-.55-1.4-1.34-1.77-1.34-1.77-1.09-.75.08-.74.08-.74 1.2.09 1.83 1.24 1.83 1.24 1.07 1.83 2.8 1.3 3.48.99.11-.78.42-1.3.76-1.6-2.66-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.17 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 013.01-.4c1.02.01 2.05.14 3.01.4 2.28-1.55 3.29-1.23 3.29-1.23.66 1.65.24 2.87.12 3.17.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.81 1.1.81 2.22 0 1.6-.015 2.89-.015 3.28 0 .32.22.7.83.58C20.57 21.8 24 17.3 24 12c0-6.63-5.37-12-12-12z"/>
                 </svg>
                 Sign up with GitHub
+              </button>
+              <button type="button" className="auth-social-btn" onClick={() => loginWithProvider('discord')}>
+                <svg width="20" height="20" viewBox="0 0 127.14 96.36" fill="#5865F2">
+                  <path d="M107.7 8.07A105.15 105.15 0 0081.47 0a72.06 72.06 0 00-3.36 6.83 97.68 97.68 0 00-29.11 0A72.37 72.37 0 0045.64 0a105.89 105.89 0 00-26.25 8.09C2.79 32.65-1.71 56.6.54 80.21a105.73 105.73 0 0032.17 16.15 77.7 77.7 0 006.89-11.11 68.42 68.42 0 01-10.85-5.18c.91-.66 1.8-1.34 2.66-2a75.57 75.57 0 0064.32 0c.87.71 1.76 1.39 2.66 2a68.68 68.68 0 01-10.87 5.19 77 77 0 006.89 11.1 105.25 105.25 0 0032.19-16.14c2.64-27.38-4.51-51.11-19.01-72.14zM42.45 65.69C36.18 65.69 31 60 31 53s5-12.74 11.43-12.74S54 46 53.89 53s-5.05 12.69-11.44 12.69zm42.24 0C78.41 65.69 73.25 60 73.25 53s5-12.74 11.44-12.74S96.23 46 96.12 53s-5.04 12.69-11.43 12.69z"/>
+                </svg>
+                Sign in with Discord
               </button>
             </div>
             <div className="auth-form-separator"><span>OR</span></div>

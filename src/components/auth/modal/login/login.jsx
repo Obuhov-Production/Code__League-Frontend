@@ -3,7 +3,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import logoImg from '@images/logos/logo.png';
 import logoIcon from '@images/logos/logo-48.png';
-import matrixFrame from '@images/decorations/big-matrix-frame.png';
+import matrixFrame from '@images/decorations/matrix_biger.png';
 import { getTournaments, loginUser, saveSession, saveUser, consumeOAuthTokenFromUrl, OAUTH_URLS, CHECK_BACKEND } from '@utils/authApi';
 import { useToast } from '@utils/toast.jsx';
 
@@ -123,12 +123,12 @@ function LoginPage() {
         <div className="auth-card auth-card--compact">
           {/* Left — form */}
           <div className="auth-form-col auth-form-col--compact">
-            <button className="auth-back-btn" type="button" onClick={() => window.history.back()} title="Назад">
+            <button className="auth-back-btn" type="button" onClick={() => navigate('/')} title="Назад">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#222" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
             </button>
-            <div className="auth-logo-top">
+            <button className="auth-logo-top" type="button" onClick={() => navigate('/')} title="Назад">
               <img src={logoIcon} alt="Code League" />
-            </div>
+            </button>
             <h2 className="auth-title-main">Welcome back!</h2>
             <p className="auth-subtitle-main">Sign in to access your dashboard</p>
             <div className="auth-social-group">
@@ -218,6 +218,7 @@ function LoginPage() {
                   Forgot password?
                 </Link>
               </div>
+              <br></br>
               <p className="auth-note" style={{ marginTop: '8px' }}>
                 Don`t have a profile?{' '}
                 <Link to="/register">Register now</Link>
