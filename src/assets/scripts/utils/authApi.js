@@ -41,6 +41,7 @@ export const DEV_MOCK_USER = {
 export const OAUTH_URLS = {
   google: `${DIRECT_BACKEND_BASE}${BASE}/auth/google`,
   discord: `${DIRECT_BACKEND_BASE}${BASE}/auth/discord`,
+  github: `${DIRECT_BACKEND_BASE}${BASE}/auth/github`,
 };
 
 /** Build auth headers */
