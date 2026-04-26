@@ -2,7 +2,7 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #edeef0;   /* сірий фон як на image 2 */
+  background-color: #edeef0;
 }
 
 .auth-body {
@@ -14,9 +14,7 @@
   padding: 32px 16px;
 }
 
-/* ================================================
-   CARD
-   ================================================ */
+/* ---------- AUTH CARD ---------- */
 .auth-card {
   position: relative;
   background: #fff;
@@ -33,7 +31,8 @@
   gap: 0;
 }
 
-/* Mac traffic lights */
+/* Тіпа как на мак буке кнопашкі сбоку уберу в комент мне не особо нрав как выглядит */
+/*
 .auth-card::before {
   content: '';
   position: absolute;
@@ -48,8 +47,8 @@
     radial-gradient(circle at 6px 6px, #fbbf24 45%, transparent 46%) 22px 0 / 16px 16px no-repeat,
     radial-gradient(circle at 6px 6px, #34d399 45%, transparent 46%) 44px 0 / 16px 16px no-repeat;
 }
+*/
 
-/* ── compact modifier (використовується у твоєму LoginPage / RegisterPage) ── */
 .auth-card--compact {
   max-width: 1100px;
   min-height: 700px;
@@ -57,14 +56,11 @@
   box-shadow: 0 8px 40px rgba(15, 23, 42, 0.10);
 }
 
-/* ================================================
-   BACK BUTTON  (← між колонками, абс. top-center)
-   ================================================ */
+/* ---------- Кнопка стрелка ---------- ( Слева сверху которая )*/
 .auth-back-btn {
   position: absolute;
-  top: 16px;
-  /* стоїть між двома колонками — трохи лівіше центру */
-  left: calc(50% - 48px);
+  top: 20px;
+  left: calc(1% + 20px);
   background: none;
   border: 1px solid #e4e4e4;
   border-radius: 50%;
@@ -85,9 +81,7 @@
   background: #f5f5f5;
 }
 
-/* ================================================
-   LEFT: FORM COLUMN
-   ================================================ */
+/* ---------- Left form (sliva) --------*/
 .auth-form-col {
   flex: 1;
   min-width: 0;
@@ -110,7 +104,7 @@
   gap: 0;
 }
 
-/* ── Logo ── */
+/* -- Logotipchik -- */
 .auth-logo-top {
   display: flex;
   justify-content: center;
@@ -126,7 +120,7 @@
   border-radius: 13px;
 }
 
-/* ── Title / Subtitle ── */
+/* -- Title \ sub title -- */
 .auth-title-main {
   font-family: var(--font-head);
   font-size: 26px;
@@ -144,7 +138,7 @@
   text-align: center;
 }
 
-/* ── Social group ── */
+/* -- Social group -- */
 .auth-social-group {
   display: grid;
   gap: 10px;
@@ -316,7 +310,7 @@
   font-family: var(--font-body);
   font-size: 13px;
   font-weight: 600;
-  color: var(--color_dark);
+  color: var(--main_color);
   text-decoration: none;
 }
 .auth-forgot-link:hover { text-decoration: underline; }
@@ -330,7 +324,7 @@
   width: 100%;
 }
 .auth-note a {
-  color: var(--color_dark);
+  color: var(--main_color);
   font-weight: 600;
   text-decoration: none;
 }
@@ -353,12 +347,12 @@
 }
 .auth-submit-btn.active,
 .auth-submit-btn:not(:disabled):hover {
-  background: #111111;           /* чорний як на image 2 */
+  background: var(--main_color);           /* чорний як на image 2 */
 }
 .auth-submit-btn:disabled {
   opacity: 1;
   cursor: not-allowed;
-  background: #c8c8c8;
+  background: #d1d0d0;
 }
 
 /* compact submit override */
@@ -476,7 +470,8 @@
   align-items: center;
   gap: 7px;
 }
-/* green dot */
+
+/* green dot (vozle slova) */
 .auth-preview-top::before {
   content: '';
   width: 7px;
@@ -486,7 +481,7 @@
   flex-shrink: 0;
 }
 
-/* ── Info card at bottom ── */
+/* -- Info card at bottom -- */
 .auth-preview-card {
   position: relative;
   z-index: 1;
@@ -556,7 +551,7 @@
   margin-bottom: 12px;
 }
 
-/* ── Meta pills ── */
+/* -- Meta pills -- */
 .auth-preview-meta {
   display: flex;
   gap: 8px;
@@ -581,7 +576,7 @@
   padding: 7px 12px;
 }
 
-/* ── Arrow button (→) ── */
+/* -- Arrow button (Стрілочка) -- */
 .auth-preview-arrow {
   position: absolute;
   bottom: 22px;
@@ -611,15 +606,39 @@
   stroke-width: 2;
 }
 
-/* ================================================
-   RESPONSIVE
-   ================================================ */
+/* по адаптівчік для мобілок */
+
 @media (max-width: 768px) {
+  .auth-body {
+    padding: 24px 12px;
+    margin-top: 20px;
+  }
+
   .auth-card,
   .auth-card--compact {
     flex-direction: column;
     border-radius: 18px;
     min-height: unset;
+  }
+  .auth-preview-col {
+    width: 0%;
+    height: 0%;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .auth-preview-col--compact {
+    width: 100%;
+    height: 0%;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .auth-preview {
+    width: 100%;
+  }
+
+  .auth-form-col {
+    height: 200px;
+    margin-top: 300px;
   }
 
   .auth-form-col,
@@ -642,7 +661,7 @@
   }
 
   .auth-back-btn {
-    left: auto;
+    left: 15px;
     right: 16px;
     top: 14px;
   }

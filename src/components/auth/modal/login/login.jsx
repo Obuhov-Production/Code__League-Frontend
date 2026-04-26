@@ -1,4 +1,4 @@
-/* короче погнали писать код) фух */
+/* короче погнали писать код кст пишу на клаві без укр розкладки (тут тіки з англ) це всьо ваше Temu віновате */
 import { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import logoImg from '@images/logos/logo.png';
@@ -39,7 +39,7 @@ function LoginPage() {
     const oauth = consumeOAuthTokenFromUrl();
     if (oauth.status === 'success') {
       if (oauth.user) saveUser(oauth.user);
-      toast.success('Успішний вхід через OAuth');
+      toast.success('Успішний вхід через провайдера!');
       navigate('/dashboard', { replace: true });
       return;
     }
@@ -52,11 +52,11 @@ function LoginPage() {
   useEffect(() => {
     const fallbackTournament = {
       id: 0,
-      name: 'Global AI Hackathon 2024',
-      description: 'Join 450+ developers competing for a $50k prize pool. Submissions close in 12 days.',
+      name: 'Local tournament 2026',
+      description: 'this is local example tournament for preview purposes. Join the next Code League event and battle for the top prize.',
       status: 'running',
       end_date: new Date(Date.now() + 12 * 24 * 60 * 60 * 1000).toISOString(),
-      teams_count: 82,
+      teams_count: 67, /* о май гад 67 67 67 67 67 67 67 67 67 67 67 67 67 67 67 67 67 67 67 67 67 */
     };
 
     const loadPreview = async () => {
@@ -98,7 +98,7 @@ function LoginPage() {
 
     // Dev-режим: VITE_CHECK_BACKEND=false → пропускаємо запит до бекенду для авторизации
     if (!CHECK_BACKEND) {
-      toast.success('Dev-режим: вхід без бекенду');
+      toast.success('Dev-mode: вхід без бекенду!');
       navigate('/dashboard');
       return;
     }
@@ -108,7 +108,7 @@ function LoginPage() {
       const data = await loginUser({ email, password });
       saveSession(data.token);
       if (data.user) saveUser(data.user);
-      toast.success('Вітаємо знову!');
+      toast.success('Вітаємо знову у системі!');
       navigate('/dashboard');
     } catch (err) {
       toast.error(err.message);
@@ -123,14 +123,14 @@ function LoginPage() {
         <div className="auth-card auth-card--compact">
           {/* Left — form */}
           <div className="auth-form-col auth-form-col--compact">
-            <button className="auth-back-btn" type="button" onClick={() => navigate('/')} title="Назад">
+            <button className="auth-back-btn" type="button" onClick={() => navigate('/')} title="На головну">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#222" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
             </button>
-            <button className="auth-logo-top" type="button" onClick={() => navigate('/')} title="Назад">
+            <button className="auth-logo-top" type="button" onClick={() => navigate('/')} title="На головну">
               <img src={logoIcon} alt="Code League" />
             </button>
-            <h2 className="auth-title-main">Welcome back!</h2>
-            <p className="auth-subtitle-main">Sign in to access your dashboard</p>
+            <h2 className="auth-title-main">Welcome Back!</h2>
+            <p className="auth-subtitle-main">Sign in to continue accessing your dashboard</p>
             <div className="auth-social-group">
               <button type="button" className="auth-social-btn" onClick={() => loginWithProvider('google')}>
                 <svg width="20" height="20" viewBox="0 0 48 48">
@@ -238,9 +238,9 @@ function LoginPage() {
               className="auth-preview auth-preview--compact"
               style={{ backgroundImage: `url(${matrixFrame})`, backgroundPosition: 'center center', backgroundSize: 'cover', minHeight: 340, maxHeight: 340 }}
             >
-              <div className="auth-preview-top">Secure Portal</div>
+              <div className="auth-preview-top">Secure Connection</div>
               <div className="auth-preview-card auth-preview-card--compact">
-                <span className="auth-preview-tag">TOURNAMENT LIVE</span>
+                <span className="auth-preview-tag">TOURNAMENTS</span>
                 <h3>{previewData?.name || 'Live tournament preview'}</h3>
                 <p>{previewData?.description}</p>
                 <div className="auth-preview-meta">

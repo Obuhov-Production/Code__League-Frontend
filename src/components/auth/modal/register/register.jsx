@@ -49,6 +49,42 @@ function RegisterPage() {
     }
   }, [navigate, toast]);
 
+  useEffect(() => {
+    const fallbackTournament = {
+      id: 0,
+      name: 'Local tournament 2026',
+      description: 'this is local example tournament for preview purposes. Join the next Code League event and battle for the top prize.',
+      status: 'running',
+      end_date: new Date(Date.now() + 12 * 24 * 60 * 60 * 1000).toISOString(),
+      teams_count: 67, /* о май гад 67 67 67 67 67 67 67 67 67 67 67 67 67 67 67 67 67 67 67 67 67 */
+    };
+
+    const loadPreview = async () => {
+      if (!CHECK_BACKEND) {
+        setTournamentPreview(fallbackTournament);
+        return;
+      }
+
+      try {
+        const tournaments = await getTournaments();
+        const candidates = Array.isArray(tournaments)
+          ? tournaments.filter((t) => ['registration', 'running'].includes(t.status))
+          : [];
+        const list = candidates.length ? candidates : Array.isArray(tournaments) ? tournaments : [];
+
+        if (list.length > 0) {
+          setTournamentPreview(list[Math.floor(Math.random() * list.length)]);
+        } else {
+          setTournamentPreview(fallbackTournament);
+        }
+      } catch {
+        setTournamentPreview(fallbackTournament);
+      }
+    };
+
+    loadPreview();
+  }, []);
+
   const loginWithProvider = (provider) => {
     const url = OAUTH_URLS[provider];
     if (url) {
@@ -101,7 +137,7 @@ function RegisterPage() {
               <img src={logoIcon} alt="Code League" />
             </button>
             <h2 className="auth-title-main">Create account</h2>
-            <p className="auth-subtitle-main">Start your Code League journey</p>
+            <p className="auth-subtitle-main">Start your Code League journey now!</p>
             <div className="auth-social-group">
               <button type="button" className="auth-social-btn" onClick={() => loginWithProvider('google')}>
                 <svg width="20" height="20" viewBox="0 0 48 48">
@@ -231,7 +267,7 @@ function RegisterPage() {
             >
               <div className="auth-preview-top">Secure Portal</div>
               <div className="auth-preview-card auth-preview-card--compact">
-                <span className="auth-preview-tag">TOURNAMENT LIVE</span>
+                <span className="auth-preview-tag">TOURNAMENT</span>
                 <h3>{previewData?.name || 'Live tournament preview'}</h3>
                 <p>{previewData?.description}</p>
                 <div className="auth-preview-meta">
