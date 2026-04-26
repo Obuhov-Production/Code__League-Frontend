@@ -1,7 +1,4 @@
-/**
- * db.shared.jsx
- * Shared constants, helpers, and small UI components used across all Dashboard tabs.
- */
+/* Дашборд - спільні константи, хелпери та компоненти для всього дашборду */
 import { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { searchUsers, API_BASE, CHECK_BACKEND, getToken } from '@utils/authApi';
@@ -19,9 +16,7 @@ import badge2Img from '@images/pin/bage2.png';
 export const STICKERS = [emote1, emote2, emote3, emote4, emote5, emote6];
 export const STICKER_PREFIX = '__sticker__:';
 
-/* ══════════════════════════════════════════════════
-   CONSTANTS
-══════════════════════════════════════════════════ */
+/* constants */
 export const STATUS_LABEL = {
   draft:        { label: 'Draft',   color: '#888',    bg: '#f0f0f0' },
   registration: { label: 'Registration', color: '#7c5ff5', bg: '#eee9ff' },
@@ -37,7 +32,7 @@ export const ACCENT = {
 };
 
 export const BANNER_PRESETS = ['#0d1117', '#191A23', '#1a1a2e', '#1e1b2e', '#231b2e', '#2e231b', '#1b3b2e', '#2e1b3b'];
-
+/* в ролі додав емодзі шоб разбавити нудні текстові позначки — замість svg icons */
 export const ROLE_LABELS = { user: '👤 User', jury: '⚖️ Jury', organizer: '🗂️ Organizer', admin: '⚙️ Admin', banned: '🚫 Banned' };
 
 export const BASE_ROOMS = [
@@ -47,19 +42,20 @@ export const BASE_ROOMS = [
 ];
 
 export const EMOJI_QUICK = [
-  // Емоції
+  // Базові емоджі
   '😀','😂','😭','🥹','😤','😡','🤯','🥵','🥶','😴','🤢','🤮','😱','🤩','😎','🤓',
-  // Жести
+  // Жести та реакції
   '👍','👎','👏','🙌','🤝','💪','🫡','🫶','✌️','🤙','☝️','🖕',
-  // Серця та символи
+  // Спеціальні символи та знаки
   '❤️','🧡','💛','💚','💙','💜','🖤','💯','⭐','✨','🔥','⚡','💥','❄️','🌊','💫',
   // Геймінг / змагання
   '🏆','🥇','🥈','🥉','🎯','🎮','🕹️','⚔️','🛡️','🧠','💻','🐛','💀','👑','🚀','🤖',
   // Святкування
   '🎉','🎊','🎁','🎈','🥳','🍾','🥂','🎶',
 ];
-export const EMOJI_REACT = ['👍','❤️','🔥','😂','😮','😭','👏','🎉','💯','🏆','⚡','🤯'];
-
+/* Швидкі реакції на повідомлення */
+export const EMOJI_REACT = ['👍','❤️','🔥','😂','😭','💯','🏆','⚡'];
+/* Бейджі в профілі */
 export const ALL_BADGES = [
   {
     id: 'identity_confirmed',

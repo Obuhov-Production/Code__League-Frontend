@@ -1,10 +1,6 @@
-﻿/* =============================================
-   Dashboard Mobile Adaptive Overrides — CLEAN
-   ============================================= */
+﻿/* Dashboard - Адаптівчік под теліфно */
 
-/* ───────────────────────────────────────────────
-   Tablet  (≤ 1024px)
-   ─────────────────────────────────────────────── */
+/* -- Tablet  (≤ 1024px) -- */
 @media (max-width: 1024px) {
   .db-stats-grid        { grid-template-columns: repeat(2, 1fr); }
   .db-overview-grid     { grid-template-columns: 1fr 1fr; }

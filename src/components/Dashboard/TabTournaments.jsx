@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import IconTournaments from '@images/dashboard_components/icon_tournaments.svg?react';
 import IconSearch      from '@images/dashboard_components/icon_search.svg?react';
 
-import { getTournaments, getMyTeams, registerTeam, searchUsers } from '@utils/authApi';
+import { getTournaments, getMyTeams, registerTeam, updateTeam, searchUsers } from '@utils/authApi';
 import { StatusBadge, ACCENT, formatDate, daysLeft } from './db.shared.jsx';
 
 function TeamRegForm({ tournament, toast, onSuccess, onCancel, user }) {
@@ -73,7 +73,13 @@ function TeamRegForm({ tournament, toast, onSuccess, onCancel, user }) {
       full_name: m.linkedUser ? (m.linkedUser.full_name?.trim() || m.linkedUser.username) : m.full_name,
       email:     m.linkedUser ? m.linkedUser.email : m.email,
     }));
-    try { await registerTeam({ name: teamName.trim(), tournament_id: tournament.id, city, school, telegram_username: telegram, members: cleanMembers }); onSuccess(); }
+    try { 
+      const newTeam = await registerTeam({ name: teamName.trim(), tournament_id: tournament.id, city, school, telegram_username: telegram }); 
+      if (cleanMembers && cleanMembers.length > 0) {
+        await updateTeam(newTeam.id, { members: cleanMembers });
+      }
+      onSuccess(); 
+    }
     catch (err) { toast.error(err.message); }
     finally { setLoading(false); }
   };
