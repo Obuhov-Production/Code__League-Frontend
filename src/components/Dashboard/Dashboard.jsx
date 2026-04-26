@@ -156,7 +156,7 @@ export default function Dashboard() {
         </nav>
 
         {!loading && user && (
-          <button className="db-sidebar-user" onClick={() => setTab('profile')}>
+          <div className="db-sidebar-user" onClick={() => setTab('profile')} role="button" tabIndex={0} onKeyDown={e => e.key === 'Enter' && setTab('profile')}>
             <UserAvatar user={user} size={34} />
             <div className="db-sidebar-info">
               <span className="db-sidebar-name">{user.username || user.email}</span>
@@ -167,7 +167,7 @@ export default function Dashboard() {
             <button className="db-sidebar-logout" title="Вийти" onClick={e => { e.stopPropagation(); handleLogout(); }}>
               <IconLogout />
             </button>
-          </button>
+          </div>
         )}
       </aside>
 

@@ -4,8 +4,8 @@ import IconTournaments from '@images/dashboard_components/icon_tournaments.svg?r
 import IconSearch      from '@images/dashboard_components/icon_search.svg?react';
 import logoImg         from '@images/logos/logo.png';
 
-import { getTournaments, getMyTeams, registerTeam, updateTeam, searchUsers } from '@utils/authApi';
-import { StatusBadge, ACCENT, formatDate, daysLeft, resolveAvatarUrl } from './db.shared.jsx';
+import { getTournaments, getMyTeams, registerTeam, updateTeam, searchUsers, updateTournament } from '@utils/authApi';
+import { StatusBadge, ACCENT, formatDate, daysLeft, resolveAvatarUrl, hasRole } from './db.shared.jsx';
 
 function TeamRegForm({ tournament, toast, onSuccess, onCancel, user }) {
   const min = tournament.min_team_size || 2;
@@ -206,12 +206,146 @@ function TeamRegForm({ tournament, toast, onSuccess, onCancel, user }) {
   );
 }
 
+/* ── helpers ────────────────────────── */
+function toDateInput(d) { if (!d) return ''; try { return new Date(d).toISOString().slice(0, 10); } catch { return ''; } }
+
+function TournamentEditForm({ tournament: t, toast, onSaved, onCancel }) {
+  const [name, setName]               = useState(t.name || '');
+  const [description, setDescription] = useState(t.description || '');
+  const [rules, setRules]             = useState(t.rules || '');
+  const [startDate, setStartDate]     = useState(toDateInput(t.start_date));
+  const [endDate, setEndDate]         = useState(toDateInput(t.end_date));
+  const [regStart, setRegStart]       = useState(toDateInput(t.registration_start));
+  const [regEnd, setRegEnd]           = useState(toDateInput(t.registration_end));
+  const [teamsLimit, setTeamsLimit]    = useState(t.teams_limit ?? '');
+  const [minSize, setMinSize]         = useState(t.min_team_size ?? 2);
+  const [maxSize, setMaxSize]         = useState(t.max_team_size ?? 5);
+  const [roundsCount, setRoundsCount] = useState(t.rounds_count ?? 1);
+  const [saving, setSaving]           = useState(false);
+
+  const handleSave = async e => {
+    e.preventDefault();
+    if (!name.trim()) { toast.error('Назва не може бути порожньою'); return; }
+    setSaving(true);
+    try {
+      const payload = {
+        name: name.trim(),
+        description: description.trim() || null,
+        rules: rules.trim() || null,
+        start_date: startDate || null,
+        end_date: endDate || null,
+        registration_start: regStart || null,
+        registration_end: regEnd || null,
+        teams_limit: teamsLimit === '' ? null : Number(teamsLimit),
+        min_team_size: Number(minSize),
+        max_team_size: Number(maxSize),
+        rounds_count: Number(roundsCount),
+      };
+      await updateTournament(t.id, payload);
+      toast.success('Турнір оновлено!');
+      onSaved();
+    } catch (err) { toast.error(err.message || 'Помилка збереження'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <form className="db-edit-tournament-form" onSubmit={handleSave}>
+      <div className="db-edit-header">
+        <h3 className="db-edit-title">{t.name}</h3>
+        <span className="db-edit-id">id #{t.id}</span>
+      </div>
+
+      <div className="db-edit-field">
+        <label className="db-edit-label">Назва <span className="db-required">*</span></label>
+        <input className="db-input" value={name} onChange={e => setName(e.target.value)} required />
+      </div>
+
+      <div className="db-edit-field">
+        <label className="db-edit-label">Опис</label>
+        <textarea className="db-input db-textarea" rows={3} value={description} onChange={e => setDescription(e.target.value)} placeholder="Опис турніру..." />
+      </div>
+
+      <div className="db-edit-field">
+        <label className="db-edit-label">Правила</label>
+        <textarea className="db-input db-textarea" rows={3} value={rules} onChange={e => setRules(e.target.value)} placeholder="Правила турніру..." />
+      </div>
+
+      <div className="db-edit-row-2">
+        <div className="db-edit-field">
+          <label className="db-edit-label">Старт</label>
+          <input type="date" className="db-input" value={startDate} onChange={e => setStartDate(e.target.value)} />
+        </div>
+        <div className="db-edit-field">
+          <label className="db-edit-label">Кінець</label>
+          <input type="date" className="db-input" value={endDate} onChange={e => setEndDate(e.target.value)} />
+        </div>
+      </div>
+
+      <div className="db-edit-row-2">
+        <div className="db-edit-field">
+          <label className="db-edit-label">Реєстрація від</label>
+          <input type="date" className="db-input" value={regStart} onChange={e => setRegStart(e.target.value)} />
+        </div>
+        <div className="db-edit-field">
+          <label className="db-edit-label">Реєстрація до</label>
+          <input type="date" className="db-input" value={regEnd} onChange={e => setRegEnd(e.target.value)} />
+        </div>
+      </div>
+
+      <div className="db-edit-row-3">
+        <div className="db-edit-field">
+          <label className="db-edit-label">Макс. команд</label>
+          <input type="number" className="db-input" min={0} value={teamsLimit} onChange={e => setTeamsLimit(e.target.value)} placeholder="—" />
+        </div>
+        <div className="db-edit-field">
+          <label className="db-edit-label">Мін. осіб</label>
+          <input type="number" className="db-input" min={1} value={minSize} onChange={e => setMinSize(e.target.value)} />
+        </div>
+        <div className="db-edit-field">
+          <label className="db-edit-label">Макс. осіб</label>
+          <input type="number" className="db-input" min={1} value={maxSize} onChange={e => setMaxSize(e.target.value)} />
+        </div>
+      </div>
+
+      <div className="db-edit-field">
+        <label className="db-edit-label">Кількість раундів</label>
+        <input type="number" className="db-input" min={1} value={roundsCount} onChange={e => setRoundsCount(e.target.value)} />
+      </div>
+
+      <div className="db-edit-actions">
+        <button type="button" className="db-btn db-btn-ghost" onClick={onCancel}>Скасувати</button>
+        <button type="submit" className="db-btn db-btn-primary db-btn-submit" disabled={saving}>
+          {saving ? 'Збереження...' : '💾 Зберегти'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function TournamentModal({ tournament: t, user, toast, initReg, isRegistered, onClose, onRegistered }) {
   const [showReg, setShowReg] = useState(initReg && !isRegistered);
+  const [showEdit, setShowEdit] = useState(false);
+  const canEdit = user && (hasRole(user, 'admin') || hasRole(user, 'organizer'));
   useEffect(() => {
     const fn = e => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', fn); return () => window.removeEventListener('keydown', fn);
   }, [onClose]);
+
+  if (showEdit && canEdit) {
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-box modal-box--light db-tournament-modal" onClick={e => e.stopPropagation()}>
+          <button className="db-tm-close" onClick={onClose}>✕</button>
+          <div className="db-modal-scroll-body">
+            <TournamentEditForm tournament={t} toast={toast}
+              onSaved={() => { onRegistered(); onClose(); }}
+              onCancel={() => setShowEdit(false)} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box modal-box--light db-tournament-modal" onClick={e => e.stopPropagation()}>
@@ -232,13 +366,13 @@ function TournamentModal({ tournament: t, user, toast, initReg, isRegistered, on
 
           <div className="db-tm-dates-strip">
             <div className="db-tm-date-block">
-              <span className="db-tm-date-label">Турнір</span>
-              <span className="db-tm-date-value">{formatDate(t.start_date)} — {formatDate(t.end_date)}</span>
+              <span className="db-tm-date-label">Дедлайн</span>
+              <span className="db-tm-date-value">{formatDate(t.start_date)} - {formatDate(t.end_date)}</span>
             </div>
             <div className="db-tm-date-divider" />
             <div className="db-tm-date-block">
-              <span className="db-tm-date-label">Реєстрація</span>
-              <span className="db-tm-date-value">{formatDate(t.registration_start)} — {formatDate(t.registration_end)}</span>
+              <span className="db-tm-date-label">Час на реєстрацію</span>
+              <span className="db-tm-date-value">{formatDate(t.registration_start)} - {formatDate(t.registration_end)}</span>
             </div>
             <div className="db-tm-date-divider" />
             <div className="db-tm-date-block">
@@ -258,6 +392,12 @@ function TournamentModal({ tournament: t, user, toast, initReg, isRegistered, on
               <h4>Правила</h4>
               <p>{t.rules}</p>
             </div>
+          )}
+
+          {canEdit && (
+            <button className="db-btn db-btn-ghost db-btn-edit-tournament" onClick={() => { setShowEdit(true); setShowReg(false); }}>
+              ✏️ Редагувати турнір
+            </button>
           )}
 
           {t.status === 'registration' && !showReg && (
@@ -299,16 +439,19 @@ export default function TabTournaments({ user, toast }) {
   }, [filter, toast]);
   useEffect(() => { load(); }, [load]);
 
-  const filtered = useMemo(() =>
-    search.trim()
-      ? tournaments.filter(t => t.name.toLowerCase().includes(search.toLowerCase()))
-      : tournaments,
-    [tournaments, search]
-  );
+  const canSeeDraft = user && (hasRole(user, 'admin') || hasRole(user, 'organizer'));
+
+  const filtered = useMemo(() => {
+    let list = tournaments;
+    if (!canSeeDraft) list = list.filter(t => t.status !== 'draft');
+    if (search.trim()) list = list.filter(t => t.name.toLowerCase().includes(search.toLowerCase()));
+    return list;
+  }, [tournaments, search, canSeeDraft]);
 
   const FILTERS = [
     { id: 'all', label: 'Всі' }, { id: 'registration', label: 'Реєстрація' },
-    { id: 'running', label: 'Активні' }, { id: 'finished', label: 'Завершені' }, { id: 'draft', label: 'Чернетки' },
+    { id: 'running', label: 'Активні' }, { id: 'finished', label: 'Завершені' },
+    ...(canSeeDraft ? [{ id: 'draft', label: 'Чернетки' }] : []),
   ];
 
   return (

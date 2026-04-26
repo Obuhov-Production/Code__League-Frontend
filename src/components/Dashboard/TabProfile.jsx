@@ -60,12 +60,15 @@ function BadgeModal({ badge, onClose }) {
 
 /* ── Organizer Application Modal ─────────────────── */
 function OrganizerApplyModal({ onClose, onSubmit }) {
-  const [form, setForm] = useState({ motivation: '', experience: '' });
+  const [form, setForm] = useState({ motivation: '', experience: '', contact_email: '', contact_telegram: '', contact_phone: '' });
   const [saving, setSaving] = useState(false);
+
+  const hasContact = form.contact_email.trim() || form.contact_telegram.trim() || form.contact_phone.trim();
 
   const handleSubmit = async e => {
     e.preventDefault();
     if (!form.motivation.trim()) return;
+    if (!hasContact) return;
     setSaving(true);
     try { await onSubmit(form); }
     finally { setSaving(false); }
@@ -73,47 +76,79 @@ function OrganizerApplyModal({ onClose, onSubmit }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box modal-box--light" onClick={e => e.stopPropagation()} style={{ maxWidth: 500, padding: 0, overflow: 'hidden' }}>
-        <div className="db-mu-header">
-          <div style={{ fontSize: 28 }}>🗂️</div>
-          <div>
-            <div className="db-mu-name">Заявка на організатора</div>
-            <div className="db-mu-email">Розкажіть про себе та свою мотивацію</div>
-          </div>
-          <button className="db-mu-close" onClick={onClose}>✕</button>
+      <div className="modal-box modal-box--light db-tournament-modal" onClick={e => e.stopPropagation()}>
+        <button className="db-tm-close" onClick={onClose}>✕</button>
+        <div className="db-modal-scroll-body">
+          <form className="db-edit-tournament-form" onSubmit={handleSubmit}>
+            <div className="db-edit-header">
+              <div className="db-app-header-row">
+                <span className="db-app-header-icon">🗂️</span>
+                <div>
+                  <h3 className="db-edit-title">Заявка на організатора</h3>
+                  <p className="db-app-header-sub">Розкажіть про себе, свою мотивацію та як з вами зв'язатися</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="db-edit-field">
+              <label className="db-edit-label">Мотивація <span className="db-required">*</span></label>
+              <textarea
+                className="db-input db-textarea"
+                rows={5}
+                value={form.motivation}
+                onChange={e => setForm(f => ({ ...f, motivation: e.target.value }))}
+                placeholder="Чому ви хочете стати організатором? Які заходи плануєте провести? Яка ваша ціль?"
+                maxLength={1000}
+                required
+              />
+              <div className="db-app-char-count">{form.motivation.length} / 1000</div>
+            </div>
+
+            <div className="db-edit-field">
+              <label className="db-edit-label">Досвід та навички</label>
+              <textarea
+                className="db-input db-textarea"
+                rows={3}
+                value={form.experience}
+                onChange={e => setForm(f => ({ ...f, experience: e.target.value }))}
+                placeholder="Попередній досвід у організації заходів, хакатонів, олімпіад..."
+                maxLength={500}
+              />
+            </div>
+
+            <div className="db-app-contacts-card">
+              <label className="db-edit-label">Контактні дані <span className="db-required">*</span></label>
+              <p className="db-app-contacts-hint">Вкажіть хоча б один спосіб зв'язку</p>
+              <div className="db-app-contact-fields">
+                <div className="db-app-contact-row">
+                  <span className="db-app-contact-icon">📧</span>
+                  <input className="db-input" type="email" value={form.contact_email}
+                    onChange={e => setForm(f => ({ ...f, contact_email: e.target.value }))}
+                    placeholder="email@example.com" />
+                </div>
+                <div className="db-app-contact-row">
+                  <span className="db-app-contact-icon">💬</span>
+                  <input className="db-input" value={form.contact_telegram}
+                    onChange={e => setForm(f => ({ ...f, contact_telegram: e.target.value }))}
+                    placeholder="@telegram_username" />
+                </div>
+                <div className="db-app-contact-row">
+                  <span className="db-app-contact-icon">📱</span>
+                  <input className="db-input" type="tel" value={form.contact_phone}
+                    onChange={e => setForm(f => ({ ...f, contact_phone: e.target.value }))}
+                    placeholder="+380 XX XXX XX XX" />
+                </div>
+              </div>
+            </div>
+
+            <div className="db-edit-actions">
+              <button type="button" className="db-btn db-btn-ghost" onClick={onClose}>Скасувати</button>
+              <button type="submit" className="db-btn db-btn-primary db-btn-submit" disabled={saving || !form.motivation.trim() || !hasContact}>
+                {saving ? '⏳ Надсилання...' : '📤 Подати заявку'}
+              </button>
+            </div>
+          </form>
         </div>
-        <form className="db-mu-body" onSubmit={handleSubmit}>
-          <div className="db-mu-section">
-            <label className="db-mu-label">Мотивація *</label>
-            <textarea
-              className="db-input"
-              rows={4}
-              value={form.motivation}
-              onChange={e => setForm(f => ({ ...f, motivation: e.target.value }))}
-              placeholder="Чому ви хочете стати організатором? Які заходи плануєте провести?"
-              maxLength={1000}
-              required
-            />
-            <div style={{ fontSize: 12, color: '#888', textAlign: 'right' }}>{form.motivation.length} / 1000</div>
-          </div>
-          <div className="db-mu-section">
-            <label className="db-mu-label">Досвід та навички</label>
-            <textarea
-              className="db-input"
-              rows={3}
-              value={form.experience}
-              onChange={e => setForm(f => ({ ...f, experience: e.target.value }))}
-              placeholder="Попередній досвід у організації заходів, хакатонів, олімпіад..."
-              maxLength={500}
-            />
-          </div>
-          <div className="db-form-actions" style={{ padding: '0 20px 20px' }}>
-            <button type="button" className="db-btn db-btn-ghost" onClick={onClose}>Скасувати</button>
-            <button type="submit" className="db-btn db-btn-primary" disabled={saving || !form.motivation.trim()}>
-              {saving ? '⏳ Надсилання...' : '📤 Подати заявку'}
-            </button>
-          </div>
-        </form>
       </div>
     </div>
   );

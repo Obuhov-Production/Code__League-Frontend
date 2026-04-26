@@ -236,27 +236,26 @@ function ManageUserModal({ user, toast, onClose, onRoleChange, onDelete }) {
   );
 }
 
+/* ── helpers ── */
+function toDateInput(d) { if (!d) return ''; try { return new Date(d).toISOString().slice(0, 10); } catch { return ''; } }
+
 /* ── Edit Tournament Modal ──────────────────────────── */
 function EditTournamentModal({ tournament, allTeams, toast, onClose, onSuccess, onDeleteTeam }) {
-  const today = new Date().toISOString().split('T')[0];
-  const [f, setF] = useState({
-    name:               tournament.name               || '',
-    description:        tournament.description        || '',
-    rules:              tournament.rules              || '',
-    start_date:         tournament.start_date         || today,
-    end_date:           tournament.end_date           || '',
-    registration_start: tournament.registration_start || today,
-    registration_end:   tournament.registration_end   || '',
-    teams_limit:        tournament.teams_limit        || '',
-    min_team_size:      tournament.min_team_size      || 2,
-    max_team_size:      tournament.max_team_size      || 5,
-  });
+  const [name, setName]               = useState(tournament.name || '');
+  const [description, setDescription] = useState(tournament.description || '');
+  const [rules, setRules]             = useState(tournament.rules || '');
+  const [startDate, setStartDate]     = useState(toDateInput(tournament.start_date));
+  const [endDate, setEndDate]         = useState(toDateInput(tournament.end_date));
+  const [regStart, setRegStart]       = useState(toDateInput(tournament.registration_start));
+  const [regEnd, setRegEnd]           = useState(toDateInput(tournament.registration_end));
+  const [teamsLimit, setTeamsLimit]    = useState(tournament.teams_limit ?? '');
+  const [minSize, setMinSize]         = useState(tournament.min_team_size ?? 2);
+  const [maxSize, setMaxSize]         = useState(tournament.max_team_size ?? 5);
+  const [roundsCount, setRoundsCount] = useState(tournament.rounds_count ?? 1);
   const [loading,      setLoading]      = useState(false);
   const [activeTab,    setActiveTab]    = useState('info');
   const [tourTeams,    setTourTeams]    = useState([]);
   const [teamsLoading, setTeamsLoading] = useState(false);
-
-  const upd = (k, v) => setF(x => ({ ...x, [k]: v }));
 
   useEffect(() => {
     if (activeTab === 'teams') {
@@ -274,13 +273,21 @@ function EditTournamentModal({ tournament, allTeams, toast, onClose, onSuccess, 
 
   const handleSubmit = async e => {
     e.preventDefault();
+    if (!name.trim()) { toast.error('Назва не може бути порожньою'); return; }
     setLoading(true);
     try {
       await updateTournament(tournament.id, {
-        ...f,
-        teams_limit:   f.teams_limit ? Number(f.teams_limit) : null,
-        min_team_size: Number(f.min_team_size),
-        max_team_size: Number(f.max_team_size),
+        name: name.trim(),
+        description: description.trim() || null,
+        rules: rules.trim() || null,
+        start_date: startDate || null,
+        end_date: endDate || null,
+        registration_start: regStart || null,
+        registration_end: regEnd || null,
+        teams_limit: teamsLimit === '' ? null : Number(teamsLimit),
+        min_team_size: Number(minSize),
+        max_team_size: Number(maxSize),
+        rounds_count: Number(roundsCount),
       });
       onSuccess();
     } catch (err) { toast.error(err.message); }
@@ -289,46 +296,58 @@ function EditTournamentModal({ tournament, allTeams, toast, onClose, onSuccess, 
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="db-et-modal" onClick={e => e.stopPropagation()}>
-        <div className="db-et-header">
-          <div>
-            <div className="db-et-title">{f.name || 'Редагування турніру'}</div>
-            <div className="db-et-subtitle">id #{tournament.id}</div>
+      <div className="modal-box modal-box--light db-tournament-modal" onClick={e => e.stopPropagation()}>
+        <button className="db-tm-close" onClick={onClose}>✕</button>
+        <div className="db-modal-scroll-body">
+          <div className="db-edit-header">
+            <h3 className="db-edit-title">{tournament.name}</h3>
+            <span className="db-edit-id">id #{tournament.id}</span>
           </div>
-          <button className="db-mu-close" onClick={onClose}>✕</button>
-        </div>
-        <div className="db-et-tabs">
-          {[['info','📋 Інформація'], ['teams','👫 Команди']].map(([id, lbl]) => (
-            <button key={id} className={`db-et-tab-btn${activeTab === id ? ' active' : ''}`} onClick={() => setActiveTab(id)}>{lbl}</button>
-          ))}
-        </div>
-        <div className="db-et-body">
+          <div className="db-et-tabs">
+            {[['info','📋 Інформація'], ['teams','👫 Команди']].map(([id, lbl]) => (
+              <button key={id} className={`db-et-tab-btn${activeTab === id ? ' active' : ''}`} onClick={() => setActiveTab(id)}>{lbl}</button>
+            ))}
+          </div>
+
           {activeTab === 'info' && (
-            <form onSubmit={handleSubmit}>
-              <div className="db-form-row"><label>Назва *</label><input className="db-input" value={f.name} onChange={e => upd('name', e.target.value)} required /></div>
-              <div className="db-form-row"><label>Опис</label><textarea className="db-input" rows={2} value={f.description} onChange={e => upd('description', e.target.value)} /></div>
-              <div className="db-form-row"><label>Правила</label><textarea className="db-input" rows={2} value={f.rules} onChange={e => upd('rules', e.target.value)} /></div>
-              <div className="db-form-row-2">
-                <div className="db-form-row"><label>Старт</label><input className="db-input" type="date" value={f.start_date} onChange={e => upd('start_date', e.target.value)} /></div>
-                <div className="db-form-row"><label>Кінець</label><input className="db-input" type="date" value={f.end_date} onChange={e => upd('end_date', e.target.value)} /></div>
+            <form className="db-edit-tournament-form" onSubmit={handleSubmit}>
+              <div className="db-edit-field">
+                <label className="db-edit-label">Назва <span className="db-required">*</span></label>
+                <input className="db-input" value={name} onChange={e => setName(e.target.value)} required />
               </div>
-              <div className="db-form-row-2">
-                <div className="db-form-row"><label>Реєстрація від</label><input className="db-input" type="date" value={f.registration_start} onChange={e => upd('registration_start', e.target.value)} /></div>
-                <div className="db-form-row"><label>Реєстрація до</label><input className="db-input" type="date" value={f.registration_end} onChange={e => upd('registration_end', e.target.value)} /></div>
+              <div className="db-edit-field">
+                <label className="db-edit-label">Опис</label>
+                <textarea className="db-input db-textarea" rows={3} value={description} onChange={e => setDescription(e.target.value)} placeholder="Опис турніру..." />
               </div>
-              <div className="db-form-row-3">
-                <div className="db-form-row"><label>Макс. команд</label><input className="db-input" type="number" min="1" value={f.teams_limit} onChange={e => upd('teams_limit', e.target.value)} placeholder="∞" /></div>
-                <div className="db-form-row"><label>Мін. осіб</label><input className="db-input" type="number" min="1" max="20" value={f.min_team_size} onChange={e => upd('min_team_size', e.target.value)} /></div>
-                <div className="db-form-row"><label>Макс. осіб</label><input className="db-input" type="number" min="1" max="20" value={f.max_team_size} onChange={e => upd('max_team_size', e.target.value)} /></div>
+              <div className="db-edit-field">
+                <label className="db-edit-label">Правила</label>
+                <textarea className="db-input db-textarea" rows={3} value={rules} onChange={e => setRules(e.target.value)} placeholder="Правила турніру..." />
               </div>
-              <div className="db-form-actions" style={{ marginTop: 16 }}>
+              <div className="db-edit-row-2">
+                <div className="db-edit-field"><label className="db-edit-label">Старт</label><input type="date" className="db-input" value={startDate} onChange={e => setStartDate(e.target.value)} /></div>
+                <div className="db-edit-field"><label className="db-edit-label">Кінець</label><input type="date" className="db-input" value={endDate} onChange={e => setEndDate(e.target.value)} /></div>
+              </div>
+              <div className="db-edit-row-2">
+                <div className="db-edit-field"><label className="db-edit-label">Реєстрація від</label><input type="date" className="db-input" value={regStart} onChange={e => setRegStart(e.target.value)} /></div>
+                <div className="db-edit-field"><label className="db-edit-label">Реєстрація до</label><input type="date" className="db-input" value={regEnd} onChange={e => setRegEnd(e.target.value)} /></div>
+              </div>
+              <div className="db-edit-row-3">
+                <div className="db-edit-field"><label className="db-edit-label">Макс. команд</label><input type="number" className="db-input" min={0} value={teamsLimit} onChange={e => setTeamsLimit(e.target.value)} placeholder="—" /></div>
+                <div className="db-edit-field"><label className="db-edit-label">Мін. осіб</label><input type="number" className="db-input" min={1} value={minSize} onChange={e => setMinSize(e.target.value)} /></div>
+                <div className="db-edit-field"><label className="db-edit-label">Макс. осіб</label><input type="number" className="db-input" min={1} value={maxSize} onChange={e => setMaxSize(e.target.value)} /></div>
+              </div>
+              <div className="db-edit-field">
+                <label className="db-edit-label">Кількість раундів</label>
+                <input type="number" className="db-input" min={1} value={roundsCount} onChange={e => setRoundsCount(e.target.value)} />
+              </div>
+              <div className="db-edit-actions">
                 <button type="button" className="db-btn db-btn-ghost" onClick={onClose}>Скасувати</button>
-                <button type="submit" className="db-btn db-btn-primary" disabled={loading}>{loading ? 'Збереження...' : '💾 Зберегти'}</button>
+                <button type="submit" className="db-btn db-btn-primary db-btn-submit" disabled={loading}>{loading ? 'Збереження...' : '💾 Зберегти'}</button>
               </div>
             </form>
           )}
           {activeTab === 'teams' && (
-            <div>
+            <div style={{ marginTop: 16 }}>
               {teamsLoading ? (
                 <div style={{ padding: 24, textAlign: 'center', color: '#aaa' }}>Завантаження...</div>
               ) : tourTeams.length === 0 ? (
@@ -486,51 +505,69 @@ function CreateTournamentForm({ toast, onSuccess, onCancel }) {
 /* ── Application View Modal ──────────────────── */
 function ApplicationViewModal({ app, onClose, onAccept, onDecline }) {
   const STATUS_COLOR = { pending: '#f59e0b', accepted: '#16a34a', rejected: '#ef4444' };
-  const STATUS_LABEL_MAP = { pending: 'Очікує', accepted: 'Прийнято', rejected: 'Відхилено' };
+  const STATUS_LABEL_MAP = { pending: '⏳ Очікує', accepted: '✓ Прийнято', rejected: '✗ Відхилено' };
   const [viewProfile, setViewProfile] = useState(null);
+
+  const contacts = [
+    app.contact_email    && { icon: '📧', label: 'Email',    value: app.contact_email },
+    app.contact_telegram && { icon: '💬', label: 'Telegram', value: app.contact_telegram },
+    app.contact_phone    && { icon: '📱', label: 'Телефон',  value: app.contact_phone },
+  ].filter(Boolean);
 
   return (
     <>
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box modal-box--light" onClick={e => e.stopPropagation()} style={{ maxWidth: 520, padding: 0, overflow: 'hidden' }}>
-        <div className="db-mu-header" style={{ background: 'rgba(124,95,245,.1)' }}>
-          <div style={{ cursor: 'pointer' }} onClick={() => setViewProfile(app)} title="Переглянути профіль">
-            <UserAvatar user={app} size={44} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div className="db-mu-name" style={{ cursor: 'pointer', textDecoration: 'underline dotted' }}
-              onClick={() => setViewProfile(app)} title="Переглянути профіль">
-              {app.username}
+      <div className="modal-box modal-box--light db-tournament-modal" onClick={e => e.stopPropagation()}>
+        <button className="db-tm-close" onClick={onClose}>✕</button>
+        <div className="db-modal-scroll-body">
+
+          <div className="db-app-review-user" onClick={() => setViewProfile(app)} title="Переглянути профіль">
+            <UserAvatar user={app} size={48} />
+            <div className="db-app-review-user-info">
+              <span className="db-app-review-name">{app.username}</span>
+              <span className="db-app-review-email">{app.email}</span>
             </div>
-            <div className="db-mu-email">{app.email}</div>
+            <span className="db-app-review-status" style={{ '--status-c': STATUS_COLOR[app.status] || '#888' }}>
+              {STATUS_LABEL_MAP[app.status] || app.status}
+            </span>
           </div>
-          <span style={{ fontSize: 12, fontWeight: 600, color: STATUS_COLOR[app.status] || '#888', background: 'rgba(0,0,0,.2)', padding: '3px 10px', borderRadius: 20 }}>
-            {STATUS_LABEL_MAP[app.status] || app.status}
-          </span>
-          <button className="db-mu-close" onClick={onClose}>✕</button>
-        </div>
-        <div className="db-mu-body">
-          <div className="db-mu-section">
-            <label className="db-mu-label">💬 Мотивація</label>
-            <div style={{ background: 'rgba(255,255,255,.04)', borderRadius: 8, padding: '12px 14px', fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-              {app.motivation || '—'}
-            </div>
+
+          <div className="db-app-review-section">
+            <label className="db-edit-label">💬 Мотивація</label>
+            <div className="db-app-review-text">{app.motivation || '—'}</div>
           </div>
-          <div className="db-mu-section">
-            <label className="db-mu-label">💼 Досвід та навички</label>
-            <div style={{ background: 'rgba(255,255,255,.04)', borderRadius: 8, padding: '12px 14px', fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap', color: app.experience ? 'inherit' : '#666' }}>
-              {app.experience || '—'}
-            </div>
+
+          <div className="db-app-review-section">
+            <label className="db-edit-label">💼 Досвід та навички</label>
+            <div className="db-app-review-text" style={{ color: app.experience ? undefined : '#999' }}>{app.experience || 'Не вказано'}</div>
           </div>
-          <div className="db-mu-section" style={{ color: '#888', fontSize: 12 }}>
-            📅 Подано: {formatDate(app.created_at)}
-          </div>
-          {app.status === 'pending' && (
-            <div className="db-form-actions" style={{ padding: '0 0 4px' }}>
-              <button className="db-btn db-btn-danger" onClick={() => { onDecline(app.id); onClose(); }}>❌ Відхилити</button>
-              <button className="db-btn db-btn-primary" style={{ background: '#16a34a' }} onClick={() => { onAccept(app.id); onClose(); }}>✓ Прийняти</button>
+
+          {contacts.length > 0 && (
+            <div className="db-app-review-section">
+              <label className="db-edit-label">📞 Контакти</label>
+              <div className="db-app-review-contacts">
+                {contacts.map(c => (
+                  <div key={c.label} className="db-app-review-contact-row">
+                    <span className="db-app-contact-icon">{c.icon}</span>
+                    <span className="db-app-review-contact-label">{c.label}</span>
+                    <span className="db-app-review-contact-value">{c.value}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
+
+          <div className="db-app-review-meta">
+            📅 Подано: {formatDate(app.created_at)}
+          </div>
+
+          {app.status === 'pending' && (
+            <div className="db-app-review-actions">
+              <button className="db-btn db-btn-danger db-app-review-btn" onClick={() => { onDecline(app.id); onClose(); }}>❌ Відхилити</button>
+              <button className="db-btn db-btn-primary db-app-review-btn db-app-review-btn--accept" onClick={() => { onAccept(app.id); onClose(); }}>✓ Прийняти</button>
+            </div>
+          )}
+
         </div>
       </div>
     </div>
@@ -616,6 +653,9 @@ export default function TabAdmin({ toast }) {
     } catch { toast.error('Помилка завантаження'); }
     finally { setLoading(false); }
   }, [toast]);
+
+  // Load applications on mount so badge count shows immediately
+  useEffect(() => { loadApplications(); }, [loadApplications]);
 
   const loadTeams = useCallback(async () => {
     try { setAdminTeams(await getAdminTeams()); } catch {}

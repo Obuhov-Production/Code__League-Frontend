@@ -132,13 +132,25 @@
   - `teams_limit` = null означає без ліміту
   - `rounds_count >= 1`
 
-### `PATCH /api/tournaments/:id`
-- **Що робить:** Оновити турнір
+### `PATCH /api/tournaments/:id` ⚠️ КРИТИЧНИЙ — використовується формою редагування
+- **Що робить:** Оновити турнір (форма редагування з фронтенду)
 - **Auth:** Так (organizer / admin)
+- **Body:** `{ name?, description?, rules?, start_date?, end_date?, registration_start?, registration_end?, teams_limit?, min_team_size?, max_team_size?, rounds_count? }`
 - **Перевірити:**
-  - Часткове оновлення
-  - Не можна міняти якщо статус = finished
-  - Перевірка прав (тільки творець або admin)
+  - Часткове оновлення (PATCH — тільки передані поля)
+  - `name` — не порожній, мін. 3 символи
+  - `description` і `rules` — допускають null (видалення)
+  - Валідація дат: `registration_start < registration_end <= start_date < end_date`
+  - `min_team_size <= max_team_size`, обидва >= 1
+  - `teams_limit` = null означає без ліміту; якщо число — >= 0
+  - `rounds_count >= 1`
+  - Не можна міняти якщо статус = finished (→ 400)
+  - Перевірка прав: тільки творець турніру або admin
+  - Якщо зменшують `teams_limit` нижче поточного `teams_count` → помилка 400
+  - Якщо зменшують `max_team_size` — перевірити існуючі команди
+  - Повертає оновлений об'єкт турніру
+  - **Реалізація:** SQL `UPDATE tournaments SET ... WHERE id = $1 RETURNING *`
+  - **Використовується на фронтенді:** TabTournaments (модальне вікно перегляду), TabOrganizer (вкладка «Турніри»), TabAdmin (вкладка «Турніри» з табами Info/Команди)
 
 ### `PATCH /api/tournaments/:id/status`
 - **Що робить:** Змінити статус турніру
@@ -371,32 +383,43 @@
 
 ## 8. ORGANIZER APPLICATIONS (Заявки на організатора)
 
-### `POST /api/applications/organizer`
+### `POST /api/applications/organizer` ⚠️ ОНОВЛЕНО — додані контактні дані
 - **Що робить:** Подати заявку
 - **Auth:** Так
-- **Body:** `{ motivation, experience, ... }`
+- **Body:** `{ motivation, experience?, contact_email?, contact_telegram?, contact_phone? }`
 - **Перевірити:**
-  - Одна активна заявка на юзера
-  - Повторна заявка якщо попередня rejected — дозволити
+  - `motivation` — обов'язкове, не порожнє, макс 1000 символів
+  - `experience` — опціональне, макс 500 символів
+  - Хоча б одне контактне поле (`contact_email`, `contact_telegram`, `contact_phone`) повинно бути заповнене
+  - `contact_email` — валідація формату email
+  - `contact_telegram` — очистити від зайвих символів, допустити з/без @
+  - `contact_phone` — допустити різні формати
+  - Одна активна заявка на юзера (статус = pending)
+  - Повторна заявка якщо попередня rejected — дозволити (створити нову)
+  - **DB:** таблиця `organizer_applications` потребує колонки: `contact_email`, `contact_telegram`, `contact_phone`
 
 ### `GET /api/applications/organizer/my`
 - **Що робить:** Моя заявка
 - **Auth:** Так
 - **Перевірити:**
   - Повертає `null` якщо немає
-  - `{ id, status: "pending" | "approved" | "rejected", ... }`
+  - `{ id, status, motivation, experience, contact_email, contact_telegram, contact_phone, created_at }`
 
 ### `GET /api/admin/applications/organizer`
 - **Що робить:** Всі заявки (для адміна)
 - **Auth:** Так (admin)
+- **Перевірити:**
+  - Повертає масив з username, email, user_avatar_url, + всі поля заявки (включно з контактами)
+  - Сортування: спочатку pending, потім по даті
 
 ### `PATCH /api/admin/applications/organizer/:id`
 - **Що робить:** Розглянути заявку
 - **Auth:** Так (admin)
-- **Body:** `{ status: "approved" | "rejected" }`
+- **Body:** `{ status: "accepted" | "rejected" }`
 - **Перевірити:**
-  - При `approved` → автоматично ставити роль `organizer`
+  - При `accepted` → автоматично ставити роль `organizer`
   - Відправити нотифікацію юзеру
+  - Не можна змінити вже оброблену заявку (accepted/rejected → 400)
 
 ---
 

@@ -967,6 +967,277 @@
 .db-btn-cancel-link:hover { color: #666; }
 
 /* ═══════════════════════════════════════════════════
+   TOURNAMENT EDIT FORM
+═══════════════════════════════════════════════════ */
+.db-edit-tournament-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.db-edit-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #f0eeff;
+}
+.db-edit-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #191A23;
+  margin: 0;
+  letter-spacing: -.2px;
+  line-height: 1.3;
+}
+.db-edit-id {
+  font-size: 12px;
+  font-weight: 600;
+  color: #7c5ff5;
+}
+.db-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.db-edit-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  color: #888;
+}
+.db-edit-label .db-required { color: #e57373; }
+.db-textarea {
+  height: auto !important;
+  padding: 12px 16px !important;
+  resize: vertical !important;
+  overflow: auto !important;
+  min-height: 64px;
+  max-height: 340px;
+  line-height: 1.5;
+}
+.db-edit-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.db-edit-row-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+}
+.db-edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #f0eeff;
+}
+.db-edit-actions .db-btn-ghost {
+  border: 1.5px solid #e0daf5;
+  border-radius: 12px;
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  background: #fff;
+  color: #555;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.db-edit-actions .db-btn-ghost:hover {
+  border-color: #AC9EF8;
+  background: #faf8ff;
+}
+.db-edit-actions .db-btn-submit {
+  flex: 1;
+}
+.db-btn-edit-tournament {
+  width: 100%;
+  justify-content: center;
+  border: 1.5px dashed #d5cef0;
+  border-radius: 14px;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #7c5ff5;
+  background: #faf8ff;
+  cursor: pointer;
+  transition: border-color .15s, background .15s, color .15s;
+  margin-bottom: 4px;
+}
+.db-btn-edit-tournament:hover {
+  border-color: #AC9EF8;
+  background: #f3f0ff;
+  color: #6b4fe0;
+}
+
+/* ═══════════════════════════════════════════════════
+   APPLICATION FORM (user) & REVIEW (admin)
+═══════════════════════════════════════════════════ */
+.db-app-header-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.db-app-header-icon {
+  font-size: 32px;
+  flex-shrink: 0;
+}
+.db-app-header-sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #999;
+  line-height: 1.4;
+}
+.db-app-char-count {
+  font-size: 11.5px;
+  color: #bbb;
+  text-align: right;
+  margin-top: 2px;
+}
+.db-app-contacts-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #faf8ff;
+  border: 1.5px solid #ece8fd;
+  border-radius: 14px;
+  padding: 18px;
+}
+.db-app-contacts-hint {
+  margin: 0;
+  font-size: 12.5px;
+  color: #999;
+  line-height: 1.4;
+}
+.db-app-contact-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.db-app-contact-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.db-app-contact-icon {
+  flex-shrink: 0;
+  width: 28px;
+  text-align: center;
+  font-size: 16px;
+}
+.db-app-contact-row .db-input {
+  flex: 1;
+}
+
+/* ── review modal (admin) ── */
+.db-app-review-user {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  background: #faf8ff;
+  border: 1.5px solid #ece8fd;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+  margin-bottom: 6px;
+}
+.db-app-review-user:hover {
+  border-color: #AC9EF8;
+  background: #f3f0ff;
+}
+.db-app-review-user-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.db-app-review-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #191A23;
+}
+.db-app-review-email {
+  font-size: 13px;
+  color: #999;
+}
+.db-app-review-status {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--status-c, #888);
+  background: rgba(0,0,0,.04);
+  padding: 4px 12px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.db-app-review-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.db-app-review-text {
+  background: #faf9ff;
+  border: 1px solid #f0eeff;
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 14px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  color: #333;
+}
+.db-app-review-contacts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.db-app-review-contact-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: #faf9ff;
+  border: 1px solid #f0eeff;
+  border-radius: 10px;
+}
+.db-app-review-contact-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #999;
+  min-width: 70px;
+}
+.db-app-review-contact-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+.db-app-review-meta {
+  font-size: 12px;
+  color: #aaa;
+  padding: 4px 0;
+}
+.db-app-review-actions {
+  display: flex;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #f0eeff;
+}
+.db-app-review-btn {
+  flex: 1;
+  justify-content: center;
+  padding: 13px 20px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.db-app-review-btn--accept {
+  background: #16a34a !important;
+}
+.db-app-review-btn--accept:hover {
+  background: #15803d !important;
+}
+
+/* ═══════════════════════════════════════════════════
    TEAMS
 ═══════════════════════════════════════════════════ */
 .db-team-list { display: flex; flex-direction: column; gap: 10px; }
@@ -2398,8 +2669,9 @@
   box-shadow:
     0 0 0 1.5px rgba(172,158,248,.30),
     0 8px 32px rgba(0,0,0,.10),
-    0 32px 80px rgba(0,0,0,.16),
-    inset 0 3px 0 #AC9EF8;
+    0 32px 80px rgba(0,0,0,.16);
+  border-top: 3px solid #AC9EF8;
+  overflow: hidden;
   position: relative;
   z-index: 1050;
   animation: db-modal-in .28s cubic-bezier(0.34,1.56,0.64,1) both;
@@ -2441,6 +2713,7 @@
 .db-usm-results {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -2458,12 +2731,12 @@
   border: 1px solid rgba(172,158,248,.14);
   background: #faf9ff;
   cursor: pointer;
-  transition: background .12s, border-color .12s, transform .12s;
+  transition: background .12s, border-color .12s, box-shadow .12s;
 }
 .db-usm-card:hover {
   background: rgba(172,158,248,.1);
   border-color: rgba(172,158,248,.3);
-  transform: translateX(3px);
+  box-shadow: 0 2px 8px rgba(124,95,245,.08);
 }
 .db-usm-info {
   display: flex;
@@ -4809,6 +5082,10 @@
   .db-form-actions { flex-direction: column; gap: 8px; }
   .db-form-actions .db-btn { width: 100%; justify-content: center; }
   .db-btn-full { border-radius: 12px; }
+  .db-edit-row-2 { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .db-edit-row-3 { grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .db-edit-tournament-form { gap: 14px; }
+  .db-edit-title { font-size: 18px; }
 }
 
 @media (max-width: 480px) {
@@ -4829,4 +5106,9 @@
   .db-btn-submit { font-size: 14px; padding: 13px 20px; border-radius: 12px; }
   .db-btn-full { font-size: 14px; padding: 13px 20px; border-radius: 12px; }
   .db-modal-section--card { padding: 14px 16px; border-radius: 10px; }
+  .db-edit-row-2 { grid-template-columns: 1fr; gap: 10px; }
+  .db-edit-row-3 { grid-template-columns: 1fr; gap: 10px; }
+  .db-edit-actions { flex-direction: column; }
+  .db-edit-actions .db-btn-ghost { width: 100%; text-align: center; }
+  .db-edit-actions .db-btn-submit { width: 100%; }
 }
