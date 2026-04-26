@@ -5,7 +5,7 @@ import IconSearch      from '@images/dashboard_components/icon_search.svg?react'
 import logoImg         from '@images/logos/logo.png';
 
 import { getTournaments, getMyTeams, registerTeam, updateTeam, searchUsers, updateTournament } from '@utils/authApi';
-import { StatusBadge, ACCENT, formatDate, daysLeft, resolveAvatarUrl, hasRole } from './db.shared.jsx';
+import { StatusBadge, ACCENT, formatDate, daysLeft, resolveAvatarUrl, hasRole, TOURNAMENT_EMOJIS, TournamentForm } from './db.shared.jsx';
 
 function TeamRegForm({ tournament, toast, onSuccess, onCancel, user }) {
   const min = tournament.min_team_size || 2;
@@ -207,121 +207,6 @@ function TeamRegForm({ tournament, toast, onSuccess, onCancel, user }) {
 }
 
 /* ── helpers ────────────────────────── */
-function toDateInput(d) { if (!d) return ''; try { return new Date(d).toISOString().slice(0, 10); } catch { return ''; } }
-
-function TournamentEditForm({ tournament: t, toast, onSaved, onCancel }) {
-  const [name, setName]               = useState(t.name || '');
-  const [description, setDescription] = useState(t.description || '');
-  const [rules, setRules]             = useState(t.rules || '');
-  const [startDate, setStartDate]     = useState(toDateInput(t.start_date));
-  const [endDate, setEndDate]         = useState(toDateInput(t.end_date));
-  const [regStart, setRegStart]       = useState(toDateInput(t.registration_start));
-  const [regEnd, setRegEnd]           = useState(toDateInput(t.registration_end));
-  const [teamsLimit, setTeamsLimit]    = useState(t.teams_limit ?? '');
-  const [minSize, setMinSize]         = useState(t.min_team_size ?? 2);
-  const [maxSize, setMaxSize]         = useState(t.max_team_size ?? 5);
-  const [roundsCount, setRoundsCount] = useState(t.rounds_count ?? 1);
-  const [saving, setSaving]           = useState(false);
-
-  const handleSave = async e => {
-    e.preventDefault();
-    if (!name.trim()) { toast.error('Назва не може бути порожньою'); return; }
-    setSaving(true);
-    try {
-      const payload = {
-        name: name.trim(),
-        description: description.trim() || null,
-        rules: rules.trim() || null,
-        start_date: startDate || null,
-        end_date: endDate || null,
-        registration_start: regStart || null,
-        registration_end: regEnd || null,
-        teams_limit: teamsLimit === '' ? null : Number(teamsLimit),
-        min_team_size: Number(minSize),
-        max_team_size: Number(maxSize),
-        rounds_count: Number(roundsCount),
-      };
-      await updateTournament(t.id, payload);
-      toast.success('Турнір оновлено!');
-      onSaved();
-    } catch (err) { toast.error(err.message || 'Помилка збереження'); }
-    finally { setSaving(false); }
-  };
-
-  return (
-    <form className="db-edit-tournament-form" onSubmit={handleSave}>
-      <div className="db-edit-header">
-        <h3 className="db-edit-title">{t.name}</h3>
-        <span className="db-edit-id">id #{t.id}</span>
-      </div>
-
-      <div className="db-edit-field">
-        <label className="db-edit-label">Назва <span className="db-required">*</span></label>
-        <input className="db-input" value={name} onChange={e => setName(e.target.value)} required />
-      </div>
-
-      <div className="db-edit-field">
-        <label className="db-edit-label">Опис</label>
-        <textarea className="db-input db-textarea" rows={3} value={description} onChange={e => setDescription(e.target.value)} placeholder="Опис турніру..." />
-      </div>
-
-      <div className="db-edit-field">
-        <label className="db-edit-label">Правила</label>
-        <textarea className="db-input db-textarea" rows={3} value={rules} onChange={e => setRules(e.target.value)} placeholder="Правила турніру..." />
-      </div>
-
-      <div className="db-edit-row-2">
-        <div className="db-edit-field">
-          <label className="db-edit-label">Старт</label>
-          <input type="date" className="db-input" value={startDate} onChange={e => setStartDate(e.target.value)} />
-        </div>
-        <div className="db-edit-field">
-          <label className="db-edit-label">Кінець</label>
-          <input type="date" className="db-input" value={endDate} onChange={e => setEndDate(e.target.value)} />
-        </div>
-      </div>
-
-      <div className="db-edit-row-2">
-        <div className="db-edit-field">
-          <label className="db-edit-label">Реєстрація від</label>
-          <input type="date" className="db-input" value={regStart} onChange={e => setRegStart(e.target.value)} />
-        </div>
-        <div className="db-edit-field">
-          <label className="db-edit-label">Реєстрація до</label>
-          <input type="date" className="db-input" value={regEnd} onChange={e => setRegEnd(e.target.value)} />
-        </div>
-      </div>
-
-      <div className="db-edit-row-3">
-        <div className="db-edit-field">
-          <label className="db-edit-label">Макс. команд</label>
-          <input type="number" className="db-input" min={0} value={teamsLimit} onChange={e => setTeamsLimit(e.target.value)} placeholder="—" />
-        </div>
-        <div className="db-edit-field">
-          <label className="db-edit-label">Мін. осіб</label>
-          <input type="number" className="db-input" min={1} value={minSize} onChange={e => setMinSize(e.target.value)} />
-        </div>
-        <div className="db-edit-field">
-          <label className="db-edit-label">Макс. осіб</label>
-          <input type="number" className="db-input" min={1} value={maxSize} onChange={e => setMaxSize(e.target.value)} />
-        </div>
-      </div>
-
-      <div className="db-edit-field">
-        <label className="db-edit-label">Кількість раундів</label>
-        <input type="number" className="db-input" min={1} value={roundsCount} onChange={e => setRoundsCount(e.target.value)} />
-      </div>
-
-      <div className="db-edit-actions">
-        <button type="button" className="db-btn db-btn-ghost" onClick={onCancel}>Скасувати</button>
-        <button type="submit" className="db-btn db-btn-primary db-btn-submit" disabled={saving}>
-          {saving ? 'Збереження...' : '💾 Зберегти'}
-        </button>
-      </div>
-    </form>
-  );
-}
-
 function TournamentModal({ tournament: t, user, toast, initReg, isRegistered, onClose, onRegistered }) {
   const [showReg, setShowReg] = useState(initReg && !isRegistered);
   const [showEdit, setShowEdit] = useState(false);
@@ -337,9 +222,17 @@ function TournamentModal({ tournament: t, user, toast, initReg, isRegistered, on
         <div className="modal-box modal-box--light db-tournament-modal" onClick={e => e.stopPropagation()}>
           <button className="db-tm-close" onClick={onClose}>✕</button>
           <div className="db-modal-scroll-body">
-            <TournamentEditForm tournament={t} toast={toast}
-              onSaved={() => { onRegistered(); onClose(); }}
-              onCancel={() => setShowEdit(false)} />
+            <TournamentForm
+              mode="edit"
+              tournament={t}
+              onSubmit={async (payload) => {
+                await updateTournament(t.id, payload);
+                toast.success('Турнір оновлено!');
+                onRegistered();
+                onClose();
+              }}
+              onCancel={() => setShowEdit(false)}
+            />
           </div>
         </div>
       </div>
@@ -483,15 +376,40 @@ export default function TabTournaments({ user, toast }) {
             const dl = daysLeft(t.registration_end);
             return (
               <div key={t.id} className="db-tournament-card" onClick={() => { setSelected(t); setOpenReg(false); }}>
-                <div className="db-tc-accent" style={{ background: ac }} />
+                <div className="db-tc-header" style={{ background: `linear-gradient(135deg, ${ac} 0%, ${ac}dd 100%)` }}>
+                  <div className="db-tc-header-icon">{t.emoji || '🏆'}</div>
+                  <StatusBadge status={t.status} />
+                </div>
                 <div className="db-tc-body">
-                  <div className="db-tournament-card-top"><h3>{t.name}</h3><StatusBadge status={t.status} /></div>
+                  <h3 className="db-tc-title">{t.name}</h3>
                   <p className="db-tournament-desc">{t.description || 'Опис відсутній'}</p>
-                  <div className="db-tournament-meta"><span>📅 {formatDate(t.start_date)} — {formatDate(t.end_date)}</span></div>
+
+                  <div className="db-tc-meta-grid">
+                    <div className="db-tc-meta-item">
+                      <span className="db-tc-meta-icon">📅</span>
+                      <span className="db-tc-meta-text">{formatDate(t.start_date)} — {formatDate(t.end_date)}</span>
+                    </div>
+                    <div className="db-tc-meta-item">
+                      <span className="db-tc-meta-icon">👥</span>
+                      <span className="db-tc-meta-text">{t.min_team_size}–{t.max_team_size} осіб</span>
+                    </div>
+                    {t.rounds_count > 0 && (
+                      <div className="db-tc-meta-item">
+                        <span className="db-tc-meta-icon">🔄</span>
+                        <span className="db-tc-meta-text">{t.rounds_count} {t.rounds_count === 1 ? 'раунд' : t.rounds_count < 5 ? 'раунди' : 'раундів'}</span>
+                      </div>
+                    )}
+                  </div>
+
                   {t.teams_limit > 0 && (
                     <div className="db-progress-wrap">
-                      <div className="db-progress-labels"><span>{t.teams_count || 0}/{t.teams_limit} команд</span><span>{regFill}%</span></div>
-                      <div className="db-progress-bar"><div className="db-progress-fill" style={{ width:`${regFill}%`, background: ac }} /></div>
+                      <div className="db-progress-labels">
+                        <span>{t.teams_count || 0} / {t.teams_limit} команд</span>
+                        <span className="db-progress-pct" style={{ color: ac }}>{regFill}%</span>
+                      </div>
+                      <div className="db-progress-bar">
+                        <div className="db-progress-fill" style={{ width: `${regFill}%`, background: ac }} />
+                      </div>
                     </div>
                   )}
                   <div className="db-tournament-footer">

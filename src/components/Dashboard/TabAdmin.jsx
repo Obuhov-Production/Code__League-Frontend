@@ -10,7 +10,7 @@ import {
   getAdminOrganizerApplications, reviewOrganizerApplication,
   getAdminUserBadges, adminGrantBadge, adminRevokeBadge,
 } from '@utils/authApi';
-import { StatusBadge, RoleBadges, CustomSelect, ConfirmModal, formatDate, STATUS_LABEL, UserAvatar, UserProfileModal, ALL_BADGES } from './db.shared.jsx';
+import { StatusBadge, RoleBadges, CustomSelect, ConfirmModal, formatDate, STATUS_LABEL, UserAvatar, UserProfileModal, ALL_BADGES, TournamentForm, TOURNAMENT_EMOJIS } from './db.shared.jsx';
 
 /* ── Options for tournament form ───────────────────── */
 const CATEGORY_OPTIONS = [
@@ -241,18 +241,6 @@ function toDateInput(d) { if (!d) return ''; try { return new Date(d).toISOStrin
 
 /* ── Edit Tournament Modal ──────────────────────────── */
 function EditTournamentModal({ tournament, allTeams, toast, onClose, onSuccess, onDeleteTeam }) {
-  const [name, setName]               = useState(tournament.name || '');
-  const [description, setDescription] = useState(tournament.description || '');
-  const [rules, setRules]             = useState(tournament.rules || '');
-  const [startDate, setStartDate]     = useState(toDateInput(tournament.start_date));
-  const [endDate, setEndDate]         = useState(toDateInput(tournament.end_date));
-  const [regStart, setRegStart]       = useState(toDateInput(tournament.registration_start));
-  const [regEnd, setRegEnd]           = useState(toDateInput(tournament.registration_end));
-  const [teamsLimit, setTeamsLimit]    = useState(tournament.teams_limit ?? '');
-  const [minSize, setMinSize]         = useState(tournament.min_team_size ?? 2);
-  const [maxSize, setMaxSize]         = useState(tournament.max_team_size ?? 5);
-  const [roundsCount, setRoundsCount] = useState(tournament.rounds_count ?? 1);
-  const [loading,      setLoading]      = useState(false);
   const [activeTab,    setActiveTab]    = useState('info');
   const [tourTeams,    setTourTeams]    = useState([]);
   const [teamsLoading, setTeamsLoading] = useState(false);
@@ -271,29 +259,6 @@ function EditTournamentModal({ tournament, allTeams, toast, onClose, onSuccess, 
     }
   }, [activeTab, allTeams, tournament.id]);
 
-  const handleSubmit = async e => {
-    e.preventDefault();
-    if (!name.trim()) { toast.error('Назва не може бути порожньою'); return; }
-    setLoading(true);
-    try {
-      await updateTournament(tournament.id, {
-        name: name.trim(),
-        description: description.trim() || null,
-        rules: rules.trim() || null,
-        start_date: startDate || null,
-        end_date: endDate || null,
-        registration_start: regStart || null,
-        registration_end: regEnd || null,
-        teams_limit: teamsLimit === '' ? null : Number(teamsLimit),
-        min_team_size: Number(minSize),
-        max_team_size: Number(maxSize),
-        rounds_count: Number(roundsCount),
-      });
-      onSuccess();
-    } catch (err) { toast.error(err.message); }
-    finally { setLoading(false); }
-  };
-
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box modal-box--light db-tournament-modal" onClick={e => e.stopPropagation()}>
@@ -310,41 +275,16 @@ function EditTournamentModal({ tournament, allTeams, toast, onClose, onSuccess, 
           </div>
 
           {activeTab === 'info' && (
-            <form className="db-edit-tournament-form" onSubmit={handleSubmit}>
-              <div className="db-edit-field">
-                <label className="db-edit-label">Назва <span className="db-required">*</span></label>
-                <input className="db-input" value={name} onChange={e => setName(e.target.value)} required />
-              </div>
-              <div className="db-edit-field">
-                <label className="db-edit-label">Опис</label>
-                <textarea className="db-input db-textarea" rows={3} value={description} onChange={e => setDescription(e.target.value)} placeholder="Опис турніру..." />
-              </div>
-              <div className="db-edit-field">
-                <label className="db-edit-label">Правила</label>
-                <textarea className="db-input db-textarea" rows={3} value={rules} onChange={e => setRules(e.target.value)} placeholder="Правила турніру..." />
-              </div>
-              <div className="db-edit-row-2">
-                <div className="db-edit-field"><label className="db-edit-label">Старт</label><input type="date" className="db-input" value={startDate} onChange={e => setStartDate(e.target.value)} /></div>
-                <div className="db-edit-field"><label className="db-edit-label">Кінець</label><input type="date" className="db-input" value={endDate} onChange={e => setEndDate(e.target.value)} /></div>
-              </div>
-              <div className="db-edit-row-2">
-                <div className="db-edit-field"><label className="db-edit-label">Реєстрація від</label><input type="date" className="db-input" value={regStart} onChange={e => setRegStart(e.target.value)} /></div>
-                <div className="db-edit-field"><label className="db-edit-label">Реєстрація до</label><input type="date" className="db-input" value={regEnd} onChange={e => setRegEnd(e.target.value)} /></div>
-              </div>
-              <div className="db-edit-row-3">
-                <div className="db-edit-field"><label className="db-edit-label">Макс. команд</label><input type="number" className="db-input" min={0} value={teamsLimit} onChange={e => setTeamsLimit(e.target.value)} placeholder="—" /></div>
-                <div className="db-edit-field"><label className="db-edit-label">Мін. осіб</label><input type="number" className="db-input" min={1} value={minSize} onChange={e => setMinSize(e.target.value)} /></div>
-                <div className="db-edit-field"><label className="db-edit-label">Макс. осіб</label><input type="number" className="db-input" min={1} value={maxSize} onChange={e => setMaxSize(e.target.value)} /></div>
-              </div>
-              <div className="db-edit-field">
-                <label className="db-edit-label">Кількість раундів</label>
-                <input type="number" className="db-input" min={1} value={roundsCount} onChange={e => setRoundsCount(e.target.value)} />
-              </div>
-              <div className="db-edit-actions">
-                <button type="button" className="db-btn db-btn-ghost" onClick={onClose}>Скасувати</button>
-                <button type="submit" className="db-btn db-btn-primary db-btn-submit" disabled={loading}>{loading ? 'Збереження...' : '💾 Зберегти'}</button>
-              </div>
-            </form>
+            <TournamentForm
+              mode="edit"
+              tournament={tournament}
+              onSubmit={async (payload) => {
+                await updateTournament(tournament.id, payload);
+                toast.success('Турнір оновлено!');
+                onSuccess();
+              }}
+              onCancel={onClose}
+            />
           )}
           {activeTab === 'teams' && (
             <div style={{ marginTop: 16 }}>
@@ -391,7 +331,9 @@ function CreateTournamentForm({ toast, onSuccess, onCancel }) {
     start_date: today, end_date: '',
     registration_start: today, registration_end: '',
     teams_limit: '', rounds_count: 1, min_team_size: 2, max_team_size: 5,
+    emoji: '🏆',
   });
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const upd = (k, v) => setF(x => ({ ...x, [k]: v }));
 
@@ -405,6 +347,7 @@ function CreateTournamentForm({ toast, onSuccess, onCancel }) {
         rounds_count:  Number(f.rounds_count),
         min_team_size: Number(f.min_team_size),
         max_team_size: Number(f.max_team_size),
+        emoji: f.emoji || '🏆',
       });
       onSuccess();
     } catch (err) { toast.error(err.message); }
@@ -414,14 +357,36 @@ function CreateTournamentForm({ toast, onSuccess, onCancel }) {
   return (
     <form className="db-create-form" onSubmit={handleSubmit}>
 
-      {/* Header */}
+      {/* Header with emoji picker */}
       <div className="db-create-form-header">
-        <div className="db-create-form-icon">🏆</div>
+        <div className="db-create-form-icon" style={{ cursor: 'pointer', position: 'relative' }} onClick={() => setShowEmojiPicker(v => !v)}>
+          {f.emoji}
+          <span style={{ position: 'absolute', bottom: -2, right: -2, fontSize: 10 }}>✏️</span>
+        </div>
         <div>
           <h3>Новий турнір</h3>
           <p>Заповніть інформацію для створення турніру</p>
         </div>
       </div>
+
+      {/* Emoji picker */}
+      {showEmojiPicker && (
+        <div className="db-cfs-section">
+          <div className="db-cfs-title"><span className="db-cfs-icon">🎨</span> Оберіть іконку турніру</div>
+          <div className="db-emoji-grid">
+            {TOURNAMENT_EMOJIS.map(e => (
+              <button
+                key={e}
+                type="button"
+                className={`db-emoji-item${f.emoji === e ? ' active' : ''}`}
+                onClick={() => { upd('emoji', e); setShowEmojiPicker(false); }}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Section: Основна інформація */}
       <div className="db-cfs-section">
@@ -522,7 +487,7 @@ function ApplicationViewModal({ app, onClose, onAccept, onDecline }) {
         <div className="db-modal-scroll-body">
 
           <div className="db-app-review-user" onClick={() => setViewProfile(app)} title="Переглянути профіль">
-            <UserAvatar user={app} size={48} />
+            <UserAvatar user={app} size={48} showStatus={true} />
             <div className="db-app-review-user-info">
               <span className="db-app-review-name">{app.username}</span>
               <span className="db-app-review-email">{app.email}</span>
@@ -617,12 +582,92 @@ export default function TabAdmin({ toast }) {
   const [savingSettings, setSavingSettings] = useState(false);
   const [creatingRoom,   setCreatingRoom]   = useState(false);
 
+  // Users management state
+  const [userSearch, setUserSearch] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState('all');
+  const [userSortBy, setUserSortBy] = useState('created_at');
+  const [userSortDesc, setUserSortDesc] = useState(true);
+  const [selectedUsers, setSelectedUsers] = useState([]);
+
   const ALL_CHAT_ROOMS = useMemo(() => [
     { id: 'general',     label: '# загальний' },
     { id: 'tournaments', label: '# турніри' },
     { id: 'offtopic',    label: '# офф-топік' },
     ...customRooms.map(r => ({ id: r.name, label: `# ${r.label}`, customId: r.id })),
   ], [customRooms]);
+
+  // Filtered and sorted users
+  const filteredUsers = useMemo(() => {
+    let result = [...users];
+    
+    // Search filter
+    if (userSearch.trim()) {
+      const query = userSearch.toLowerCase();
+      result = result.filter(u => 
+        (u.username?.toLowerCase().includes(query)) ||
+        (u.email?.toLowerCase().includes(query))
+      );
+    }
+    
+    // Role filter
+    if (userRoleFilter !== 'all') {
+      result = result.filter(u => u.role?.includes(userRoleFilter));
+    }
+    
+    // Sorting
+    result.sort((a, b) => {
+      let aVal, bVal;
+      switch (userSortBy) {
+        case 'username':
+          aVal = a.username?.toLowerCase() || '';
+          bVal = b.username?.toLowerCase() || '';
+          break;
+        case 'email':
+          aVal = a.email?.toLowerCase() || '';
+          bVal = b.email?.toLowerCase() || '';
+          break;
+        case 'role':
+          aVal = a.role || '';
+          bVal = b.role || '';
+          break;
+        case 'created_at':
+        default:
+          aVal = new Date(a.created_at || 0);
+          bVal = new Date(b.created_at || 0);
+          return userSortDesc ? bVal - aVal : aVal - bVal;
+      }
+      if (aVal < bVal) return userSortDesc ? 1 : -1;
+      if (aVal > bVal) return userSortDesc ? -1 : 1;
+      return 0;
+    });
+    
+    return result;
+  }, [users, userSearch, userRoleFilter, userSortBy, userSortDesc]);
+
+  const toggleUserSelection = (userId) => {
+    setSelectedUsers(prev => 
+      prev.includes(userId) 
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
+  const selectAllUsers = () => {
+    if (selectedUsers.length === filteredUsers.length) {
+      setSelectedUsers([]);
+    } else {
+      setSelectedUsers(filteredUsers.map(u => u.id));
+    }
+  };
+
+  const handleSort = (column) => {
+    if (userSortBy === column) {
+      setUserSortDesc(!userSortDesc);
+    } else {
+      setUserSortBy(column);
+      setUserSortDesc(true);
+    }
+  };
 
   const loadChatData = useCallback(async () => {
     try { setCustomRooms(await getCustomChatRooms()); } catch {}
@@ -790,12 +835,73 @@ export default function TabAdmin({ toast }) {
     ...prev, [settingsRoom]: { ...(prev[settingsRoom] || {}), [k]: v },
   }));
 
+  // Новые карточки статистики - расширенный набор
   const adminStats = stats ? [
-    { label: 'Користувачів', value: stats.users,      color: '#AC9EF8', icon: '👤' },
-    { label: 'Команд',       value: stats.teams,       color: '#7c5ff5', icon: '👥' },
-    { label: 'Турнірів',     value: stats.tournaments, color: '#4ade80', icon: '🏆' },
-    { label: 'Повідомлень',  value: stats.messages,    color: '#0ea5e9', icon: '💬' },
-    { label: 'Заблоковано',  value: stats.banned,      color: '#f87171', icon: '🚫' },
+    { 
+      label: 'Live Tournaments', 
+      value: tournaments.filter(t => t.status === 'running').length, 
+      color: '#7c5ff5', 
+      icon: '🏆',
+      badge: { text: 'ACTIVE', color: '#4ade80', bg: 'rgba(74,222,128,.15)' },
+      trend: '+12%'
+    },
+    { 
+      label: 'Registered Teams', 
+      value: stats.teams, 
+      color: '#0ea5e9', 
+      icon: '👥',
+      badge: { text: '+14%', color: '#0ea5e9', bg: 'rgba(14,165,233,.1)' },
+      trend: null
+    },
+    { 
+      label: 'Total Submissions', 
+      value: stats.submissions || tournaments.reduce((s, t) => s + (t.submission_count || 0), 0), 
+      color: '#f59e0b', 
+      icon: '📤',
+      badge: { text: 'This Week', color: '#888', bg: 'rgba(136,136,136,.1)' },
+      trend: null
+    },
+    { 
+      label: 'Judges Assigned', 
+      value: users.filter(u => (u.role || '').includes('jury')).length, 
+      color: '#ec4899', 
+      icon: '⚖️',
+      badge: { text: 'PENDING', color: '#f59e0b', bg: 'rgba(245,158,11,.15)' },
+      trend: null
+    },
+    // Дополнительные карточки
+    { 
+      label: 'Total Users', 
+      value: stats.users, 
+      color: '#8b5cf6', 
+      icon: '👤',
+      badge: { text: 'PLATFORM', color: '#8b5cf6', bg: 'rgba(139,92,246,.1)' },
+      trend: '+8%'
+    },
+    { 
+      label: 'Active Now', 
+      value: stats.active_users || Math.round(stats.users * 0.15), 
+      color: '#22c55e', 
+      icon: '🟢',
+      badge: { text: 'ONLINE', color: '#22c55e', bg: 'rgba(34,197,94,.15)' },
+      trend: null
+    },
+    { 
+      label: 'Total Messages', 
+      value: stats.messages, 
+      color: '#06b6d4', 
+      icon: '💬',
+      badge: { text: 'CHAT', color: '#06b6d4', bg: 'rgba(6,182,212,.1)' },
+      trend: '+23%'
+    },
+    { 
+      label: 'Open Registration', 
+      value: tournaments.filter(t => t.status === 'registration').length, 
+      color: '#f97316', 
+      icon: '📝',
+      badge: { text: 'OPEN', color: '#f97316', bg: 'rgba(249,115,22,.15)' },
+      trend: null
+    },
   ] : [];
 
   const pendingAppsCount = applications.filter(a => a.status === 'pending').length;
@@ -840,14 +946,109 @@ export default function TabAdmin({ toast }) {
           {/* ─── OVERVIEW ─── */}
           {adminTab === 'overview' && (
             <div>
-              <div className="db-admin-stats" style={{ marginBottom: 24 }}>
+              {/* Stat Cards v2 - новый дизайн */}
+              <div className="db-admin-stats-v2" style={{ marginBottom: 24 }}>
                 {adminStats.map(s => (
-                  <div key={s.label} className="db-admin-stat" style={{ '--c': s.color }}>
-                    <span className="db-admin-stat-icon">{s.icon}</span>
-                    <span className="db-admin-stat-val">{s.value ?? '—'}</span>
-                    <span className="db-admin-stat-label">{s.label}</span>
+                  <div key={s.label} className="db-admin-stat-card" style={{ '--accent': s.color }}>
+                    <div className="db-admin-stat-card-header">
+                      <div className="db-admin-stat-card-icon" style={{ background: `${s.color}15` }}>{s.icon}</div>
+                      <div className="db-admin-stat-card-meta">
+                        {s.trend && (
+                          <span className="db-admin-stat-card-trend" style={{ color: '#22c55e' }}>
+                            ↗ {s.trend}
+                          </span>
+                        )}
+                        {s.badge && (
+                          <span className="db-admin-stat-card-badge" style={{ color: s.badge.color, background: s.badge.bg }}>
+                            {s.badge.text}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="db-admin-stat-card-body">
+                      <span className="db-admin-stat-card-value">{s.value ?? '—'}</span>
+                      <span className="db-admin-stat-card-label">{s.label}</span>
+                    </div>
                   </div>
                 ))}
+              </div>
+              
+              {/* Submission Activity Chart */}
+              <div className="db-admin-charts-row">
+                <div className="db-admin-chart-card">
+                  <div className="db-admin-chart-header">
+                    <div>
+                      <h3 className="db-admin-chart-title">Submission Activity</h3>
+                      <p className="db-admin-chart-subtitle">Daily submission volume across all active tournaments</p>
+                    </div>
+                    <select className="db-admin-chart-select">
+                      <option>Last 7 Days</option>
+                      <option>Last 30 Days</option>
+                    </select>
+                  </div>
+                  <div className="db-admin-chart-body">
+                    <svg viewBox="0 0 400 150" className="db-admin-chart-svg">
+                      <defs>
+                        <linearGradient id="chartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                          <stop offset="0%" stopColor="#AC9EF8" stopOpacity="0.3" />
+                          <stop offset="100%" stopColor="#AC9EF8" stopOpacity="0" />
+                        </linearGradient>
+                      </defs>
+                      {/* График линии */}
+                      <path 
+                        d="M0,120 Q50,100 100,80 T200,60 T300,40 T400,20" 
+                        fill="none" 
+                        stroke="#AC9EF8" 
+                        strokeWidth="2"
+                      />
+                      {/* Заливка под графиком */}
+                      <path 
+                        d="M0,120 Q50,100 100,80 T200,60 T300,40 T400,20 L400,150 L0,150 Z" 
+                        fill="url(#chartGradient)"
+                      />
+                      {/* Точки */}
+                      <circle cx="0" cy="120" r="4" fill="#AC9EF8" />
+                      <circle cx="100" cy="80" r="4" fill="#AC9EF8" />
+                      <circle cx="200" cy="60" r="4" fill="#AC9EF8" />
+                      <circle cx="300" cy="40" r="4" fill="#AC9EF8" />
+                      <circle cx="400" cy="20" r="4" fill="#AC9EF8" />
+                    </svg>
+                  </div>
+                </div>
+                
+                {/* Upcoming Deadlines */}
+                <div className="db-admin-deadlines-card">
+                  <div className="db-admin-deadlines-header">
+                    <h3 className="db-admin-deadlines-title">Upcoming Deadlines</h3>
+                    <button className="db-admin-deadlines-viewall">View All</button>
+                  </div>
+                  <div className="db-admin-deadlines-list">
+                    {tournaments
+                      .filter(t => t.status === 'registration' && t.registration_end)
+                      .slice(0, 3)
+                      .map(t => {
+                        const daysLeft = Math.ceil((new Date(t.registration_end) - new Date()) / 86400000);
+                        const progress = Math.max(0, Math.min(100, (daysLeft / 7) * 100));
+                        return (
+                          <div key={t.id} className="db-admin-deadline-item">
+                            <div className="db-admin-deadline-icon" style={{ background: daysLeft < 2 ? '#fef3c7' : '#ede9fe' }}>
+                              {daysLeft < 2 ? '⏰' : '🏆'}
+                            </div>
+                            <div className="db-admin-deadline-info">
+                              <strong>{t.name}</strong>
+                              <span>Closes in {daysLeft} days</span>
+                              <div className="db-admin-deadline-progress">
+                                <div className="db-admin-deadline-bar" style={{ width: `${progress}%`, background: daysLeft < 2 ? '#f59e0b' : '#7c5ff5' }} />
+                              </div>
+                            </div>
+                            <span className="db-admin-deadline-percent" style={{ color: daysLeft < 2 ? '#f59e0b' : '#7c5ff5' }}>
+                              {Math.round(progress)}%
+                            </span>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
               </div>
               <div className="db-admin-chat-grid">
                 <div className="db-admin-card">
@@ -958,7 +1159,7 @@ export default function TabAdmin({ toast }) {
                         <tr key={a.id}>
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <UserAvatar user={a} size={28} />
+                              <UserAvatar user={a} size={28} showStatus={true} />
                               <strong>{a.username}</strong>
                             </div>
                           </td>
@@ -1027,24 +1228,146 @@ export default function TabAdmin({ toast }) {
 
           {/* ─── USERS ─── */}
           {adminTab === 'users' && (
-            <div className="db-admin-table-wrap">
-              <table className="db-admin-table">
-                <thead><tr><th>#</th><th>Нікнейм</th><th>Email</th><th>Ролі</th><th>Реєстрація</th><th></th></tr></thead>
-                <tbody>
-                  {users.map(u => (
-                    <tr key={u.id} className={u.role?.includes('banned') ? 'row-banned' : ''}>
-                      <td style={{ color: '#bbb', fontSize: 12 }}>{u.id}</td>
-                      <td><strong>{u.username}</strong></td>
-                      <td style={{ fontSize: 13, color: '#888' }}>{u.email}</td>
-                      <td><RoleBadges role={u.role} /></td>
-                      <td style={{ fontSize: 13 }}>{formatDate(u.created_at)}</td>
-                      <td>
-                        <button className="db-btn db-btn-ghost db-btn-sm" onClick={() => setManageUser(u)}>Керувати</button>
-                      </td>
+            <div className="db-admin-users-section">
+              {/* Toolbar with search and filters */}
+              <div className="db-admin-users-toolbar">
+                <div className="db-admin-users-search">
+                  <span className="db-admin-search-icon">🔍</span>
+                  <input 
+                    type="text" 
+                    placeholder="Пошук за нікнеймом або email..."
+                    value={userSearch}
+                    onChange={e => setUserSearch(e.target.value)}
+                    className="db-admin-search-input"
+                  />
+                  {userSearch && (
+                    <button className="db-admin-search-clear" onClick={() => setUserSearch('')}>✕</button>
+                  )}
+                </div>
+                
+                <div className="db-admin-users-filters">
+                  <select 
+                    value={userRoleFilter} 
+                    onChange={e => setUserRoleFilter(e.target.value)}
+                    className="db-admin-filter-select"
+                  >
+                    <option value="all">👥 Всі ролі</option>
+                    <option value="admin">⚙️ Адмін</option>
+                    <option value="organizer">🗂️ Організатор</option>
+                    <option value="jury">⚖️ Журі</option>
+                    <option value="user">👤 Учасник</option>
+                    <option value="banned">🚫 Забанені</option>
+                  </select>
+                  
+                  {selectedUsers.length > 0 && (
+                    <div className="db-admin-bulk-actions">
+                      <span className="db-admin-selected-count">{selectedUsers.length} вибрано</span>
+                      <button className="db-btn db-btn-danger db-btn-sm" onClick={() => {/* bulk delete */}}>
+                        🗑 Видалити
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Stats bar */}
+              <div className="db-admin-users-stats">
+                <span>Всього: <strong>{users.length}</strong></span>
+                <span>Знайдено: <strong>{filteredUsers.length}</strong></span>
+                {selectedUsers.length > 0 && <span>Вибрано: <strong>{selectedUsers.length}</strong></span>}
+              </div>
+              
+              {/* Table */}
+              <div className="db-admin-table-wrap">
+                <table className="db-admin-table db-admin-users-table">
+                  <thead>
+                    <tr>
+                      <th className="db-admin-col-checkbox">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedUsers.length === filteredUsers.length && filteredUsers.length > 0}
+                          onChange={selectAllUsers}
+                        />
+                      </th>
+                      <th className="db-admin-col-avatar">Аватар</th>
+                      <th 
+                        className="db-admin-col-sortable" 
+                        onClick={() => handleSort('username')}
+                      >
+                        Нікнейм {userSortBy === 'username' && (userSortDesc ? '↓' : '↑')}
+                      </th>
+                      <th 
+                        className="db-admin-col-sortable" 
+                        onClick={() => handleSort('email')}
+                      >
+                        Email {userSortBy === 'email' && (userSortDesc ? '↓' : '↑')}
+                      </th>
+                      <th 
+                        className="db-admin-col-sortable" 
+                        onClick={() => handleSort('role')}
+                      >
+                        Ролі {userSortBy === 'role' && (userSortDesc ? '↓' : '↑')}
+                      </th>
+                      <th 
+                        className="db-admin-col-sortable" 
+                        onClick={() => handleSort('created_at')}
+                      >
+                        Реєстрація {userSortBy === 'created_at' && (userSortDesc ? '↓' : '↑')}
+                      </th>
+                      <th className="db-admin-col-status">Статус</th>
+                      <th></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {filteredUsers.length === 0 ? (
+                      <tr>
+                        <td colSpan="8" className="db-admin-users-empty">
+                          {userSearch || userRoleFilter !== 'all' 
+                            ? '🔍 Користувачів не знайдено' 
+                            : '👥 Немає користувачів'}
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredUsers.map(u => (
+                        <tr 
+                          key={u.id} 
+                          className={`${u.role?.includes('banned') ? 'row-banned' : ''} ${selectedUsers.includes(u.id) ? 'row-selected' : ''}`}
+                        >
+                          <td>
+                            <input 
+                              type="checkbox" 
+                              checked={selectedUsers.includes(u.id)}
+                              onChange={() => toggleUserSelection(u.id)}
+                            />
+                          </td>
+                          <td>
+                            <UserAvatar user={u} size={36} showStatus={true} />
+                          </td>
+                          <td>
+                            <div className="db-admin-user-info">
+                              <strong>{u.username}</strong>
+                              {u.github_username && <span className="db-admin-user-github">🐙 {u.github_username}</span>}
+                            </div>
+                          </td>
+                          <td style={{ fontSize: 13, color: '#666' }}>{u.email}</td>
+                          <td><RoleBadges role={u.role} /></td>
+                          <td style={{ fontSize: 13 }}>{formatDate(u.created_at)}</td>
+                          <td>
+                            <span className={`db-admin-user-status db-admin-user-status--${u.status || 'offline'}`}>
+                              {u.status === 'online' ? '🟢 Онлайн' : u.status === 'away' ? '🟡 Відійшов' : u.status === 'dnd' ? '🔴 Не турбувати' : '⚪ Офлайн'}
+                            </span>
+                          </td>
+                          <td>
+                            <button className="db-btn db-btn-ghost db-btn-sm" onClick={() => setManageUser(u)}>
+                              ⚙️ Керувати
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 

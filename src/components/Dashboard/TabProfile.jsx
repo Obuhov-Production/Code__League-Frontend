@@ -399,6 +399,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
           </h2>
           <div className="db-profile-chips">
             <span className="db-role-badge">{hasRole(user, 'admin') ? '🛡️ Адмін' : hasRole(user, 'organizer') ? '🗂️ Організатор' : hasRole(user, 'jury') ? '⚖ Журі' : '👤 Учасник'}</span>
+            <span className="db-chip db-chip-elo">⭐ ELO: {user?.elo ?? user?.exp ?? 0}</span>
             <span className="db-chip">🏆 Команд: {myTeams.length}</span>
             <span className="db-chip">📅 Зареєстровано: {formatDate(user.created_at)}</span>
           </div>
@@ -418,6 +419,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
 
       {/* Mobile chips row (shown below banner on mobile, hidden on desktop) */}
       <div className="db-profile-mobile-chips">
+        <span className="db-chip db-chip-elo">⭐ ELO: {user?.elo ?? user?.exp ?? 0}</span>
         <span className="db-chip">🏆 Команд: {myTeams.length}</span>
         <span className="db-chip">📅 {formatDate(user.created_at)}</span>
       </div>

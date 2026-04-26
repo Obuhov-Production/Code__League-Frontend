@@ -5,7 +5,7 @@ import {
   updateTournamentStatus, deleteTournament,
   getAdminTeams,
 } from '@utils/authApi';
-import { StatusBadge, CustomSelect, ConfirmModal, formatDate } from './db.shared.jsx';
+import { StatusBadge, CustomSelect, ConfirmModal, formatDate, TournamentForm, TOURNAMENT_EMOJIS } from './db.shared.jsx';
 
 /* ── Options ───────────────────────────────────────── */
 const CATEGORY_OPTIONS = [
@@ -83,91 +83,23 @@ function StatusPicker({ value, onChange, compact = false }) {
   );
 }
 
-/* ── helpers ── */
-function toDateInput(d) { if (!d) return ''; try { return new Date(d).toISOString().slice(0, 10); } catch { return ''; } }
-
 /* ── Edit Tournament Modal ─────────────────────────── */
 function EditTournamentModal({ tournament, toast, onClose, onSuccess }) {
-  const [name, setName]               = useState(tournament.name || '');
-  const [description, setDescription] = useState(tournament.description || '');
-  const [rules, setRules]             = useState(tournament.rules || '');
-  const [startDate, setStartDate]     = useState(toDateInput(tournament.start_date));
-  const [endDate, setEndDate]         = useState(toDateInput(tournament.end_date));
-  const [regStart, setRegStart]       = useState(toDateInput(tournament.registration_start));
-  const [regEnd, setRegEnd]           = useState(toDateInput(tournament.registration_end));
-  const [teamsLimit, setTeamsLimit]    = useState(tournament.teams_limit ?? '');
-  const [minSize, setMinSize]         = useState(tournament.min_team_size ?? 2);
-  const [maxSize, setMaxSize]         = useState(tournament.max_team_size ?? 5);
-  const [roundsCount, setRoundsCount] = useState(tournament.rounds_count ?? 1);
-  const [loading, setLoading]         = useState(false);
-
-  const handleSubmit = async e => {
-    e.preventDefault();
-    if (!name.trim()) { toast.error('Назва не може бути порожньою'); return; }
-    setLoading(true);
-    try {
-      await updateTournament(tournament.id, {
-        name: name.trim(),
-        description: description.trim() || null,
-        rules: rules.trim() || null,
-        start_date: startDate || null,
-        end_date: endDate || null,
-        registration_start: regStart || null,
-        registration_end: regEnd || null,
-        teams_limit: teamsLimit === '' ? null : Number(teamsLimit),
-        min_team_size: Number(minSize),
-        max_team_size: Number(maxSize),
-        rounds_count: Number(roundsCount),
-      });
-      onSuccess();
-    } catch (err) { toast.error(err.message); }
-    finally { setLoading(false); }
-  };
-
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box modal-box--light db-tournament-modal" onClick={e => e.stopPropagation()}>
         <button className="db-tm-close" onClick={onClose}>✕</button>
         <div className="db-modal-scroll-body">
-          <form className="db-edit-tournament-form" onSubmit={handleSubmit}>
-            <div className="db-edit-header">
-              <h3 className="db-edit-title">{tournament.name}</h3>
-              <span className="db-edit-id">id #{tournament.id}</span>
-            </div>
-            <div className="db-edit-field">
-              <label className="db-edit-label">Назва <span className="db-required">*</span></label>
-              <input className="db-input" value={name} onChange={e => setName(e.target.value)} required />
-            </div>
-            <div className="db-edit-field">
-              <label className="db-edit-label">Опис</label>
-              <textarea className="db-input db-textarea" rows={3} value={description} onChange={e => setDescription(e.target.value)} placeholder="Опис турніру..." />
-            </div>
-            <div className="db-edit-field">
-              <label className="db-edit-label">Правила</label>
-              <textarea className="db-input db-textarea" rows={3} value={rules} onChange={e => setRules(e.target.value)} placeholder="Правила турніру..." />
-            </div>
-            <div className="db-edit-row-2">
-              <div className="db-edit-field"><label className="db-edit-label">Старт</label><input type="date" className="db-input" value={startDate} onChange={e => setStartDate(e.target.value)} /></div>
-              <div className="db-edit-field"><label className="db-edit-label">Кінець</label><input type="date" className="db-input" value={endDate} onChange={e => setEndDate(e.target.value)} /></div>
-            </div>
-            <div className="db-edit-row-2">
-              <div className="db-edit-field"><label className="db-edit-label">Реєстрація від</label><input type="date" className="db-input" value={regStart} onChange={e => setRegStart(e.target.value)} /></div>
-              <div className="db-edit-field"><label className="db-edit-label">Реєстрація до</label><input type="date" className="db-input" value={regEnd} onChange={e => setRegEnd(e.target.value)} /></div>
-            </div>
-            <div className="db-edit-row-3">
-              <div className="db-edit-field"><label className="db-edit-label">Макс. команд</label><input type="number" className="db-input" min={0} value={teamsLimit} onChange={e => setTeamsLimit(e.target.value)} placeholder="—" /></div>
-              <div className="db-edit-field"><label className="db-edit-label">Мін. осіб</label><input type="number" className="db-input" min={1} value={minSize} onChange={e => setMinSize(e.target.value)} /></div>
-              <div className="db-edit-field"><label className="db-edit-label">Макс. осіб</label><input type="number" className="db-input" min={1} value={maxSize} onChange={e => setMaxSize(e.target.value)} /></div>
-            </div>
-            <div className="db-edit-field">
-              <label className="db-edit-label">Кількість раундів</label>
-              <input type="number" className="db-input" min={1} value={roundsCount} onChange={e => setRoundsCount(e.target.value)} />
-            </div>
-            <div className="db-edit-actions">
-              <button type="button" className="db-btn db-btn-ghost" onClick={onClose}>Скасувати</button>
-              <button type="submit" className="db-btn db-btn-primary db-btn-submit" disabled={loading}>{loading ? 'Збереження...' : '💾 Зберегти'}</button>
-            </div>
-          </form>
+          <TournamentForm
+            mode="edit"
+            tournament={tournament}
+            onSubmit={async (payload) => {
+              await updateTournament(tournament.id, payload);
+              toast.success('Турнір оновлено!');
+              onSuccess();
+            }}
+            onCancel={onClose}
+          />
         </div>
       </div>
     </div>
@@ -183,7 +115,9 @@ function CreateTournamentForm({ toast, onSuccess, onCancel }) {
     start_date: today, end_date: '',
     registration_start: today, registration_end: '',
     teams_limit: '', rounds_count: 1, min_team_size: 2, max_team_size: 5,
+    emoji: '🏆',
   });
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const upd = (k, v) => setF(x => ({ ...x, [k]: v }));
 
@@ -197,6 +131,7 @@ function CreateTournamentForm({ toast, onSuccess, onCancel }) {
         rounds_count:  Number(f.rounds_count),
         min_team_size: Number(f.min_team_size),
         max_team_size: Number(f.max_team_size),
+        emoji: f.emoji || '🏆',
       });
       onSuccess();
     } catch (err) { toast.error(err.message); }
@@ -205,13 +140,36 @@ function CreateTournamentForm({ toast, onSuccess, onCancel }) {
 
   return (
     <form className="db-create-form" onSubmit={handleSubmit}>
+      {/* Header with emoji picker */}
       <div className="db-create-form-header">
-        <div className="db-create-form-icon">🏆</div>
+        <div className="db-create-form-icon" style={{ cursor: 'pointer', position: 'relative' }} onClick={() => setShowEmojiPicker(v => !v)}>
+          {f.emoji}
+          <span style={{ position: 'absolute', bottom: -2, right: -2, fontSize: 10 }}>✏️</span>
+        </div>
         <div>
           <h3>Новий турнір</h3>
           <p>Заповніть інформацію для створення турніру</p>
         </div>
       </div>
+
+      {/* Emoji picker */}
+      {showEmojiPicker && (
+        <div className="db-cfs-section">
+          <div className="db-cfs-title"><span className="db-cfs-icon">🎨</span> Оберіть іконку турніру</div>
+          <div className="db-emoji-grid">
+            {TOURNAMENT_EMOJIS.map(e => (
+              <button
+                key={e}
+                type="button"
+                className={`db-emoji-item${f.emoji === e ? ' active' : ''}`}
+                onClick={() => { upd('emoji', e); setShowEmojiPicker(false); }}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="db-cfs-section">
         <div className="db-cfs-title"><span className="db-cfs-icon">📋</span> Основна інформація</div>

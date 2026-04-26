@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, __dirname, '')
   const frontendPort = Number(env.VITE_FRONTEND_PORT || 3000)
   const backendUrl = env.VITE_BACKEND_URL || 'http://localhost:3001'
+  const debugApi = env.VITE_DEBUG_API === 'true'
 
   return {
     plugins: [react(), svgr()],
@@ -43,14 +44,19 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           configure: (proxy) => {
             proxy.on('proxyReq', (proxyReq, req) => {
-              console.log(`[PROXY] ➜  ${req.method} ${req.url}  →  ${backendUrl}${req.url}`);
+              if (debugApi) {
+                console.log(`[PROXY] ➜  ${req.method} ${req.url}  →  ${backendUrl}${req.url}`);
+              }
             });
             proxy.on('proxyRes', (proxyRes, req) => {
-              const ok = proxyRes.statusCode < 400;
-              const icon = ok ? '✓' : '✗';
-              console.log(`[PROXY] ${icon}  ${proxyRes.statusCode} ${req.method} ${req.url}`);
+              if (debugApi) {
+                const ok = proxyRes.statusCode < 400;
+                const icon = ok ? '✓' : '✗';
+                console.log(`[PROXY] ${icon}  ${proxyRes.statusCode} ${req.method} ${req.url}`);
+              }
             });
             proxy.on('error', (err, req) => {
+              // Ошибки логируем всегда, даже без дебага
               console.error(`[PROXY] ERROR ${req.method} ${req.url}`, err.message);
             });
           },

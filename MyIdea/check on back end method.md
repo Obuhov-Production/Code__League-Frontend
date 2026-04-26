@@ -111,8 +111,12 @@
 - **Перевірити:**
   - Фільтрація по статусу працює
   - Без фільтра — повертає все
-  - Повертає: `[{ id, name, description, rules, status, start_date, end_date, registration_start, registration_end, min_team_size, max_team_size, teams_count, teams_limit, rounds_count }]`
+  - Повертає: `[{ id, name, description, rules, status, start_date, end_date, registration_start, registration_end, min_team_size, max_team_size, teams_count, teams_limit, rounds_count, emoji?, category?, format?, prize? }]`
   - `teams_count` — підрахунок зареєстрованих команд (COUNT)
+  - `emoji` — іконка турніру (emoji string, max 4 chars), nullable
+  - `category` — категорія: `hackathon|olympiad|marathon|sprint|challenge|other`
+  - `format` — формат: `online|offline|hybrid`
+  - `prize` — опис призів, string, nullable
   - Сортування: спочатку registration, потім active, потім finished
 
 ### `GET /api/tournaments/:id`
@@ -124,18 +128,23 @@
 ### `POST /api/tournaments`
 - **Що робить:** Створити турнір
 - **Auth:** Так (organizer / admin)
-- **Body:** `{ name, description?, rules?, start_date, end_date, registration_start, registration_end, min_team_size, max_team_size, teams_limit?, rounds_count }`
+- **Body:** `{ name, description?, rules?, start_date, end_date, registration_start, registration_end, min_team_size, max_team_size, teams_limit?, rounds_count, emoji?, category?, format?, prize?, status? }`
 - **Перевірити:**
   - Тільки organizer/admin може створювати
   - Валідація дат: `registration_start < registration_end < start_date < end_date`
   - `min_team_size <= max_team_size`
   - `teams_limit` = null означає без ліміту
   - `rounds_count >= 1`
+  - `emoji` — валідація: max 4 Unicode символів (emoji), або null
+  - `category` — enum: `['hackathon','olympiad','marathon','sprint','challenge','other']`, default: `'other'`
+  - `format` — enum: `['online','offline','hybrid']`, default: `'online'`
+  - `prize` — string (опис призів), max 500 chars, nullable
+  - `status` — enum: `['draft','registration','running','finished']`, default: `'draft'`
 
 ### `PATCH /api/tournaments/:id` ⚠️ КРИТИЧНИЙ — використовується формою редагування
 - **Що робить:** Оновити турнір (форма редагування з фронтенду)
 - **Auth:** Так (organizer / admin)
-- **Body:** `{ name?, description?, rules?, start_date?, end_date?, registration_start?, registration_end?, teams_limit?, min_team_size?, max_team_size?, rounds_count? }`
+- **Body:** `{ name?, description?, rules?, start_date?, end_date?, registration_start?, registration_end?, teams_limit?, min_team_size?, max_team_size?, rounds_count?, emoji?, category?, format?, prize? }`
 - **Перевірити:**
   - Часткове оновлення (PATCH — тільки передані поля)
   - `name` — не порожній, мін. 3 символи
@@ -144,11 +153,15 @@
   - `min_team_size <= max_team_size`, обидва >= 1
   - `teams_limit` = null означає без ліміту; якщо число — >= 0
   - `rounds_count >= 1`
+  - `emoji` — валідація: max 4 Unicode символів (emoji), або null для видалення
+  - `category` — enum: `['hackathon','olympiad','marathon','sprint','challenge','other']`
+  - `format` — enum: `['online','offline','hybrid']`
+  - `prize` — string, max 500 chars, nullable
   - Не можна міняти якщо статус = finished (→ 400)
   - Перевірка прав: тільки творець турніру або admin
   - Якщо зменшують `teams_limit` нижче поточного `teams_count` → помилка 400
   - Якщо зменшують `max_team_size` — перевірити існуючі команди
-  - Повертає оновлений об'єкт турніру
+  - Повертає оновлений об'єкт турніру (включаючи всі поля)
   - **Реалізація:** SQL `UPDATE tournaments SET ... WHERE id = $1 RETURNING *`
   - **Використовується на фронтенді:** TabTournaments (модальне вікно перегляду), TabOrganizer (вкладка «Турніри»), TabAdmin (вкладка «Турніри» з табами Info/Команди)
 
@@ -585,3 +598,113 @@
    /uploads/banners/   — банери
    /uploads/chat/      — файли чату
    ```
+
+---
+
+## 14. DB MIGRATIONS (Міграції бази даних)
+
+### Додати нові поля до таблиці `tournaments`
+```sql
+-- PostgreSQL
+ALTER TABLE tournaments 
+  ADD COLUMN emoji VARCHAR(16) NULL,
+  ADD COLUMN category VARCHAR(20) DEFAULT 'other',
+  ADD COLUMN format VARCHAR(10) DEFAULT 'online',
+  ADD COLUMN prize VARCHAR(500) NULL;
+
+-- Індекси для пошуку (опціонально)
+CREATE INDEX idx_tournaments_emoji ON tournaments(emoji) WHERE emoji IS NOT NULL;
+CREATE INDEX idx_tournaments_category ON tournaments(category);
+CREATE INDEX idx_tournaments_format ON tournaments(format);
+
+-- Обмеження для enum (опціонально, для PostgreSQL)
+ALTER TABLE tournaments 
+  ADD CONSTRAINT check_category CHECK (category IN ('hackathon','olympiad','marathon','sprint','challenge','other')),
+  ADD CONSTRAINT check_format CHECK (format IN ('online','offline','hybrid'));
+```
+
+**Опис колонок:**
+| Колонка | Тип | Опис | Default |
+|---------|-----|------|---------|
+| `emoji` | `VARCHAR(16)` | Emoji іконка турніру | `NULL` → 🏆 |
+| `category` | `VARCHAR(20)` | Категорія турніру | `'other'` |
+| `format` | `VARCHAR(10)` | Формат проведення | `'online'` |
+| `prize` | `VARCHAR(500)` | Опис призів | `NULL` |
+
+**Значення enums:**
+- `category`: `hackathon`, `olympiad`, `marathon`, `sprint`, `challenge`, `other`
+- `format`: `online`, `offline`, `hybrid`
+
+**Колір хедера** — фіксований на фронтенді за статусом:
+- `draft` → `#191A23` (темно-сірий)
+- `registration` → `#AC9EF8` (фіолетовий)
+- `running` → `#4ade80` (зелений)
+- `finished` → `#0ea5e9` (синій)
+
+---
+
+## 15. FRONTEND CHANGES SUMMARY
+
+### Новий уніфікований компонент: `TournamentForm`
+**Розташування:** `src/components/Dashboard/db.shared.jsx`
+
+**Підтримує два режими:**
+- `mode="edit"` — редагування існуючого турніру
+- `mode="create"` — створення нового турніру (з вибором статусу)
+
+**Функціонал:**
+- Всі базові поля (назва, опис, правила, дати, ліміти, раунди)
+- **Emoji picker** — вибір іконки турніру з 70+ емодзі
+- Вибір статусу (при створенні)
+- Додаткові поля через `extraFields` prop
+
+### Файли змінені:
+
+| Файл | Зміни |
+|------|-------|
+| `db.shared.jsx` | + `TournamentForm` компонент, + `TOURNAMENT_EMOJIS` список, оновлено `ACCENT` для draft |
+| `TabTournaments.jsx` | Використання `TournamentForm` замість `TournamentEditForm` |
+| `TabAdmin.jsx` | `EditTournamentModal` → `TournamentForm`, `CreateTournamentForm` + emoji picker |
+| `TabOrganizer.jsx` | `EditTournamentModal` → `TournamentForm`, `CreateTournamentForm` + emoji picker |
+| `dashboard.css` | Стилі для emoji picker (`.db-emoji-grid`, `.db-emoji-item`, etc.) |
+
+### API інтеграція (єдина для всіх вкладок):
+- `POST /api/tournaments` — створення з усіма полями
+- `PATCH /api/tournaments/:id` — оновлення з усіма полями
+- `GET /api/tournaments` — отримання списку з усіма полями
+- `GET /api/tournaments/:id` — отримання деталей з усіма полями
+
+### Поля турніру (frontend ↔ backend):
+| Поле | Тип | Опис |
+|------|-----|------|
+| `name` | string | Назва турніру |
+| `description` | string\|null | Опис |
+| `rules` | string\|null | Правила |
+| `start_date` | string\|null | Дата початку (YYYY-MM-DD) |
+| `end_date` | string\|null | Дата закінчення |
+| `registration_start` | string\|null | Початок реєстрації |
+| `registration_end` | string\|null | Кінець реєстрації |
+| `min_team_size` | number | Мін. учасників у команді |
+| `max_team_size` | number | Макс. учасників у команді |
+| `teams_limit` | number\|null | Ліміт команд (null = без ліміту) |
+| `rounds_count` | number | Кількість раундів |
+| `emoji` | string\|null | Іконка турніру (🏆, 🎮, etc.) |
+| `category` | string | Категорія: `hackathon\|olympiad\|marathon\|sprint\|challenge\|other` |
+| `format` | string | Формат: `online\|offline\|hybrid` |
+| `prize` | string\|null | Опис призів |
+| `status` | string | Статус: `draft\|registration\|running\|finished` |
+
+### Кольори хедера (фіксовані на фронтенді):
+| Статус | Колір | Hex |
+|--------|-------|-----|
+| `draft` | Темно-сірий | `#191A23` |
+| `registration` | Фіолетовий | `#AC9EF8` |
+| `running` | Зелений | `#4ade80` |
+| `finished` | Синій | `#0ea5e9` |
+
+### Що треба зробити на бекенді:
+1. **Міграція БД** — додати колонки `emoji`, `category`, `format`, `prize`
+2. **Оновити `createTournament`** — приймати нові поля
+3. **Оновити `updateTournament`** — приймати нові поля
+4. **Оновити `getTournaments`** — повертати нові поля
+5. **Оновити `getTournamentById`** — повертати нові поля

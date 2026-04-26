@@ -15,6 +15,7 @@ import IconChat        from '@images/dashboard_components/icon_chat.svg?react';
 import IconBell        from '@images/dashboard_components/icon_bell.svg?react';
 import IconSearch      from '@images/dashboard_components/icon_search.svg?react';
 import IconLogout      from '@images/dashboard_components/icon_logout.svg?react';
+import IconGithub      from '@images/dashboard_components/github.svg?react';
 
 import { getMe, clearSession, isLoggedIn, API_BASE, CHECK_BACKEND, DEV_MOCK_USER, loadCachedUser, saveUser,
   getNotifications, markNotificationRead, deleteNotification, markAllNotificationsRead } from '@utils/authApi';
@@ -157,12 +158,15 @@ export default function Dashboard() {
 
         {!loading && user && (
           <div className="db-sidebar-user" onClick={() => setTab('profile')} role="button" tabIndex={0} onKeyDown={e => e.key === 'Enter' && setTab('profile')}>
-            <UserAvatar user={user} size={34} />
+            <UserAvatar user={user} size={34} showStatus={true} />
             <div className="db-sidebar-info">
               <span className="db-sidebar-name">{user.username || user.email}</span>
               <span className="db-sidebar-role">
                 {hasRole(user, 'admin') ? '⚙ Адмін' : hasRole(user, 'organizer') ? '🗂 Організатор' : hasRole(user, 'jury') ? '⚖ Журі' : '👤 Учасник'}
               </span>
+              {user?.auth_provider === 'github' && (
+                <span className="db-sidebar-github"><IconGithub width="12" height="12" /> {user.github_username || 'GitHub'}</span>
+              )}
             </div>
             <button className="db-sidebar-logout" title="Вийти" onClick={e => { e.stopPropagation(); handleLogout(); }}>
               <IconLogout />
