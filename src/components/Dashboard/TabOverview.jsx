@@ -65,7 +65,7 @@ export default function TabOverview({ user, toast, onNavigate }) {
   const openRegistrations = useMemo(() => tournaments.filter(t => t.status === 'registration'), [tournaments]);
   const activeTournaments = useMemo(() => tournaments.filter(t => t.status === 'running'), [tournaments]);
   
-  // Турниры где участвует пользователь (через команды)
+  /* Турніри де користувач приймає участь */
   const myTournamentIds = useMemo(() => 
     [...new Set(myTeams.map(t => t.tournament_id || t.tournamentId).filter(Boolean))],
     [myTeams]
@@ -150,7 +150,7 @@ export default function TabOverview({ user, toast, onNavigate }) {
         </div>
       </div>
 
-      {/* ELO / Статистика с анимацией */}
+      {/* ELO / Статистика */}
       {loading ? (
         <div className="db-stats-grid">
           {[1,2,3,4,5].map(i => <div key={i} className="db-card-skeleton" style={{ height: 96 }} />)}

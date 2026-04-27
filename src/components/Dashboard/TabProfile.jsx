@@ -551,14 +551,14 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
             </div>
           )}
 
-          {/* Organizer application — only for plain users */}
-          {user.role === 'user' && (
+          {/* Organizer application — only for plain users without organizer/admin role */}
+          {!hasRole(user, 'organizer') && !hasRole(user, 'admin') && (
             <div className="db-profile-panel-access" style={{ marginTop: 12 }}>
               <h4 className="db-profile-panel-label">📄 Заявка на організатора</h4>
               {myApplication === undefined && (
                 <div style={{ fontSize: 13, color: '#888', padding: '6px 0' }}>Завантаження...</div>
               )}
-              {myApplication === null && (
+              {(myApplication === null || myApplication?.hasApplication === false) && (
                 <button className="db-panel-access-btn" style={{ borderColor: '#4ade80' }} onClick={() => setApplyModal(true)}>
                   <span className="db-pab-icon">🗂️</span>
                   <div className="db-pab-text">
@@ -568,7 +568,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
                   <span className="db-pab-arrow">→</span>
                 </button>
               )}
-              {myApplication?.status === 'pending' && (
+              {myApplication?.status === 'pending' && !myApplication?.hasApplication && (
                 <div className="db-admin-tip" style={{ margin: 0 }}>
                   ⏳ Заявка на розгляді — чекайте рішення адміністратора
                 </div>

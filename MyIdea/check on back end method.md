@@ -248,7 +248,9 @@
 
 ## 5. CHAT (Чат)
 
-### `GET /api/chat-messages?room=roomName`
+### `GET /api/chat-messages`
+- **Що робить:** Список повідомлень
+- **Query:** `?room=roomName`
 - **Що робить:** Історія повідомлень кімнати
 - **Auth:** Так
 - **Перевірити:**

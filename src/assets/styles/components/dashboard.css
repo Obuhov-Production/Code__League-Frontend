@@ -567,10 +567,6 @@
 .db-welcome-next span {
   color: rgba(255,255,255,.5);
 }
-.db-admin-users-stats strong {
-  color: #191A23;
-  font-weight: 700;
-}
 
 /* Avatar wrap for welcome banner - needs relative positioning for status indicator */
 .db-welcome-avatar-wrap {
@@ -1428,6 +1424,7 @@
   margin: 0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   min-height: 36px;
@@ -1945,7 +1942,7 @@
   resize: vertical !important;
   overflow: auto !important;
   min-height: 64px;
-  max-height: 340px;
+  max-height: 600px;
   line-height: 1.5;
 }
 .db-edit-row-2 {
@@ -4377,11 +4374,267 @@
 .db-admin-stat-icon { font-size: 18px; display: block; margin-bottom: 2px; }
 
 /* ─── Admin: Users table ─── */
+.db-admin-users-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.db-admin-users-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.db-admin-users-search {
+  position: relative;
+  flex: 1;
+  min-width: 220px;
+  max-width: 380px;
+}
+
+.db-admin-search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  pointer-events: none;
+  opacity: .5;
+}
+
+.db-admin-search-input {
+  width: 100%;
+  height: 42px;
+  padding: 0 36px 0 40px;
+  border: 1.5px solid #e4e0f8;
+  border-radius: 12px;
+  background: #faf9ff;
+  font-family: inherit;
+  font-size: 13.5px;
+  color: #191A23;
+  outline: none;
+  transition: border-color .15s, background .15s, box-shadow .15s;
+}
+.db-admin-search-input:focus {
+  border-color: #AC9EF8;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(172,158,248,.12);
+}
+.db-admin-search-input::placeholder { color: #b0adc0; }
+
+.db-admin-search-clear {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0,0,0,.06);
+  border: none;
+  cursor: pointer;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  color: #888;
+  transition: background .15s;
+}
+.db-admin-search-clear:hover { background: rgba(0,0,0,.12); }
+
+.db-admin-users-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.db-admin-filter-select {
+  height: 42px;
+  padding: 0 32px 0 14px;
+  border: 1.5px solid #e4e0f8;
+  border-radius: 12px;
+  background: #faf9ff;
+  font-family: inherit;
+  font-size: 13px;
+  color: #191A23;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  transition: border-color .15s;
+}
+.db-admin-filter-select:focus { border-color: #AC9EF8; }
+
+.db-admin-bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(239,68,68,.06);
+  border: 1px solid rgba(239,68,68,.2);
+  border-radius: 10px;
+  animation: db-bulk-appear .2s ease-out;
+}
+@keyframes db-bulk-appear {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.db-admin-selected-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: #ef4444;
+  white-space: nowrap;
+}
+
+.db-admin-users-stats {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  background: #faf9ff;
+  border: 1px solid #ededf5;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #888;
+}
+.db-admin-users-stats strong {
+  color: #191A23;
+  font-weight: 700;
+}
+
+.db-admin-users-table .db-admin-col-checkbox { width: 36px; text-align: center; }
+.db-admin-users-table .db-admin-col-avatar { width: 56px; text-align: center; }
+.db-admin-users-table .db-admin-col-sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: color .15s;
+}
+.db-admin-users-table .db-admin-col-sortable:hover { color: #7c5ff5; }
+.db-admin-users-table .db-admin-col-status { white-space: nowrap; }
+
+.db-admin-user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.db-admin-user-github {
+  font-size: 11.5px;
+  color: #888;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.db-admin-user-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.db-admin-user-status--online  { background: rgba(34,197,94,.1);  color: #16a34a; }
+.db-admin-user-status--away    { background: rgba(245,158,11,.1); color: #d97706; }
+.db-admin-user-status--dnd     { background: rgba(239,68,68,.1);  color: #ef4444; }
+.db-admin-user-status--offline { background: rgba(156,163,175,.1); color: #9ca3af; }
+
+.db-admin-users-empty {
+  text-align: center;
+  padding: 40px 20px !important;
+  color: #888;
+  font-size: 14px;
+}
+
 .row-banned td { opacity: .55; text-decoration: line-through; }
 .row-banned td strong { text-decoration: line-through; }
+.row-selected { background: rgba(172,158,248,.06) !important; }
+.row-selected td { border-color: rgba(172,158,248,.2); }
 .db-role-badge.role-admin  { background: rgba(172,158,248,.2); color: #7c5ff5; }
 .db-role-badge.role-jury   { background: rgba(74,222,128,.15); color: #16a34a; }
 .db-role-badge.role-banned { background: rgba(239,68,68,.15);  color: #ef4444; }
+
+/* ─── Admin: Role Filter Dropdown ─── */
+.db-role-filter {
+  position: relative;
+}
+.db-role-filter-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 14px;
+  border: 1.5px solid #e4e0f8;
+  border-radius: 12px;
+  background: #faf9ff;
+  font-family: inherit;
+  font-size: 13.5px;
+  color: #191A23;
+  cursor: pointer;
+  transition: border-color .15s, background .15s, box-shadow .15s;
+  white-space: nowrap;
+}
+.db-role-filter-trigger:hover {
+  border-color: #AC9EF8;
+  background: #fff;
+}
+.db-role-filter-trigger:focus {
+  outline: none;
+  border-color: #AC9EF8;
+  box-shadow: 0 0 0 3px rgba(172,158,248,.12);
+}
+.db-role-filter-icon { font-size: 15px; line-height: 1; }
+.db-role-filter-label { font-weight: 500; }
+.db-role-filter-arrow {
+  font-size: 9px;
+  color: #aaa;
+  margin-left: 2px;
+  transition: transform .15s;
+}
+.db-role-filter-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 190px;
+  background: #fff;
+  border: 1.5px solid #e4e0f8;
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.10), 0 0 0 1px rgba(172,158,248,.08);
+  padding: 6px;
+  z-index: 200;
+  animation: db-rfd-in .15s ease-out;
+}
+@keyframes db-rfd-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.db-role-filter-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background .12s;
+  font-size: 13.5px;
+}
+.db-role-filter-option:hover {
+  background: #f4f2ff;
+}
+.db-role-filter-option.active {
+  background: rgba(172,158,248,.1);
+}
+.db-role-filter-opt-icon { font-size: 15px; line-height: 1; flex-shrink: 0; }
+.db-role-filter-opt-label { flex: 1; font-weight: 500; color: #333; }
+.db-role-filter-option.active .db-role-filter-opt-label { font-weight: 600; }
+.db-role-filter-check {
+  font-size: 13px;
+  font-weight: 700;
+  color: #7c5ff5;
+}
 
 /* ─── Admin: Chat section ─── */
 .db-admin-chat-section {
@@ -5386,12 +5639,12 @@
 .db-mu-avatar {
   width: 52px; height: 52px;
   border-radius: 14px;
-  background: #AC9EF8;
-  color: #191A23;
-  font-size: 18px;
-  font-weight: 800;
-  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
   flex-shrink: 0;
+}
+.db-mu-avatar .db-avatar-img,
+.db-mu-avatar .db-avatar-fallback {
+  border-radius: 14px !important;
 }
 .db-mu-name  { font-size: 16px; font-weight: 700; color: #fff; }
 .db-mu-email { font-size: 12px; color: rgba(255,255,255,.55); margin-top: 2px; }

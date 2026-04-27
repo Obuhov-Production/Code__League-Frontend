@@ -10,29 +10,13 @@ import {
   getAdminOrganizerApplications, reviewOrganizerApplication,
   getAdminUserBadges, adminGrantBadge, adminRevokeBadge,
 } from '@utils/authApi';
-import { StatusBadge, RoleBadges, CustomSelect, ConfirmModal, formatDate, STATUS_LABEL, UserAvatar, UserProfileModal, ALL_BADGES, TournamentForm, TOURNAMENT_EMOJIS } from './db.shared.jsx';
-
-/* ── Options for tournament form ───────────────────── */
-const CATEGORY_OPTIONS = [
-  { value: 'hackathon',  label: '⚡ Хакатон' },
-  { value: 'olympiad',   label: '🎓 Олімпіада' },
-  { value: 'marathon',   label: '🏃 Марафон' },
-  { value: 'sprint',     label: '⏱ Спринт' },
-  { value: 'challenge',  label: '🎯 Челендж' },
-  { value: 'other',      label: '📦 Інше' },
-];
-
-const FORMAT_OPTIONS = [
-  { value: 'online',  label: '🌐 Онлайн' },
-  { value: 'offline', label: '📍 Офлайн' },
-  { value: 'hybrid',  label: '🔀 Гібрид' },
-];
+import { StatusBadge, RoleBadges, CustomSelect, ConfirmModal, formatDate, STATUS_LABEL, UserAvatar, UserProfileModal, ALL_BADGES, TournamentForm } from './db.shared.jsx';
 
 const TOUR_STATUS_OPTS = [
-  { value: 'draft',        label: 'Draft',   color: '#888' },
+  { value: 'draft',        label: 'Draft',        color: '#888' },
   { value: 'registration', label: 'Registration', color: '#7c5ff5' },
-  { value: 'running',      label: 'Running',   color: '#16a34a' },
-  { value: 'finished',     label: 'Finished', color: '#0ea5e9' },
+  { value: 'running',      label: 'Running',      color: '#16a34a' },
+  { value: 'finished',     label: 'Finished',     color: '#0ea5e9' },
 ];
 
 /* ── StatusPicker — custom colored status dropdown ─── */
@@ -80,6 +64,54 @@ function StatusPicker({ value, onChange, compact = false }) {
               <span className="db-sp-dot" style={{ background: o.color }} />
               <span style={{ flex: 1, color: o.color, fontWeight: 500 }}>{o.label}</span>
               {o.value === value && <span className="db-sp-check">✓</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Role Filter Dropdown (custom) ─────────────────── */
+const ROLE_FILTER_OPTIONS = [
+  { value: 'all',       label: 'Всі ролі',    icon: '👥', color: '#7c5ff5' },
+  { value: 'admin',     label: 'Адмін',        icon: '⚙️', color: '#7c5ff5' },
+  { value: 'organizer', label: 'Організатор',  icon: '🗂️', color: '#0ea5e9' },
+  { value: 'jury',      label: 'Журі',         icon: '⚖️', color: '#16a34a' },
+  { value: 'user',      label: 'Учасник',      icon: '👤', color: '#888' },
+  { value: 'banned',    label: 'Забанені',     icon: '🚫', color: '#ef4444' },
+];
+
+function RoleFilterDropdown({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const current = ROLE_FILTER_OPTIONS.find(o => o.value === value) || ROLE_FILTER_OPTIONS[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  return (
+    <div className="db-role-filter" ref={ref}>
+      <button type="button" className="db-role-filter-trigger" onClick={() => setOpen(p => !p)}>
+        <span className="db-role-filter-icon">{current.icon}</span>
+        <span className="db-role-filter-label">{current.label}</span>
+        <span className="db-role-filter-arrow">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="db-role-filter-dropdown">
+          {ROLE_FILTER_OPTIONS.map(o => (
+            <div
+              key={o.value}
+              className={`db-role-filter-option${o.value === value ? ' active' : ''}`}
+              onClick={() => { onChange(o.value); setOpen(false); }}
+            >
+              <span className="db-role-filter-opt-icon">{o.icon}</span>
+              <span className="db-role-filter-opt-label" style={{ color: o.value === value ? o.color : undefined }}>{o.label}</span>
+              {o.value === value && <span className="db-role-filter-check">✓</span>}
             </div>
           ))}
         </div>
@@ -164,7 +196,7 @@ function ManageUserModal({ user, toast, onClose, onRoleChange, onDelete }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box modal-box--light db-manage-user-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 440, padding: 0, overflow: 'hidden' }}>
         <div className="db-mu-header">
-          <div className="db-mu-avatar">{(user.username || '?').slice(0,2).toUpperCase()}</div>
+          <div className="db-mu-avatar"><UserAvatar user={user} size={52} /></div>
           <div>
             <div className="db-mu-name">{user.username}</div>
             <div className="db-mu-email">{user.email}</div>
@@ -322,155 +354,11 @@ function EditTournamentModal({ tournament, allTeams, toast, onClose, onSuccess, 
   );
 }
 
-/* ── Create Tournament Form ─────────────────────────── */
-function CreateTournamentForm({ toast, onSuccess, onCancel }) {
-  const today = new Date().toISOString().split('T')[0];
-  const [f, setF] = useState({
-    name: '', description: '', rules: '', prize: '',
-    category: 'hackathon', format: 'online', status: 'draft',
-    start_date: today, end_date: '',
-    registration_start: today, registration_end: '',
-    teams_limit: '', rounds_count: 1, min_team_size: 2, max_team_size: 5,
-    emoji: '🏆',
-  });
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const upd = (k, v) => setF(x => ({ ...x, [k]: v }));
-
-  const handleSubmit = async e => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await createTournament({
-        ...f,
-        teams_limit:   f.teams_limit ? Number(f.teams_limit) : null,
-        rounds_count:  Number(f.rounds_count),
-        min_team_size: Number(f.min_team_size),
-        max_team_size: Number(f.max_team_size),
-        emoji: f.emoji || '🏆',
-      });
-      onSuccess();
-    } catch (err) { toast.error(err.message); }
-    finally { setLoading(false); }
-  };
-
-  return (
-    <form className="db-create-form" onSubmit={handleSubmit}>
-
-      {/* Header with emoji picker */}
-      <div className="db-create-form-header">
-        <div className="db-create-form-icon" style={{ cursor: 'pointer', position: 'relative' }} onClick={() => setShowEmojiPicker(v => !v)}>
-          {f.emoji}
-          <span style={{ position: 'absolute', bottom: -2, right: -2, fontSize: 10 }}>✏️</span>
-        </div>
-        <div>
-          <h3>Новий турнір</h3>
-          <p>Заповніть інформацію для створення турніру</p>
-        </div>
-      </div>
-
-      {/* Emoji picker */}
-      {showEmojiPicker && (
-        <div className="db-cfs-section">
-          <div className="db-cfs-title"><span className="db-cfs-icon">🎨</span> Оберіть іконку турніру</div>
-          <div className="db-emoji-grid">
-            {TOURNAMENT_EMOJIS.map(e => (
-              <button
-                key={e}
-                type="button"
-                className={`db-emoji-item${f.emoji === e ? ' active' : ''}`}
-                onClick={() => { upd('emoji', e); setShowEmojiPicker(false); }}
-              >
-                {e}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Section: Основна інформація */}
-      <div className="db-cfs-section">
-        <div className="db-cfs-title"><span className="db-cfs-icon">📋</span> Основна інформація</div>
-        <div className="db-form-row">
-          <label>Назва *</label>
-          <input placeholder="Введіть назву турніру" value={f.name} onChange={e => upd('name', e.target.value)} required />
-        </div>
-        <div className="db-form-row-2">
-          <div className="db-form-row">
-            <label>Категорія</label>
-            <CustomSelect value={f.category} onChange={v => upd('category', v)} options={CATEGORY_OPTIONS} placeholder="Оберіть категорію" />
-          </div>
-          <div className="db-form-row">
-            <label>Формат</label>
-            <CustomSelect value={f.format} onChange={v => upd('format', v)} options={FORMAT_OPTIONS} placeholder="Оберіть формат" />
-          </div>
-        </div>
-        <div className="db-form-row">
-          <label>Опис</label>
-          <textarea rows={2} placeholder="Короткий опис турніру..." value={f.description} onChange={e => upd('description', e.target.value)} />
-        </div>
-        <div className="db-form-row">
-          <label>Правила участі</label>
-          <textarea rows={2} placeholder="Умови участі, критерії оцінювання..." value={f.rules} onChange={e => upd('rules', e.target.value)} />
-        </div>
-      </div>
-
-      {/* Section: Дати */}
-      <div className="db-cfs-section">
-        <div className="db-cfs-title"><span className="db-cfs-icon">📅</span> Дати</div>
-        <div className="db-form-row-2">
-          <div className="db-form-row"><label>Реєстрація від *</label><input type="date" value={f.registration_start} onChange={e => upd('registration_start', e.target.value)} required /></div>
-          <div className="db-form-row"><label>Реєстрація до *</label><input type="date" value={f.registration_end} onChange={e => upd('registration_end', e.target.value)} required /></div>
-        </div>
-        <div className="db-form-row-2">
-          <div className="db-form-row"><label>Старт *</label><input type="date" value={f.start_date} onChange={e => upd('start_date', e.target.value)} required /></div>
-          <div className="db-form-row"><label>Кінець *</label><input type="date" value={f.end_date} onChange={e => upd('end_date', e.target.value)} required /></div>
-        </div>
-      </div>
-
-      {/* Section: Команди */}
-      <div className="db-cfs-section">
-        <div className="db-cfs-title"><span className="db-cfs-icon">👥</span> Команди</div>
-        <div className="db-form-row-3">
-          <div className="db-form-row"><label>Макс. команд</label><input type="number" min="1" value={f.teams_limit} onChange={e => upd('teams_limit', e.target.value)} placeholder="∞" /></div>
-          <div className="db-form-row"><label>Мін. учасників</label><input type="number" min="1" max="20" value={f.min_team_size} onChange={e => upd('min_team_size', e.target.value)} /></div>
-          <div className="db-form-row"><label>Макс. учасників</label><input type="number" min="1" max="20" value={f.max_team_size} onChange={e => upd('max_team_size', e.target.value)} /></div>
-        </div>
-        <div className="db-form-row" style={{ maxWidth: 160 }}>
-          <label>Кількість раундів</label>
-          <input type="number" min="1" max="10" value={f.rounds_count} onChange={e => upd('rounds_count', e.target.value)} />
-        </div>
-      </div>
-
-      {/* Section: Статус та нагорода */}
-      <div className="db-cfs-section">
-        <div className="db-cfs-title"><span className="db-cfs-icon">🏷</span> Статус та нагорода</div>
-        <div className="db-form-row-2">
-          <div className="db-form-row">
-            <label>Початковий статус</label>
-            <StatusPicker value={f.status} onChange={v => upd('status', v)} />
-          </div>
-          <div className="db-form-row">
-            <label>Нагорода / Призи</label>
-            <input placeholder="Опис призів переможцям..." value={f.prize} onChange={e => upd('prize', e.target.value)} />
-          </div>
-        </div>
-      </div>
-
-      <div className="db-form-actions">
-        <button type="button" className="db-btn db-btn-ghost" onClick={onCancel}>Скасувати</button>
-        <button type="submit" className="db-btn db-btn-primary" disabled={loading}>
-          {loading ? 'Збереження...' : '🏆 Створити турнір'}
-        </button>
-      </div>
-    </form>
-  );
-}
 
 /* ── Application View Modal ──────────────────── */
 function ApplicationViewModal({ app, onClose, onAccept, onDecline }) {
-  const STATUS_COLOR = { pending: '#f59e0b', accepted: '#16a34a', rejected: '#ef4444' };
-  const STATUS_LABEL_MAP = { pending: '⏳ Очікує', accepted: '✓ Прийнято', rejected: '✗ Відхилено' };
+  const STATUS_COLOR = { pending: '#f59e0b', approved: '#16a34a', rejected: '#ef4444' };
+  const STATUS_LABEL_MAP = { pending: '⏳ Очікує', approved: '✓ Прийнято', rejected: '✗ Відхилено' };
   const [viewProfile, setViewProfile] = useState(null);
 
   const contacts = [
@@ -751,8 +639,8 @@ export default function TabAdmin({ toast }) {
 
   const handleAcceptApplication = async (id) => {
     try {
-      await reviewOrganizerApplication(id, 'accepted');
-      setApplications(prev => prev.map(a => a.id === id ? { ...a, status: 'accepted' } : a));
+      await reviewOrganizerApplication(id, 'approved');
+      setApplications(prev => prev.map(a => a.id === id ? { ...a, status: 'approved' } : a));
       toast.success('Заявку прийнято — користувач отримав роль Організатора');
     } catch (err) { toast.error(err.message); }
   };
@@ -1126,7 +1014,7 @@ export default function TabAdmin({ toast }) {
             <div>
               <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
                 <span style={{ fontSize: 13, color: '#888' }}>Фільтр:</span>
-                {[['pending','⏳ Очікують'], ['accepted','✓ Прийняті'], ['rejected','✗ Відхилені'], ['all','Усі']].map(([v, l]) => (
+                {[['pending','⏳ Очікують'], ['approved','✓ Прийняті'], ['rejected','✗ Відхилені'], ['all','Усі']].map(([v, l]) => (
                   <button key={v}
                     className={`db-admin-tab-btn${appFilter === v ? ' active' : ''}`}
                     style={{ padding: '4px 12px', fontSize: 13 }}
@@ -1172,7 +1060,7 @@ export default function TabAdmin({ toast }) {
                           <td style={{ fontSize: 12, color: '#888', whiteSpace: 'nowrap' }}>{formatDate(a.created_at)}</td>
                           <td>
                             {a.status === 'pending' && <span style={{ color: '#f59e0b', fontWeight: 600, fontSize: 12 }}>⏳ Очікує</span>}
-                            {a.status === 'accepted' && <span style={{ color: '#16a34a', fontWeight: 600, fontSize: 12 }}>✓ Прийнято</span>}
+                            {a.status === 'approved' && <span style={{ color: '#16a34a', fontWeight: 600, fontSize: 12 }}>✓ Прийнято</span>}
                             {a.status === 'rejected' && <span style={{ color: '#ef4444', fontWeight: 600, fontSize: 12 }}>✗ Відхилено</span>}
                           </td>
                           <td>
@@ -1197,9 +1085,14 @@ export default function TabAdmin({ toast }) {
           {adminTab === 'tournaments' && (
             <>
               {showCreate && (
-                <CreateTournamentForm toast={toast}
-                  onSuccess={() => { setShowCreate(false); load(); loadAll(); toast.success('Турнір створено!'); }}
-                  onCancel={() => setShowCreate(false)} />
+                <TournamentForm
+                  mode="create"
+                  onSubmit={async (payload) => {
+                    await createTournament(payload);
+                    setShowCreate(false); load(); loadAll(); toast.success('Турнір створено!');
+                  }}
+                  onCancel={() => setShowCreate(false)}
+                />
               )}
               <div className="db-admin-table-wrap">
                 <table className="db-admin-table">
@@ -1246,18 +1139,7 @@ export default function TabAdmin({ toast }) {
                 </div>
                 
                 <div className="db-admin-users-filters">
-                  <select 
-                    value={userRoleFilter} 
-                    onChange={e => setUserRoleFilter(e.target.value)}
-                    className="db-admin-filter-select"
-                  >
-                    <option value="all">👥 Всі ролі</option>
-                    <option value="admin">⚙️ Адмін</option>
-                    <option value="organizer">🗂️ Організатор</option>
-                    <option value="jury">⚖️ Журі</option>
-                    <option value="user">👤 Учасник</option>
-                    <option value="banned">🚫 Забанені</option>
-                  </select>
+                  <RoleFilterDropdown value={userRoleFilter} onChange={setUserRoleFilter} />
                   
                   {selectedUsers.length > 0 && (
                     <div className="db-admin-bulk-actions">

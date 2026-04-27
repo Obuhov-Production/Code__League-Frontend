@@ -139,7 +139,10 @@ export function avatarUrl(user) {
   if (!user) return null;
   // Проверяем оба варианта поля (user_avatar_url для /me, avatar_url для admin/users)
   const url = user.user_avatar_url || user.avatar_url;
-  return resolveAvatarUrl(url);
+  if (url) return resolveAvatarUrl(url);
+  // Fallback: GitHub avatar по github_username
+  if (user.github_username) return `https://avatars.githubusercontent.com/${user.github_username}`;
+  return null;
 }
 
 export function hasRole(user, role) {
@@ -202,6 +205,7 @@ export function RoleBadges({ role }) {
 export function UserAvatar({ user, size = 36, onClick, className = '', showStatus = false }) {
   const [imgError, setImgError] = useState(false);
   const url = avatarUrl(user);
+  useEffect(() => { setImgError(false); }, [url]);
   const initials = user?.username ? user.username.slice(0,2).toUpperCase() : (user?.email?.[0]?.toUpperCase() ?? '?');
   const style = { width: size, height: size, borderRadius: '50%', cursor: onClick ? 'pointer' : 'default', flexShrink: 0 };
   const status = user?.status || 'offline';
@@ -457,12 +461,12 @@ export function UserProfileModal({ profile, meId, onClose, onGoOwnProfile }) {
         </div>
         <div className="db-upm-body">
           <div className={`db-upm-avatar${isAdmin ? ' admin' : ''}`}>
-            {profile.user_avatar_url
-              ? <img src={resolveAvatarUrl(profile.user_avatar_url)} alt={profile.username} className="db-upm-avatar-img"
+            {avatarUrl(profile)
+              ? <img src={avatarUrl(profile)} alt={profile.username} className="db-upm-avatar-img"
                   onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextElementSibling.style.removeProperty('display'); }} />
               : null
             }
-            <span className="db-upm-avatar-initials" style={profile.user_avatar_url ? { display: 'none' } : undefined}>{(profile.username || '?').slice(0, 2).toUpperCase()}</span>
+            <span className="db-upm-avatar-initials" style={avatarUrl(profile) ? { display: 'none' } : undefined}>{(profile.username || '?').slice(0, 2).toUpperCase()}</span>
           </div>
           <div className="db-upm-name-row">
             <span className="db-upm-name">{displayName(profile)}</span>
