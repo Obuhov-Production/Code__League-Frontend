@@ -78,7 +78,7 @@ export default function TabOverview({ user, toast, onNavigate }) {
   const userElo = user?.elo ?? user?.exp ?? 0;
   
   const STATS = [
-    { label: 'Усього турнірів',  value: tournaments.length,       Icon: StatTrophy,   color: '#AC9EF8' },
+    { label: 'Усього турнірів',  value: tournaments.length,       Icon: StatTrophy,   color: '#3a15f0' },
     { label: 'Мої команди',      value: myTeams.length,           Icon: StatTeam,     color: '#4ade80' },
     { label: 'Активні турніри',    value: activeTournaments.length, Icon: StatStar,     color: '#f59e0b' },
     { label: 'Відкрита реєстрація', value: openRegistrations.length, Icon: StatCalendar, color: '#0ea5e9' },

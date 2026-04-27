@@ -2,7 +2,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import logoImg from '@images/logos/logo.png';
 
-/* SVG icons */
+/* svg icons - іконашкі */
 import IconHome        from '@images/dashboard_components/icon_home.svg?react';
 import IconTournaments from '@images/dashboard_components/icon_tournaments.svg?react';
 import IconTeams       from '@images/dashboard_components/icon_teams.svg?react';
@@ -39,7 +39,6 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [tab,     setTabRaw]  = useState(() => {
     const saved = localStorage.getItem('db_tab') || 'overview';
-    // Privileged tabs require user data — always start from overview to avoid blank panels
     return ['admin', 'jury', 'organizer'].includes(saved) ? 'overview' : saved;
   });
   const setTab = t => { setTabRaw(t); localStorage.setItem('db_tab', t); };
@@ -58,21 +57,19 @@ export default function Dashboard() {
       return;
     }
     if (!isLoggedIn()) { navigate('/login'); return; }
-    // Show cached user instantly (has avatar_url from OAuth)
     const cached = loadCachedUser();
     if (cached) { setUser(cached); setLoading(false); }
-    // Always refresh from backend to get the latest data
     getMe()
       .then(fresh => { saveUser(fresh); setUser(fresh); })
       .catch(() => {
         if (!cached) { clearSession(); toast.error('Сесія закінчилась'); navigate('/login'); }
       })
       .finally(() => setLoading(false));
-  }, []); // eslint-disable-line
+  }, []);
 
   const handleLogout = () => { clearSession(); toast.info('Ви вийшли'); navigate('/'); };
 
-  // ── Notifications ──────────────────────────────
+  /* --- Notification --- */
   const loadNotifications = () => {
     setNotifLoading(true);
     getNotifications()
@@ -89,7 +86,7 @@ export default function Dashboard() {
     const onNotif = notif => setNotifications(prev => [notif, ...prev]);
     socket.on('notification:new', onNotif);
     return () => socket.off('notification:new', onNotif);
-  }, [user]); // eslint-disable-line
+  }, [user]);
 
   // Close notifications on outside click
   useEffect(() => {
