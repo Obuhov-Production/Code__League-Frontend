@@ -196,7 +196,8 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
   }, [user]);
 
   useEffect(() => {
-    if (user) {
+    // Не скидаємо форму під час редагування — інакше збереження ПІБ затирає введений опис
+    if (user && !editing) {
       const bc = user.banner_color || '#1e1b2e';
       setForm({ username: user.username || '', user_description: user.user_description || '', banner_color: bc });
       setHexInput(bc);
@@ -207,7 +208,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
       });
       setPinnedBadge(user.pinned_badge || null);
     }
-  }, [user]);
+  }, [user, editing]);
 
   const handleSavePib = async () => {
     setSavingPib(true);
@@ -224,7 +225,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
       if (allFilled && !hadConfirmed) {
         toast.success('🏅 Отримано нове досягнення: «Підтвердив особу»!');
       } else {
-        toast.success('ПІБ збережено!');
+        toast.success('Зміни збережено!');
       }
     } catch (err) { toast.error(err.message); }
     finally { setSavingPib(false); }
@@ -260,17 +261,10 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
     return Math.ceil(7 - (Date.now() - new Date(user.username_updated_at).getTime()) / 86400000);
   };
 
-  const bannerStyle = editing
-    ? (
-        bannerMode === 'image' && user.banner_url
-          ? { backgroundImage: `url(${API_BASE + user.banner_url})`, backgroundSize:'cover', backgroundPosition:'center' }
-          : { background: form.banner_color || '#1e1b2e' }
-      )
-    : (
-        user.banner_url
-          ? { backgroundImage: `url(${API_BASE + user.banner_url})`, backgroundSize:'cover', backgroundPosition:'center' }
-          : { background: user.banner_color || '#1e1b2e' }
-      );
+  const bannerHasPhoto = !!user.banner_url;
+  const bannerStyle = user.banner_url
+    ? { backgroundImage: `url(${API_BASE + user.banner_url})`, backgroundSize: 'cover', backgroundPosition: 'center top' }
+    : { background: form.banner_color || user.banner_color || '#1e1b2e' };
 
   const handleDeleteBanner = async () => {
     try { await deleteBanner(); setUser(u => ({ ...u, banner_url: null })); toast.success('Банер видалено'); }
@@ -315,7 +309,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
       <input ref={bannerInputRef} type="file" accept="image/*" style={{ display:'none' }} onChange={handleBannerPick} />
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━ BANNER ━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <div className="db-profile-banner" style={bannerStyle}>
+      <div className={`db-profile-banner${bannerHasPhoto ? ' has-photo' : ''}`} style={bannerStyle}>
         {/* ─── Banner editor panel ─── */}
         {editing && (
           <div className="db-bep">
@@ -456,8 +450,13 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
               <div className="db-field-row">
                 <label>Про себе</label>
                 <textarea className="db-field-input" rows={3} value={form.user_description}
-                  onChange={e => setForm(f => ({ ...f, user_description: e.target.value }))}
-                  placeholder="Розкажіть про себе..." />
+                  onChange={e => setForm(f => ({ ...f, user_description: e.target.value.slice(0, 256) }))}
+                  placeholder="Розкажіть про себе..."
+                  maxLength={256}
+                  style={{ resize: 'vertical', minHeight: 72, maxHeight: 160 }} />
+                <small style={{ color: form.user_description.length >= 240 ? '#f87171' : '#999', fontSize: 11, textAlign: 'right', display: 'block', marginTop: 2 }}>
+                  {form.user_description.length} / 256
+                </small>
               </div>
               {/* ── ПІБ inline (edit mode) ── */}
               <div className="db-pib-section">

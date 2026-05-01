@@ -1,188 +1,288 @@
-# Backend — список задач для реалізації функціоналу
+# Що потрібно реалізувати на бекенді
 
-## 1. Підтвердження особи учасника (PIB) перед участю в турнірі
-
-### Що потрібно
-Коли лідер команди додає учасника з платформи, бекенд повинен перевірити що той користувач підтвердив своє ПІБ.
-
-### API зміни
-- `GET /api/users/search?q=...` — додати поле `identity_confirmed: boolean` до відповіді.
-  - `identity_confirmed = true` якщо `first_name`, `last_name`, `middle_name` всі заповнені у профілі користувача.
-
-- `PATCH /api/teams/:id` — при збереженні команди перевіряти:
-  - Якщо учасник прив'язаний до платформи (`user_id` вказано), його `identity_confirmed` має бути `true`.
-  - Якщо ні — повертати помилку `400` з текстом: `"Учасник {username} ще не підтвердив своє ПІБ у профілі"`.
-
-- `POST /api/teams/:teamId/chat/members` — при додаванні до чату команди також перевіряти `identity_confirmed`.
-
-### Бейдж `identity_confirmed`
-- При збереженні ПІБ через `PATCH /api/users/me`:
-  - Якщо `first_name`, `last_name`, `middle_name` всі не порожні — автоматично видати бейдж `identity_confirmed` через `INSERT INTO user_badges (user_id, badge_id)`.
-  - `GET /api/badges/my` повинен повертати актуальний стан з БД (не мок).
-  - Це виправляє баг: після оновлення сторінки бейдж зникає (зараз бекенд не зберігає бейдж).
+> Складено на основі `authApi.js` + компонентів дашборду (TabTeams, TabTournaments, db.shared).
+> Статус: ✅ є / ❌ потрібно зробити / ⚠️ є але потребує перевірки
 
 ---
 
-## 2. Чат команди (Team Chat Room)
+## 1. Статистика платформи
 
-### Концепція
-Кожна команда має приватну кімнату чату з id `team_{teamId}`.
-Лише члени команди мають доступ до кімнати.
+| Метод | Маршрут | Статус |
+|-------|---------|--------|
+| GET | `/api/stats` | ✅ |
 
-### Членство в кімнаті
-
-**Таблиця `chat_room_members`:**
-```sql
-CREATE TABLE IF NOT EXISTS chat_room_members (
-  room        TEXT NOT NULL,         -- наприклад 'team_42'
-  user_id     INTEGER NOT NULL REFERENCES users(id),
-  added_at    TIMESTAMPTZ DEFAULT NOW(),
-  added_by    INTEGER REFERENCES users(id),
-  PRIMARY KEY (room, user_id)
-);
-```
-
-### API ендпоінти
-
-#### `GET /api/teams/:teamId/chat/members`
-Повертає список членів чату команди.
+Очікувана відповідь:
 ```json
-[{ "id": 1, "username": "...", "first_name": "...", "last_name": "...", "identity_confirmed": true }]
-```
-Доступ: тільки члени команди або адмін.
-
-#### `POST /api/teams/:teamId/chat/members`
-Додати користувача до чату команди.
-Body: `{ "user_id": 123 }`
-- Перевірити що `user_id` є учасником команди (або подавався у складі).
-- Перевірити `identity_confirmed`.
-- Вставити в `chat_room_members`.
-- Надіслати Socket.IO подію `room:member_added` в кімнату `team_{teamId}`.
-Доступ: лідер команди або адмін.
-
-#### `DELETE /api/teams/:teamId/chat/members/:userId`
-Видалити учасника з чату.
-Доступ: лідер або адмін.
-
-### WebSocket — доступ до кімнати
-При `room:join` для кімнат що починаються з `team_`:
-- Перевірити що `socket.user.id` є в `chat_room_members` для цієї кімнати.
-- Якщо ні — відправити `error: "Доступ заборонено"`.
-
-### Автоматичне створення чату при реєстрації команди
-При `POST /api/teams` (реєстрація команди):
-- Для кожного члена команди що має `user_id` (зареєстрований на платформі) — автоматично додати в `chat_room_members('team_{teamId}', user_id)`.
-
----
-
-## 3. Прив'язка ПІБ учасника через чат (Member linking)
-
-### Концепція
-Якщо учасник увійшов в чат команди, лідер може прив'язати його до одного з записів у команді (де зазначено ПІБ).
-
-### API
-
-#### `POST /api/teams/:teamId/members/:memberId/link`
-Прив'язати запис учасника команди до акаунту на платформі.
-Body: `{ "user_id": 123 }`
-- Встановлює `user_id` для запису `members[memberId]`.
-- Автоматично додає `user_id` в `chat_room_members`.
-- Перевіряє `identity_confirmed` для `user_id`.
-Доступ: лідер команди або адмін.
-
----
-
-## 4. Реєстрація учасника на турнір (окрема задача)
-
-### Поточна ситуація
-Зараз команда може бути зареєстрована на турнір без реєстрації окремих учасників.
-
-### Що потрібно
-Щоб учасники що прив'язані до платформи могли брати участь в турнірі:
-
-- Додати таблицю `tournament_registrations`:
-```sql
-CREATE TABLE IF NOT EXISTS tournament_registrations (
-  tournament_id INTEGER REFERENCES tournaments(id),
-  user_id       INTEGER REFERENCES users(id),
-  registered_at TIMESTAMPTZ DEFAULT NOW(),
-  PRIMARY KEY (tournament_id, user_id)
-);
+{ "participants": 536, "tournamentsTotal": 120, "tournamentsFinished": 40, "teams": 98 }
 ```
 
-- `POST /api/tournaments/:id/register` — зареєструвати себе на турнір.
-- `GET /api/tournaments/:id/registrations` — список зареєстрованих.
-
-При прив'язці платформ-учасника до команди — перевіряти чи він зареєстрований на турнір цієї команди.
-
 ---
 
-## 5. Пошук користувачів — розширення
+## 2. Турніри
 
-`GET /api/users/search?q=...` повинен повертати:
+| Метод | Маршрут | Статус |
+|-------|---------|--------|
+| GET | `/api/tournaments` | ✅ |
+| GET | `/api/tournaments?status=registration` | ✅ |
+| GET | `/api/tournaments/:id` | ✅ |
+| POST | `/api/tournaments` | ✅ |
+| PATCH | `/api/tournaments/:id` | ✅ |
+| PATCH | `/api/tournaments/:id/status` | ✅ |
+| DELETE | `/api/tournaments/:id` | ✅ |
+| GET | `/api/tournaments/:id/leaderboard` | ⚠️ перевір структуру відповіді |
+| POST | `/api/tournaments/:id/announcements` | ⚠️ перевір чи реалізовано |
+| GET | `/api/tournaments/:id/rounds` | ❌ **ПОТРІБНО** |
+
+### Rounds — що очікує фронтенд (`SubmitWorkModal`):
 ```json
-[{
+[
+  { "id": 1, "title": "Раунд 1", "order_index": 0, "status": "active" },
+  { "id": 2, "title": "Раунд 2", "order_index": 1, "status": "pending" }
+]
+```
+Фронтенд фільтрує по `status === 'active'`, якщо немає — бере останній.
+
+---
+
+## 3. Команди
+
+| Метод | Маршрут | Статус |
+|-------|---------|--------|
+| GET | `/api/teams/my` | ✅ |
+| GET | `/api/teams/tournament/:tournamentId` | ✅ |
+| GET | `/api/teams/:id` | ✅ |
+| POST | `/api/teams` | ✅ |
+| PATCH | `/api/teams/:id` | ✅ |
+| DELETE | `/api/teams/:id` | ✅ |
+
+### Важливо: що повертає `GET /api/teams/my`
+
+```json
+[
+  {
+    "id": 1,
+    "name": "Team Alpha",
+    "city": "Kyiv",
+    "school": "School 1",
+    "telegram_username": "team_alpha",
+    "tournament_id": 5,
+    "tournament_name": "Code League 2025",
+    "tournament_status": "running"
+  }
+]
+```
+`tournament_status` визначає кнопки в UI:
+- `"registration"` → ✏️ Редагувати
+- `"running"` → 📤 Подати роботу
+
+### `GET /api/teams/:id` — повна деталь:
+```json
+{
   "id": 1,
-  "username": "...",
-  "email": "...",
-  "first_name": "...",
-  "last_name": "...",
-  "identity_confirmed": true,
-  "user_avatar_url": "..."
-}]
-```
-`identity_confirmed` — обчислюється на льоту: `first_name IS NOT NULL AND last_name IS NOT NULL AND middle_name IS NOT NULL`.
-
----
-
----
-
-## 6. Бан та мут користувача
-
-### Поточна ситуація
-Роль `banned` вже існує в полі `role` користувача (через кому). Фронтенд перевіряє `hasRole(user, 'banned')` та `hasRole(user, 'muted')` і відображає відповідний UI.
-
-### Що потрібно
-
-#### Роль `banned`
-- Поле `role` у таблиці `users` вже підтримує множинні ролі через кому (наприклад `"user,banned"`).
-- `PATCH /api/admin/users/:id` — встановлення ролі `banned` вже реалізовано через `setUserRole`.
-- **Додатково**: при кожному `GET /api/users/me` повертати актуальну роль — якщо `role` містить `banned`, фронтенд показує незакривне модальне вікно.
-- **Важливо**: `GET /api/users/me` повинен повертати дані навіть для заблокованого (щоб фронт міг визначити статус). Не повертати `403` для цього ендпоінту.
-
-#### Роль `muted`
-- Аналогічно до `banned` — роль `muted` додається адміном через `setUserRole`.
-- При `GET /api/users/me` якщо `role` містить `muted` — фронтенд замінює поле вводу в чаті на повідомлення про блокування.
-- **WebSocket**: при спробі відправити повідомлення (`message:send`) від замученого користувача — бекенд повинен відхилити з помилкою `"Вам заборонено писати повідомлення"`. Не зберігати і не розсилати повідомлення.
-- Socket.IO middleware перевірка:
-```js
-// у room:message або message:send handler
-if (user.role.includes('muted')) {
-  return socket.emit('error', { message: 'Вам заборонено писати повідомлення' });
+  "name": "Team Alpha",
+  "members": [
+    { "full_name": "Іванов Іван", "email": "ivan@mail.com", "username": "ivan_dev" }
+  ]
 }
 ```
 
-#### Зняття бану/муту
-- Через `PATCH /api/admin/users/:id` — встановити роль без `banned`/`muted` (наприклад назад на `"user"`).
-- Після зняття бану — при наступному завантаженні `/api/users/me` фронтенд автоматично прибере overlay.
+---
 
-#### Безпека
-- Усі захищені ендпоінти (крім `/me`) повинні повертати `403` для заблокованих.
-- Socket.IO middleware: при підключенні перевіряти якщо `role.includes('banned')` — відхиляти з'єднання з помилкою `"Акаунт заблоковано"`.
+## 4. Submissions (Подача роботи) ❌ ПОТРІБНО РЕАЛІЗУВАТИ
+
+| Метод | Маршрут | Опис |
+|-------|---------|------|
+| GET | `/api/submissions/teams/:teamId` | Сабмішени команди |
+| POST | `/api/submissions/rounds/:roundId` | Створити сабмішен |
+| PATCH | `/api/submissions/:id` | Оновити сабмішен |
+
+### Таблиця `submissions`:
+```
+id                 PK
+round_id           FK → rounds.id
+team_id            FK → teams.id
+github_repo_url    varchar
+github_branch      varchar
+pitch_video_url    varchar (YouTube/Vimeo)
+live_demo_url      varchar
+description        text
+created_at         timestamp
+updated_at         timestamp
+```
+
+### POST `/api/submissions/rounds/:roundId` body:
+```json
+{
+  "team_id": 1,
+  "github_repo_url": "https://github.com/user/repo",
+  "github_branch": "main",
+  "pitch_video_url": "https://youtube.com/...",
+  "live_demo_url": "https://myproject.vercel.app",
+  "description": "Короткий опис"
+}
+```
+
+### GET `/api/submissions/teams/:teamId` відповідь:
+```json
+[{ "id": 1, "round_id": 2, "github_repo_url": "...", "github_branch": "main", ... }]
+```
 
 ---
 
-## Підсумок пріоритетів
+## 5. Jury (Журі) ❌ ПОТРІБНО РЕАЛІЗУВАТИ
 
-| Пріоритет | Задача |
-|-----------|--------|
-| 🔴 Критично | `GET /api/users/me` повертає роль для banned-юзерів (не `403`) |
-| 🔴 Критично | WebSocket відхиляти повідомлення від muted |
-| 🔴 Критично | Бейдж `identity_confirmed` зберігати в БД |
-| 🔴 Критично | Поле `identity_confirmed` в `/users/search` |
-| 🟠 Важливо | Socket.IO middleware відхиляти banned при підключенні |
-| 🟠 Важливо | Таблиця `chat_room_members` + API ендпоінти |
-| 🟠 Важливо | Перевірка доступу до `team_*` кімнат в WebSocket |
-| 🟡 Бажано | Автододавання в чат при реєстрації команди |
-| 🟡 Бажано | Прив'язка учасника через `/link` |
-| 🟢 Майбутнє | `tournament_registrations` таблиця |
+| Метод | Маршрут | Опис |
+|-------|---------|------|
+| GET | `/api/jury/tournaments` | Турніри де поточний юзер є журі |
+| GET | `/api/jury/rounds/:roundId/submissions` | Сабмішени для перевірки |
+| POST | `/api/jury/submissions/:id/evaluate` | Виставити оцінку |
+
+### POST evaluate body:
+```json
+{
+  "backend": 8,
+  "database": 7,
+  "frontend": 9,
+  "documentation": 6,
+  "requirements": 8,
+  "comment": "Гарна архітектура"
+}
+```
+Критерії оцінки (константа `EVAL_CRITERIA` на фронтенді):
+- `backend` — Backend / Код (якість, ООП, тести)
+- `database` — База даних (структура, налаштування)
+- `frontend` — Frontend / UX
+- `documentation` — README, коментарі, API опис
+- `requirements` — Виконання must-have критеріїв ТЗ
+
+Також бекенд повинен знати яких юзерів призначено журі для турніру.
+Журі призначається через `TournamentForm` → `jury_ids: [1, 2, 3]` при `POST/PATCH /api/tournaments`.
+
+---
+
+## 6. Сповіщення (Notifications) ❌ ПОТРІБНО РЕАЛІЗУВАТИ
+
+| Метод | Маршрут | Опис |
+|-------|---------|------|
+| GET | `/api/notifications` | Список сповіщень юзера |
+| PATCH | `/api/notifications/:id/read` | Позначити прочитаним |
+| DELETE | `/api/notifications/:id` | Видалити |
+| PATCH | `/api/notifications/read-all` | Всі як прочитані |
+
+---
+
+## 7. Badges (Значки) ❌ ПОТРІБНО РЕАЛІЗУВАТИ
+
+| Метод | Маршрут | Опис |
+|-------|---------|------|
+| GET | `/api/badges/my` | Мої значки |
+| GET | `/api/admin/users/:id/badges` | Значки юзера (адмін) |
+| POST | `/api/admin/users/:id/badges` | Видати значок `{ badge_id: "team_member" }` |
+| DELETE | `/api/admin/users/:id/badges/:badgeId` | Забрати значок |
+
+Значки (`ALL_BADGES` на фронтенді):
+- `identity_confirmed` — заповнив ПІБ у профілі
+- `team_member` — вступив до першої команди
+
+---
+
+## 8. Заявки організатора
+
+| Метод | Маршрут | Статус |
+|-------|---------|--------|
+| POST | `/api/applications/organizer` | ⚠️ перевір |
+| GET | `/api/applications/organizer/my` | ⚠️ перевір |
+| GET | `/api/admin/applications/organizer` | ⚠️ перевір |
+| PATCH | `/api/admin/applications/organizer/:id` | ⚠️ перевір |
+
+Body PATCH: `{ "status": "approved" | "rejected" }`
+
+---
+
+## 9. Чат
+
+| Метод | Маршрут | Статус |
+|-------|---------|--------|
+| GET | `/api/chat-messages?room=general` | ⚠️ перевір |
+| POST | `/api/chat/upload` | ⚠️ multipart file |
+| GET | `/api/chat/:room/reactions` | ⚠️ |
+| DELETE | `/api/chat/:room/clear` | ⚠️ адмін |
+| GET | `/api/chat/custom-rooms` | ⚠️ |
+| GET | `/api/chat/:room/pinned` | ⚠️ |
+| POST | `/api/admin/chat/rooms` | ⚠️ |
+| DELETE | `/api/admin/chat/rooms/:id` | ⚠️ |
+| GET | `/api/admin/chat/settings/:room` | ⚠️ |
+| PATCH | `/api/admin/chat/settings/:room` | ⚠️ |
+| POST | `/api/admin/chat/announce/:room` | ⚠️ |
+| POST | `/api/admin/chat/pin/:msgId` | ⚠️ |
+| DELETE | `/api/admin/chat/pin/:msgId` | ⚠️ |
+| GET | `/api/admin/chat/muted` | ⚠️ |
+| POST | `/api/admin/chat/mute/:userId` | ⚠️ |
+| GET | `/api/teams/:teamId/chat/members` | ⚠️ |
+| POST | `/api/teams/:teamId/chat/members` | ⚠️ body: `{ user_id }` |
+| POST | `/api/teams/:teamId/members/:memberId/link` | ⚠️ body: `{ user_id }` |
+
+---
+
+## 10. Користувачі
+
+| Метод | Маршрут | Статус |
+|-------|---------|--------|
+| GET | `/api/users/me` | ✅ |
+| PATCH | `/api/users/me` | ✅ |
+| POST | `/api/users/me/avatar` | ✅ multipart |
+| POST | `/api/users/me/banner` | ✅ multipart |
+| DELETE | `/api/users/me/banner` | ✅ |
+| GET | `/api/users/:id` | ✅ |
+| GET | `/api/users/search?q=` | ✅ |
+
+### Поле `identity_confirmed` на юзері ⚠️
+Фронтенд перевіряє при додаванні до команди:
+```js
+if (!platformUser.identity_confirmed) { toast.error(...) }
+```
+Бекенд повинен повертати `identity_confirmed: true/false` — true якщо у юзера заповнено ПІБ (наприклад, `last_name` + `first_name` не пусті).
+
+---
+
+## 11. Admin
+
+| Метод | Маршрут | Статус |
+|-------|---------|--------|
+| GET | `/api/admin/users` | ⚠️ |
+| PATCH | `/api/admin/users/:id` | ⚠️ body: `{ role }` |
+| DELETE | `/api/admin/users/:id` | ⚠️ |
+| PATCH | `/api/admin/users/:id/password` | ⚠️ body: `{ password }` |
+| GET | `/api/admin/stats` | ⚠️ |
+| GET | `/api/admin/teams` | ⚠️ |
+| DELETE | `/api/admin/teams/:id` | ⚠️ |
+
+---
+
+## 12. Відгуки (Reviews)
+
+| Метод | Маршрут | Статус |
+|-------|---------|--------|
+| GET | `/api/reviews` | ⚠️ |
+| GET | `/api/reviews?q=search` | ⚠️ |
+| POST | `/api/reviews` | ⚠️ |
+
+---
+
+## Пріоритет реалізації
+
+### 🔴 Критично (блокує основний флоу):
+1. `GET /api/tournaments/:id/rounds` — без цього модалка "Подати роботу" не завантажується
+2. `GET /api/submissions/teams/:teamId` — перевірка чи є вже сабмішен
+3. `POST /api/submissions/rounds/:roundId` — власне подача роботи
+4. `PATCH /api/submissions/:id` — оновлення поданої роботи
+
+### 🟡 Важливо (UI є але запити падають):
+5. `GET /api/jury/...` — повний jury flow
+6. `GET /api/notifications` + mutations — таб сповіщень
+7. `GET /api/badges/my` — профіль
+
+### 🟢 Другорядне:
+8. Заявки організатора (якщо ще не перевірено)
+9. Адмін-ендпоїнти для чат-модерації
+10. Reviews

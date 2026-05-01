@@ -1,8 +1,7 @@
 /* Дашборд - спільні константи, хелпери та компоненти для всього дашборду */
 import { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
-import { searchUsers, API_BASE, CHECK_BACKEND, getToken } from '@utils/authApi';
-import IconGithub from '@images/dashboard_components/github.svg?react';
+import { searchUsers, getUserProfile, API_BASE, CHECK_BACKEND, getToken } from '@utils/authApi';
 
 import emote1 from '@images/emote/emote.png';
 import emote2 from '@images/emote/emote2.png';
@@ -546,11 +545,7 @@ function JurySearchSelector({ selectedJury, onChange }) {
         return;
       }
       try {
-        const users = await Promise.all(
-          selectedJury.map(id => 
-            fetch(`${API_BASE}/users/${id}`).then(r => r.json())
-          )
-        );
+        const users = await Promise.all(selectedJury.map(id => getUserProfile(id)));
         setSelectedUsers(users.filter(u => u && u.id));
       } catch {
         setSelectedUsers([]);
@@ -570,11 +565,7 @@ function JurySearchSelector({ selectedJury, onChange }) {
       setLoading(true);
       try {
         const all = await searchUsers(query);
-        // Фільтруємо тільки organizer та jury
-        const filtered = all.filter(u => 
-          (u.role === 'organizer' || u.role === 'jury' || u.role === 'admin') &&
-          !selectedJury.includes(u.id)
-        );
+        const filtered = all.filter(u => !selectedJury.includes(u.id));
         setResults(filtered);
       } catch {
         setResults([]);
@@ -740,19 +731,8 @@ export function TournamentForm({
   const [tz, setTz] = useState(t.tz || t.technical_task || '');
   const [showPreview, setShowPreview] = useState(false);
   
-  // GitHub integration
-  const [githubUrl, setGithubUrl] = useState(t.github_url || '');
-  const [githubBranch, setGithubBranch] = useState(t.github_branch || 'main');
-  const [liveDemoUrl, setLiveDemoUrl] = useState(t.live_demo_url || '');
-  const [videoUrl, setVideoUrl] = useState(t.video_url || '');
-  
   // Jury selection (for admin/organizer)
   const [selectedJury, setSelectedJury] = useState(t.jury_ids || []);
-  const [juryOptions, setJuryOptions] = useState([]);
-  const [juryLoading, setJuryLoading] = useState(false);
-  const [jurySearchQuery, setJurySearchQuery] = useState('');
-  const [jurySearchResults, setJurySearchResults] = useState([]);
-  const [jurySearchLoading, setJurySearchLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -777,14 +757,7 @@ export function TournamentForm({
       tz: tz.trim() || null,
     };
 
-    // Include optional fields only when they have values (backend whitelist rejects null for these)
     if (selectedJury.length > 0) payload.jury_ids = selectedJury;
-    if (githubUrl.trim()) {
-      payload.github_url = githubUrl.trim();
-      payload.github_branch = githubBranch.trim() || 'main';
-    }
-    if (liveDemoUrl.trim()) payload.live_demo_url = liveDemoUrl.trim();
-    if (videoUrl.trim()) payload.video_url = videoUrl.trim();
 
     // Для создания добавляем статус
     if (isCreate) {
@@ -1037,61 +1010,6 @@ export function TournamentForm({
           </small>
         </div>
         
-        {/* GitHub Integration */}
-        <div className="db-tz-github-preview">
-          <div className="db-tz-github-header">
-            <IconGithub width="20" height="20" />
-            <span>GitHub інтеграція <span className="db-tz-github-badge">вже доступно</span></span>
-          </div>
-          <div className="db-tz-github-fields">
-            <div className="db-edit-field">
-              <label className="db-edit-label">🔗 GitHub Repository URL</label>
-              <input 
-                type="url"
-                className="db-input"
-                value={githubUrl}
-                onChange={e => setGithubUrl(e.target.value)}
-                placeholder="https://github.com/username/repo"
-              />
-              <small className="db-field-hint">Посилання на репозиторій для автоматичної перевірки</small>
-            </div>
-            <div className="db-edit-field">
-              <label className="db-edit-label">🌿 Branch / Tag</label>
-              <input 
-                type="text"
-                className="db-input"
-                value={githubBranch}
-                onChange={e => setGithubBranch(e.target.value)}
-                placeholder="main"
-              />
-              <small className="db-field-hint">Вітка для сабміту (за замовчуванням: main)</small>
-            </div>
-            <div className="db-edit-row-2">
-              <div className="db-edit-field">
-                <label className="db-edit-label">🚀 Live Demo URL</label>
-                <input 
-                  type="url"
-                  className="db-input"
-                  value={liveDemoUrl}
-                  onChange={e => setLiveDemoUrl(e.target.value)}
-                  placeholder="https://my-project.vercel.app"
-                />
-                <small className="db-field-hint">Посилання на робочий прототип</small>
-              </div>
-              <div className="db-edit-field">
-                <label className="db-edit-label">🎥 Pitch Video URL</label>
-                <input 
-                  type="url"
-                  className="db-input"
-                  value={videoUrl}
-                  onChange={e => setVideoUrl(e.target.value)}
-                  placeholder="https://youtube.com/watch?v=..."
-                />
-                <small className="db-field-hint">Відео-презентація проєкту</small>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Jury Selection */}

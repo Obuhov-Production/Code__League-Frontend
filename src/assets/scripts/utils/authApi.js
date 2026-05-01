@@ -634,6 +634,31 @@ export async function evaluateSubmission(submissionId, data) {
   });
 }
 
+/* ── Submissions ──────────────────────────────────── */
+export async function getTournamentRounds(tournamentId) {
+  return request(`${BASE}/tournaments/${tournamentId}/rounds`, { headers: authHeaders() });
+}
+
+export async function getTeamSubmissions(teamId) {
+  return request(`${BASE}/submissions/teams/${teamId}`, { headers: authHeaders() });
+}
+
+export async function createSubmission(roundId, data) {
+  return request(`${BASE}/submissions/rounds/${roundId}`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateSubmission(submissionId, data) {
+  return request(`${BASE}/submissions/${submissionId}`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
 /* ── Badges ───────────────────────────────────────── */
 
 export async function getMyBadges() {

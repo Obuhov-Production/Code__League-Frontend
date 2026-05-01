@@ -2605,6 +2605,11 @@
   pointer-events: none;
   z-index: 1;
 }
+/* When photo banner — remove decorative effects */
+.db-profile-banner.has-photo::before,
+.db-profile-banner.has-photo::after {
+  display: none;
+}
 /* Everything inside banner stays above pseudo-elements */
 .db-profile-banner > * { position: relative; z-index: 2; }
 
