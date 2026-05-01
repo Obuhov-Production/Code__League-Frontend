@@ -58,9 +58,17 @@ export default function Dashboard() {
     }
     if (!isLoggedIn()) { navigate('/login'); return; }
     const cached = loadCachedUser();
-    if (cached) { setUser(cached); setLoading(false); }
+    if (cached) {
+      if (hasRole(cached, 'banned')) { navigate('/banned', { replace: true }); return; }
+      setUser(cached);
+      setLoading(false);
+    }
     getMe()
-      .then(fresh => { saveUser(fresh); setUser(fresh); })
+      .then(fresh => {
+        saveUser(fresh);
+        if (hasRole(fresh, 'banned')) { navigate('/banned', { replace: true }); return; }
+        setUser(fresh);
+      })
       .catch(() => {
         if (!cached) { clearSession(); toast.error('Сесія закінчилась'); navigate('/login'); }
       })
@@ -132,8 +140,32 @@ export default function Dashboard() {
 
   const tabLabel = TABS.find(t => t.id === tab)?.label ?? '';
 
+  const isBanned = user && hasRole(user, 'banned');
+  const isMuted  = user && hasRole(user, 'muted');
+
   return (
     <div className="db-page">
+
+      {/* ── Ban wall — unclosable, covers everything ── */}
+      {isBanned && (
+        <div className="db-ban-overlay">
+          <div className="db-ban-modal">
+            <div className="db-ban-icon">🚫</div>
+            <h2 className="db-ban-title">Акаунт заблоковано</h2>
+            <p className="db-ban-desc">
+              Ваш акаунт було заблоковано адміністратором платформи.<br />
+              Доступ до дашборду та будь-яких функцій обмежено.
+            </p>
+            <p className="db-ban-sub">
+              Якщо ви вважаєте, що це помилка — зверніться до підтримки.
+            </p>
+            <button className="db-btn db-btn-ghost db-ban-logout-btn" onClick={handleLogout}>
+              Вийти з акаунту
+            </button>
+          </div>
+        </div>
+      )}
+
       <aside className="db-sidebar">
         <Link to="/" className="db-logo">
           <img src={logoImg} alt="logo" className="db-logo-img" />
@@ -240,9 +272,9 @@ export default function Dashboard() {
               {tab !== 'chat' && <TabTip tab={tab} />}
               {tab === 'overview'    && <TabOverview    user={user} toast={toast} onNavigate={setTab} />}
               {tab === 'tournaments' && <TabTournaments user={user} toast={toast} />}
-              {tab === 'teams'       && <TabTeams       toast={toast} />}
+              {tab === 'teams'       && <TabTeams       toast={toast} setTab={setTab} />}
               {tab === 'leaderboard' && <TabLeaderboard toast={toast} />}
-              {tab === 'chat'        && <TabChat        user={user} toast={toast} userId={user?.id} onUnreadChange={setChatHasUnread} setTab={setTab} />}
+              {tab === 'chat'        && <TabChat        user={user} toast={toast} userId={user?.id} onUnreadChange={setChatHasUnread} setTab={setTab} isMuted={isMuted} />}
               {tab === 'profile'     && <TabProfile     user={user} setUser={setUser} toast={toast} onLogout={handleLogout} setTab={setTab} />}
               {tab === 'jury'      && (hasRole(user, 'admin') || hasRole(user, 'jury'))      && <TabJury      user={user} toast={toast} />}
               {tab === 'organizer' && (hasRole(user, 'admin') || hasRole(user, 'organizer')) && <TabOrganizer toast={toast} />}

@@ -8,6 +8,7 @@ import {
   getPinnedMessages, uploadChatFile, getUserProfile,
   getMutedChatUsers, toggleChatMute,
   pinChatMessage, unpinChatMessage,
+  searchUsers, addTeamChatMember,
   API_BASE,
 } from '@utils/authApi';
 import {
@@ -20,7 +21,7 @@ import {
   ALL_BADGES, displayName,
 } from './db.shared.jsx';
 
-export default function TabChat({ user, toast, userId, onUnreadChange, setTab }) {
+export default function TabChat({ user, toast, userId, onUnreadChange, setTab, isMuted }) {
   const [myTeams,     setMyTeams]     = useState([]);
   const [room,        setRoom]        = useState('general');
   const [messages,    setMessages]    = useState([]);
@@ -53,6 +54,12 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
   const [roomsOpen,   setRoomsOpen]   = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [reactPos,    setReactPos]    = useState(null); // { msgId, top, left, right, showBelow, isMe }
+  const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [addMemberQuery, setAddMemberQuery] = useState('');
+  const [addMemberResult, setAddMemberResult] = useState(null);
+  const [addMemberSearching, setAddMemberSearching] = useState(false);
+  const [addMemberAdding, setAddMemberAdding] = useState(false);
+  const addMemberTimer = useRef(null);
 
   async function openChatProfile(basic) {
     setChatProfile({ ...basic, loading: true });
@@ -366,6 +373,35 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
     setCtxMenu({ msg, x: Math.max(4, x), y: Math.max(4, y) });
   };
   const currentRoom = ROOMS.find(r => r.id === room);
+  const currentTeam = room.startsWith('team_') ? myTeams.find(t => `team_${t.id}` === room) : null;
+
+  const handleAddMemberSearch = (q) => {
+    setAddMemberQuery(q);
+    setAddMemberResult(null);
+    clearTimeout(addMemberTimer.current);
+    if (q.trim().length < 2) return;
+    addMemberTimer.current = setTimeout(async () => {
+      setAddMemberSearching(true);
+      try {
+        const results = await searchUsers(q.trim());
+        setAddMemberResult(results[0] || null);
+      } catch { /* ignore */ }
+      finally { setAddMemberSearching(false); }
+    }, 400);
+  };
+
+  const handleAddMemberConfirm = async () => {
+    if (!addMemberResult || !currentTeam) return;
+    setAddMemberAdding(true);
+    try {
+      await addTeamChatMember(currentTeam.id, addMemberResult.id);
+      toast.success(`${addMemberResult.username} додано до чату команди!`);
+      setAddMemberOpen(false);
+      setAddMemberQuery('');
+      setAddMemberResult(null);
+    } catch (err) { toast.error(err.message || 'Помилка додавання'); }
+    finally { setAddMemberAdding(false); }
+  };
 
   /* ── Inner ChatMsg component ─────────────────── */
   function ChatMsg({ msg }) {
@@ -696,7 +732,49 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
             {roomLocked && <span className="db-chat-locked-tag locked">🔒 заблоковано</span>}
           </div>
           {online && onlineCount > 0 && <span className="db-chat-online-count">⚫ {onlineCount} онлайн</span>}
+          {currentTeam && (
+            <button className="db-chat-add-member-btn" onClick={() => setAddMemberOpen(true)} title="Додати учасника до чату">
+              ➕
+            </button>
+          )}
         </div>
+
+        {/* Add member modal for team rooms */}
+        {addMemberOpen && currentTeam && (
+          <div className="modal-overlay" onClick={() => setAddMemberOpen(false)}>
+            <div className="modal-box modal-box--light" onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
+              <button className="modal-close" onClick={() => setAddMemberOpen(false)}>✕</button>
+              <h3 style={{ margin: '0 0 16px', fontSize: 17, fontWeight: 700 }}>Додати учасника до чату</h3>
+              <p style={{ fontSize: 13, color: '#aaa', margin: '0 0 12px' }}>
+                Тільки учасники, яких подавали у складі команди, можуть бути додані.
+              </p>
+              <input
+                className="db-input"
+                placeholder="🔍 Пошук по нікнейму"
+                value={addMemberQuery}
+                onChange={e => handleAddMemberSearch(e.target.value)}
+                autoFocus
+              />
+              {addMemberSearching && <p style={{ fontSize: 13, color: '#aaa', marginTop: 8 }}>Пошук...</p>}
+              {addMemberResult && !addMemberSearching && (
+                <div className="db-platform-suggestion" style={{ marginTop: 10 }}
+                  onClick={handleAddMemberConfirm}>
+                  <span className="db-ps-avatar">{addMemberResult.username.slice(0,2).toUpperCase()}</span>
+                  <div style={{ flex: 1 }}>
+                    <span className="db-ps-name">{addMemberResult.username}</span>
+                    {!addMemberResult.identity_confirmed && (
+                      <span style={{ display: 'block', fontSize: 11, color: '#e05fa0' }}>⚠️ ПІБ не підтверджено</span>
+                    )}
+                  </div>
+                  <span className="db-ps-add">{addMemberAdding ? '...' : '+ Додати'}</span>
+                </div>
+              )}
+              {addMemberQuery.length >= 2 && !addMemberResult && !addMemberSearching && (
+                <p style={{ fontSize: 13, color: '#bbb', marginTop: 8 }}>Користувача не знайдено</p>
+              )}
+            </div>
+          </div>
+        )}
 
         {pinnedMsgs.length > 0 && (
           <div className="db-chat-pinned-bar">
@@ -789,7 +867,12 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab })
             <button type="button" className="db-emoji-toggle" onClick={() => setShowEmoji(p => !p)} title="Емодзі">😊</button>
             <button type="button" className="db-emoji-toggle" onClick={() => fileRef.current?.click()} title="Прикріпити зображення">📎</button>
             <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleFileChange} />
-            {roomLocked && !isAdmin ? (
+            {isMuted ? (
+              <div className="db-chat-muted-input">
+                <span className="db-chat-muted-icon">🔇</span>
+                <span>Вам відключено можливість писати повідомлення в даний момент</span>
+              </div>
+            ) : roomLocked && !isAdmin ? (
               <div className="db-chat-locked-input">🔒 Чат заблоковано адміністратором</div>
             ) : (
               <>

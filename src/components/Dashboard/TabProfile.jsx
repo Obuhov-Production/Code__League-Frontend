@@ -171,12 +171,15 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
   const avatarInputRef = useRef(null);
   const bannerInputRef = useRef(null);
 
-  // Determine which badges are earned based on DB-loaded badges
+  const pibConfirmed = !!(user?.first_name?.trim() && user?.last_name?.trim() && user?.middle_name?.trim());
+
   const earnedBadges = ALL_BADGES.map(b => ({
     ...b,
-    earned: b.id === 'team_member'
-      ? myTeams.length > 0 || myBadges.some(mb => mb.badge_id === b.id)
-      : myBadges.some(mb => mb.badge_id === b.id),
+    earned: b.id === 'identity_confirmed'
+      ? pibConfirmed || myBadges.some(mb => mb.badge_id === b.id)
+      : b.id === 'team_member'
+        ? myTeams.length > 0 || myBadges.some(mb => mb.badge_id === b.id)
+        : myBadges.some(mb => mb.badge_id === b.id),
   }));
 
   const pinnedBadgeDef = pinnedBadge ? ALL_BADGES.find(b => b.id === pinnedBadge) : null;
@@ -209,15 +212,16 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
   const handleSavePib = async () => {
     setSavingPib(true);
     try {
+      const hadConfirmed = pibConfirmed;
       const updated = await updateMe({
         first_name: pibForm.first_name.trim(),
         last_name: pibForm.last_name.trim(),
         middle_name: pibForm.middle_name.trim(),
       });
       setUser(updated);
+      getMyBadges().then(setMyBadges).catch(() => {});
       const allFilled = pibForm.first_name.trim() && pibForm.last_name.trim() && pibForm.middle_name.trim();
-      if (allFilled && !myBadges.some(b => b.badge_id === 'identity_confirmed')) {
-        setMyBadges(prev => [...prev, { badge_id: 'identity_confirmed' }]);
+      if (allFilled && !hadConfirmed) {
         toast.success('🏅 Отримано нове досягнення: «Підтвердив особу»!');
       } else {
         toast.success('ПІБ збережено!');

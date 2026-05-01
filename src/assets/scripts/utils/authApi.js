@@ -393,7 +393,8 @@ export async function createPublicReview(payload) {
 
 export async function getAdminUsers() {
   if (!CHECK_BACKEND) return [];
-  return request(`${BASE}/admin/users`, { headers: authHeaders() });
+  const data = await request(`${BASE}/admin/users`, { headers: authHeaders() });
+  return Array.isArray(data) ? data : (data?.users || []);
 }
 
 export async function setUserRole(id, role) {
@@ -487,6 +488,29 @@ export async function toggleChatMute(userId) {
   return request(`${BASE}/admin/chat/mute/${userId}`, {
     method: 'POST',
     headers: authHeaders(),
+  });
+}
+
+/* ── Team chat membership ────────────────────────── */
+
+export async function getTeamChatMembers(teamId) {
+  if (!CHECK_BACKEND) return [];
+  return request(`${BASE}/teams/${teamId}/chat/members`, { headers: authHeaders() });
+}
+
+export async function addTeamChatMember(teamId, userId) {
+  return request(`${BASE}/teams/${teamId}/chat/members`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ user_id: userId }),
+  });
+}
+
+export async function linkTeamMember(teamId, memberId, userId) {
+  return request(`${BASE}/teams/${teamId}/members/${memberId}/link`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ user_id: userId }),
   });
 }
 

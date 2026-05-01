@@ -775,12 +775,16 @@ export function TournamentForm({
       elo_per_round: Number(eloPerRound),
       elo_winner: Number(eloWinner),
       tz: tz.trim() || null,
-      jury_ids: selectedJury.length > 0 ? selectedJury : null,
-      github_url: githubUrl.trim() || null,
-      github_branch: githubBranch.trim() || 'main',
-      live_demo_url: liveDemoUrl.trim() || null,
-      video_url: videoUrl.trim() || null,
     };
+
+    // Include optional fields only when they have values (backend whitelist rejects null for these)
+    if (selectedJury.length > 0) payload.jury_ids = selectedJury;
+    if (githubUrl.trim()) {
+      payload.github_url = githubUrl.trim();
+      payload.github_branch = githubBranch.trim() || 'main';
+    }
+    if (liveDemoUrl.trim()) payload.live_demo_url = liveDemoUrl.trim();
+    if (videoUrl.trim()) payload.video_url = videoUrl.trim();
 
     // Для создания добавляем статус
     if (isCreate) {

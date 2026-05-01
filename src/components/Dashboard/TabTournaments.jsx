@@ -7,6 +7,10 @@ import logoImg         from '@images/logos/logo.png';
 import { getTournaments, getMyTeams, registerTeam, updateTeam, searchUsers, updateTournament } from '@utils/authApi';
 import { StatusBadge, ACCENT, formatDate, daysLeft, resolveAvatarUrl, hasRole, TOURNAMENT_EMOJIS, TournamentForm } from './db.shared.jsx';
 
+function getTeamTournamentId(team) {
+  return team?.tournament_id ?? team?.tournamentId ?? team?.tournament?.id ?? team?.tournament?.tournament_id ?? null;
+}
+
 function TeamRegForm({ tournament, toast, onSuccess, onCancel, user }) {
   const min = tournament.min_team_size || 2;
   const max = tournament.max_team_size || 5;
@@ -70,13 +74,21 @@ function TeamRegForm({ tournament, toast, onSuccess, onCancel, user }) {
     }
     setLoading(true);
     const cleanMembers = members.map(m => ({
-      full_name: m.linkedUser ? (m.linkedUser.full_name?.trim() || m.linkedUser.username) : m.full_name,
-      email:     m.linkedUser ? m.linkedUser.email : m.email,
+      full_name: m.linkedUser ? (m.linkedUser.full_name?.trim() || m.linkedUser.username) : m.full_name.trim(),
+      email:     m.linkedUser ? m.linkedUser.email?.trim() : m.email.trim(),
+      user_id:   m.linkedUser?.userId ?? null,
     }));
     try { 
-      const newTeam = await registerTeam({ name: teamName.trim(), tournament_id: tournament.id, city, school, telegram_username: telegram }); 
+      const teamPayload = {
+        name: teamName.trim(),
+        tournament_id: tournament.id,
+        city: city.trim(),
+        school: school.trim(),
+        telegram_username: telegram.trim(),
+      };
+      const newTeam = await registerTeam(teamPayload); 
       if (cleanMembers && cleanMembers.length > 0) {
-        await updateTeam(newTeam.id, { members: cleanMembers });
+        await updateTeam(newTeam.id, { ...teamPayload, members: cleanMembers });
       }
       onSuccess(); 
     }
@@ -212,6 +224,10 @@ function TournamentModal({ tournament: t, user, toast, initReg, isRegistered, on
   const [showEdit, setShowEdit] = useState(false);
   const canEdit = user && (hasRole(user, 'admin') || hasRole(user, 'organizer'));
   useEffect(() => {
+    if (isRegistered) setShowReg(false);
+  }, [isRegistered]);
+
+  useEffect(() => {
     const fn = e => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', fn); return () => window.removeEventListener('keydown', fn);
   }, [onClose]);
@@ -318,7 +334,7 @@ export default function TabTournaments({ user, toast }) {
   const [selected,    setSelected]    = useState(null);
   const [openReg,     setOpenReg]     = useState(false);
 
-  const registeredIds = useMemo(() => new Set(myTeams.map(t => t.tournament_id)), [myTeams]);
+  const registeredIds = useMemo(() => new Set(myTeams.map(getTeamTournamentId).filter(Boolean).map(String)), [myTeams]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -419,7 +435,7 @@ export default function TabTournaments({ user, toast }) {
                       </span>
                     )}
                     {t.status === 'registration' && (
-                      registeredIds.has(t.id)
+                      registeredIds.has(String(t.id))
                         ? <span className="db-badge-registered">✓ Зареєстровано</span>
                         : <button className="db-btn db-btn-primary db-btn-sm"
                             onClick={e => { e.stopPropagation(); setSelected(t); setOpenReg(true); }}>
@@ -435,7 +451,7 @@ export default function TabTournaments({ user, toast }) {
       )}
       {selected && (
         <TournamentModal tournament={selected} user={user} toast={toast} initReg={openReg}
-          isRegistered={registeredIds.has(selected.id)}
+          isRegistered={registeredIds.has(String(selected.id))}
           onClose={() => { setSelected(null); setOpenReg(false); }} onRegistered={load} />
       )}
     </div>
