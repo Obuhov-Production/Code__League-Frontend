@@ -219,7 +219,7 @@
   .db-chat-msg         { max-width: 86%; }
   .db-chat-bubble      { font-size: 13.5px; padding: 9px 13px; }
   .db-chat-input-row   { padding: 10px 12px; gap: 6px; }
-  .db-chat-input       { height: 40px; font-size: 14px; }
+  .db-chat-input       { min-height: 40px; max-height: 100px; font-size: 14px; }
   /* Send button: icon only on mobile */
   .db-send-btn         { padding: 0; width: 40px; justify-content: center; border-radius: 12px; }
   .db-send-label       { display: none; }

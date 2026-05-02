@@ -295,10 +295,13 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
     socket.emit('message:typing', { room, isTyping: false });
     clearTimeout(typingTimer.current);
     setText(''); setReplyTo(null); setShowEmoji(false); setImgFiles([]);
+    if (inputRef.current) { inputRef.current.style.height = 'auto'; }
   };
 
   const handleInput = e => {
     setText(e.target.value);
+    e.target.style.height = 'auto';
+    e.target.style.height = Math.min(e.target.scrollHeight, 140) + 'px';
     if (!online) return;
     socket.emit('message:typing', { room, isTyping: true });
     clearTimeout(typingTimer.current);
@@ -876,11 +879,11 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
               <div className="db-chat-locked-input">🔒 Чат заблоковано адміністратором</div>
             ) : (
               <>
-                <input ref={inputRef} type="text" value={text} onChange={handleInput}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) send(e); }}
-                  placeholder={chatError || (online ? 'Написати повідомлення...' : 'Підключення...')}
+                <textarea ref={inputRef} value={text} onChange={handleInput}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(e); } }}
+                  placeholder={chatError || (online ? 'Написати повідомлення... (Shift+Enter — новий рядок)' : 'Підключення...')}
                   disabled={!online || uploading} className={`db-chat-input${chatError ? ' error' : ''}`}
-                  maxLength={500} />
+                  maxLength={500} rows={1} />
                 {text.length > 300 && (
                   <span className={`db-chat-char-count${text.length >= 480 ? ' danger' : text.length >= 400 ? ' warn' : ''}`}>
                     {text.length}/500

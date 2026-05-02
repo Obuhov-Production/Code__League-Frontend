@@ -634,6 +634,18 @@
   overflow-y: auto;
   padding: 28px;
 }
+/* Chat tab: remove padding so it fills the full area like a real chat app */
+/* padding-top: 10px aligns the chat panel with the logo bottom border (logo=74px, topbar=64px) */
+.db-content:has(> .db-chat-layout) {
+  padding: 10px 0 0 0;
+  overflow: hidden;
+}
+.db-content:has(> .db-chat-layout) > .db-chat-layout {
+  height: 100%;
+  max-height: none;
+  border-radius: 0;
+  box-shadow: none;
+}
 .db-tab { display: flex; flex-direction: column; gap: 24px; min-height: 100%; }
 .db-tab-header {
   display: flex;
@@ -2547,10 +2559,10 @@
 
 /* ── Rooms panel (left sidebar) ─────────────────── */
 .db-chat-rooms {
-  width: 200px;
+  width: 260px;
   flex-shrink: 0;
   background: #191A23;
-  border-radius: 18px 0 0 18px;
+  border-radius: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -2606,11 +2618,6 @@
   width: 100%;
   min-height: 34px;
 }
-/* Color the leading # in channel names */
-.db-chat-room-btn span:first-child::first-letter {
-  color: rgba(172,158,248,.7);
-  font-weight: 700;
-}
 .db-chat-room-btn:hover {
   background: rgba(255,255,255,.06);
   color: rgba(255,255,255,.9);
@@ -2620,9 +2627,6 @@
   color: #c4b5fd;
   font-weight: 600;
   box-shadow: inset 3px 0 0 #AC9EF8;
-}
-.db-chat-room-btn.active span:first-child::first-letter {
-  color: #AC9EF8;
 }
 .db-chat-room-btn.has-unread {
   color: rgba(255,255,255,.85);
@@ -2659,7 +2663,7 @@
   display: flex;
   flex-direction: column;
   background: #f8f7ff;
-  border-radius: 0 18px 18px 0;
+  border-radius: 0;
   overflow: hidden;
   min-width: 0;
 }
@@ -2684,10 +2688,10 @@
 .db-chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 22px;
+  padding: 20px 28px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   scroll-behavior: smooth;
 }
 .db-chat-messages::-webkit-scrollbar { width: 5px; }
@@ -2699,7 +2703,7 @@
   display: flex;
   gap: 10px;
   align-items: flex-end;
-  max-width: 68%;
+  max-width: 74%;
   align-self: flex-start;
   margin-bottom: 6px;
 }
@@ -2743,7 +2747,7 @@
   flex-direction: column;
   align-items: flex-start;
   min-width: 36px;
-  max-width: 420px;
+  max-width: 620px;
   width: fit-content;
   text-align: left;
 }
@@ -2770,19 +2774,23 @@
   padding: 12px 16px;
   background: #fff;
   border-top: none;
-  align-items: center;
+  align-items: flex-end;
 }
 .db-chat-input {
   flex: 1;
-  height: 40px;
-  padding: 0 16px;
+  min-height: 44px;
+  max-height: 140px;
+  padding: 11px 16px;
   border: 1.5px solid #e4e0f8;
   border-radius: 12px;
   font-family: inherit;
   font-size: 14px;
+  line-height: 1.5;
   color: #191A23;
   background: #faf9ff;
   outline: none;
+  resize: none;
+  overflow-y: auto;
   transition: border-color .15s, background .15s, box-shadow .15s;
 }
 .db-chat-input:focus {
