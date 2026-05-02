@@ -13,11 +13,36 @@ import emote3 from '@images/emote/emote3.png';
 import emote4 from '@images/emote/emote4.png';
 import emote5 from '@images/emote/emote5.png';
 import emote6 from '@images/emote/emote6.png';
+import emote7 from '@images/emote/emote7.svg';
+import emote8 from '@images/emote/emote8.svg';
+import emote9 from '@images/emote/emote9.svg';
+import emote10 from '@images/emote/emote10.svg';
+import emote11 from '@images/emote/emote11.svg';
+import emote12 from '@images/emote/emote12.svg';
+import emote13 from '@images/emote/emote13.svg';
+import emote14 from '@images/emote/emote14.svg';
+import emote15 from '@images/emote/emote15.svg';
+import emote16 from '@images/emote/emote16.svg';
+import emote17 from '@images/emote/emote17.svg';
+import emote18 from '@images/emote/emote18.svg';
+import emote19 from '@images/emote/emote19.svg';
+import emote20 from '@images/emote/emote20.svg';
+import emote21 from '@images/emote/emote21.svg';
+import emote22 from '@images/emote/emote22.svg';
+import emote23 from '@images/emote/emote23.svg';
+import emote24 from '@images/emote/emote24.svg';
+import emote25 from '@images/emote/emote25.svg';
+import emote26 from '@images/emote/emote26.svg';
+import emote27 from '@images/emote/emote27.svg';
+import emote28 from '@images/emote/emote28.svg';
+import emote29 from '@images/emote/emote29.svg';
+import emote30 from '@images/emote/emote30.svg';
+
 
 import badge1Img from '@images/pin/bage1.png';
 import badge2Img from '@images/pin/bage2.png';
 
-export const STICKERS = [emote1, emote2, emote3, emote4, emote5, emote6];
+export const STICKERS = [emote1, emote2, emote3, emote4, emote5, emote6, emote7, emote8, emote9, emote10, emote11, emote12, emote13, emote14, emote15, emote16, emote17, emote18, emote19, emote20, emote21, emote22, emote23, emote24, emote25, emote26, emote27, emote28, emote29, emote30];
 export const STICKER_PREFIX = '__sticker__:';
 
 /* constants */

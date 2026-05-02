@@ -4104,9 +4104,10 @@
   max-height: 150px; overflow-y: auto;
 }
 .db-sticker-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: 8px; padding: 10px 12px;
-  max-height: 200px; overflow-y: auto;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+  gap: 6px; padding: 10px 12px;
+  max-height: 240px; overflow-y: auto;
+  width: 100%; box-sizing: border-box;
 }
 .db-sticker-btn {
   background: #f5f5fa; border: 1px solid #ebebf0;

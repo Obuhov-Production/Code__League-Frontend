@@ -423,6 +423,14 @@
   /* ══ Tap targets ══ */
   .db-btn, .db-filter-btn { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   .db-btn              { min-height: 40px; }
+
+  /* ══ Sticker / emoji picker ══ */
+  .db-sticker-grid {
+    grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+    width: 100%;
+    gap: 6px;
+  }
+  .db-sticker-btn img { width: 44px; height: 44px; }
 }
 
 /* ───────────────────────────────────────────────
