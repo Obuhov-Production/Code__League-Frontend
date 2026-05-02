@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 
-import StatTrophy   from '@images/dashboard_components/icon_stat_trophy.svg?react';
+import StatTrophy   from '@images/dashboard_components/tournaments.svg?react';
 import StatTeam     from '@images/dashboard_components/icon_stat_team.svg?react';
-import StatStar     from '@images/dashboard_components/icon_stat_star.svg?react';
+import StatStar     from '@images/dashboard_components/active.svg?react';
 import StatCalendar from '@images/dashboard_components/icon_stat_calendar.svg?react';
 import IconTournaments from '@images/dashboard_components/icon_tournaments.svg?react';
 import IconChat        from '@images/dashboard_components/icon_chat.svg?react';
@@ -80,7 +80,7 @@ export default function TabOverview({ user, toast, onNavigate }) {
   const STATS = [
     { label: 'Усього турнірів',  value: tournaments.length,       Icon: StatTrophy,   color: '#3a15f0' },
     { label: 'Мої команди',      value: myTeams.length,           Icon: StatTeam,     color: '#4ade80' },
-    { label: 'Активні турніри',    value: activeTournaments.length, Icon: StatStar,     color: '#f59e0b' },
+    { label: 'Активні турніри',    value: activeTournaments.length, Icon: StatStar,     color: '#f50b0b' },
     { label: 'Відкрита реєстрація', value: openRegistrations.length, Icon: StatCalendar, color: '#0ea5e9' },
   ];
   

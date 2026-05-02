@@ -614,6 +614,13 @@ export async function markAllNotificationsRead() {
   });
 }
 
+export async function deleteAllNotifications() {
+  return request(`${BASE}/notifications`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+}
+
 /* ── Jury ─────────────────────────────────────── */
 
 export async function getJuryTournaments() {

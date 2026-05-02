@@ -1,7 +1,11 @@
 /* Дашборд - спільні константи, хелпери та компоненти для всього дашборду */
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { io } from 'socket.io-client';
 import { searchUsers, getUserProfile, API_BASE, CHECK_BACKEND, getToken } from '@utils/authApi';
+
+import IconGithubSm  from '@images/dashboard_components/icon_github.svg?react';
+import IconLogoutSm  from '@images/dashboard_components/icon_logout.svg?react';
+import IconProfileSm from '@images/dashboard_components/icon_profile.svg?react';
 
 import emote1 from '@images/emote/emote.png';
 import emote2 from '@images/emote/emote2.png';
@@ -106,14 +110,14 @@ export const EVAL_CRITERIA = [
 ];
 
 export const TAB_TIPS = {
-  overview:    { icon: '🏠', title: 'Головна',     text: 'Тут зібрана вся важлива інформація: ваші турніри, команди та швидка навігація.' },
-  tournaments: { icon: '🏆', title: 'Турніри',   text: 'Переглядайте актуальні змагання, фільтруйте за статусом та реєструйте команди.' },
+  overview:    { icon: '🏠', title: 'Головна',     text: 'Тут зібрана вся важлива інформація: ваші турніри, команди та навігація.' },
+  tournaments: { icon: '🏆', title: 'Турніри',   text: 'Переглядайте актуальні змагання, турніри та реєструйтесь!.' },
   teams:       { icon: '👥', title: 'Команди',   text: 'Усі ваші команди в одному місці. Команди прив\'язані до конкретних турнірів.' },
   leaderboard: { icon: '📊', title: 'Лідерборд', text: 'Рейтинг команд по кожному турніру. Оберіть турнір щоб побачити результати.' },
   chat:        { icon: '💬', title: 'Чат',       text: 'Загальний чат та приватні кімнати для вашої команди. ПКМ на повідомлення — дії.' },
   profile:     { icon: '👤', title: 'Профіль',   text: 'Налаштуйте нікнейм, аватар, банер та опис профілю.' },
-  admin:       { icon: '⚙️', title: 'Адмін',        text: 'Управляйте турнірами, користувачами та чатом платформи.' },
   organizer:   { icon: '🗂️', title: 'Організатор', text: 'Створюйте турніри, керуйте раундами та переглядайте команди.' },
+  admin:       { icon: '⚙️', title: 'Адмін',        text: 'Керуйте усіма аспектами платформи. :)' },
 };
 
 /* Helpers (хелперы) (вдруг не понял с первого раза) */
@@ -317,34 +321,144 @@ export function TabTip({ tab }) {
   );
 }
 
-export function MiniProfileModal({ user, onClose, onGoProfile }) {
+const ROLE_CONFIG = {
+  admin:     { label: 'Адмін',       color: '#f59e0b', bg: 'rgba(245,158,11,.13)' },
+  organizer: { label: 'Організатор', color: '#0ea5e9', bg: 'rgba(14,165,233,.13)' },
+  jury:      { label: 'Журі',        color: '#6366f1', bg: 'rgba(99,102,241,.13)'  },
+  banned:    { label: 'Заблок.',     color: '#ef4444', bg: 'rgba(239,68,68,.13)'   },
+};
+
+export function MiniProfileModal({ user, onClose, onGoProfile, onLogout }) {
   const ref = useRef(null);
+  const [copied,  setCopied]  = useState(false);
+  const [glowPos, setGlowPos] = useState({ x: 50, y: 50 });
+
   useEffect(() => {
-    const fn = e => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
-    document.addEventListener('mousedown', fn);
-    return () => document.removeEventListener('mousedown', fn);
+    const onMouse = e => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    const onKey   = e => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('mousedown', onMouse);
+    document.addEventListener('keydown',   onKey);
+    return () => { document.removeEventListener('mousedown', onMouse); document.removeEventListener('keydown', onKey); };
   }, [onClose]);
 
+  const dotPositions = useMemo(() =>
+    [...Array(18)].map(() => ({
+      left:  `${Math.random() * 100}%`,
+      top:   `${Math.random() * 100}%`,
+      delay: `${Math.random() * 3}s`,
+      size:  `${2 + Math.random() * 3}px`,
+    })), []);
+
   const bannerStyle = user.banner_url
-    ? { backgroundImage: `url(${API_BASE + user.banner_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-    : { background: user.banner_color || '#1e1b2e' };
+    ? { backgroundImage: `url(${resolveAvatarUrl(user.banner_url)})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+    : { background: user.banner_color
+        ? `linear-gradient(135deg, ${user.banner_color} 0%, ${user.banner_color}99 60%, #1a1333 100%)`
+        : 'linear-gradient(135deg, #1a1333 0%, #2d1f6e 50%, #1e1b2e 100%)' };
+
+  const roleConf = ROLE_CONFIG[user.role] || { label: 'Учасник', color: '#AC9EF8', bg: 'rgba(172,158,248,.13)' };
+  const name = displayName(user);
+
+  const handleCopyUsername = () => {
+    if (!user.username) return;
+    navigator.clipboard.writeText(user.username).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  };
+
+  const handleBannerMouseMove = (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setGlowPos({
+      x: ((e.clientX - r.left) / r.width)  * 100,
+      y: ((e.clientY - r.top)  / r.height) * 100,
+    });
+  };
 
   return (
     <div className="db-mini-profile" ref={ref} onClick={e => e.stopPropagation()}>
-      <div className="db-mp-banner" style={bannerStyle} />
-      <div className="db-mp-body">
-        <div className="db-mp-avatar-wrap"><UserAvatar user={user} size={56} showStatus={true} /></div>
-        <div className="db-mp-info">
-          <strong>{displayName(user)}</strong>
-          {(user.first_name || user.last_name) && <span style={{ fontSize: 12, color: '#aaa', display: 'block' }}>@{user.username}</span>}
-          <span className="db-role-badge" style={{ display:'inline-block', marginTop:4 }}>{user.role}</span>
-        </div>
-        {user.user_description && <p className="db-mp-desc">{user.user_description}</p>}
-        <div className="db-mp-footer">
-          <span style={{ fontSize:12, color:'#aaa' }}>Реєстрація: {formatDate(user.created_at)}</span>
-          <button className="db-btn db-btn-primary db-btn-sm" onClick={onGoProfile}>Редагувати профіль</button>
+
+      {/* ── Banner + avatar ── */}
+      <div className="db-mp-banner" style={bannerStyle}
+        onMouseMove={!user.banner_url ? handleBannerMouseMove : undefined}
+        onMouseLeave={!user.banner_url ? () => setGlowPos({ x: 50, y: 50 }) : undefined}>
+
+        {/* Animated effects — тільки для кольорового банера */}
+        {!user.banner_url && (
+          <div className="db-mp-effects">
+            <div className="db-mp-dots">
+              {dotPositions.map((d, i) => (
+                <span key={i} className="db-welcome-dot" style={{
+                  left: d.left, top: d.top,
+                  width: d.size, height: d.size,
+                  animationDelay: d.delay,
+                }} />
+              ))}
+            </div>
+            <div className="db-mp-glow" style={{
+              top:   `${-60 + (glowPos.y / 100) * 50}px`,
+              right: `${-20 + ((100 - glowPos.x) / 100) * 50}px`,
+              transition: 'top .5s ease, right .5s ease',
+            }} />
+            <div className="db-mp-glow db-mp-glow-2" style={{
+              bottom: `${-30 + ((100 - glowPos.y) / 100) * 30}px`,
+              left:   `${15 + (glowPos.x / 100) * 30}%`,
+              transition: 'bottom .5s ease, left .5s ease',
+            }} />
+          </div>
+        )}
+
+        <button className="db-mp-banner-edit" onClick={onGoProfile} title="Редагувати профіль">
+          ✏ Змінити
+        </button>
+        <div className="db-mp-avatar-wrap">
+          <UserAvatar user={user} size={62} showStatus={true} />
         </div>
       </div>
+
+      {/* ── Identity ── */}
+      <div className="db-mp-identity">
+        <strong className="db-mp-name">{name}</strong>
+        {user.username && (
+          <button className={`db-mp-at${copied ? ' copied' : ''}`} onClick={handleCopyUsername} title="Натисни щоб скопіювати">
+            {copied ? '✓ Скопійовано' : `@${user.username}`}
+          </button>
+        )}
+        <span className="db-mp-role-badge" style={{ color: roleConf.color, background: roleConf.bg }}>
+          {roleConf.label}
+        </span>
+      </div>
+
+      {/* ── Bio ── */}
+      {user.user_description && (
+        <p className="db-mp-bio">{user.user_description}</p>
+      )}
+
+      {/* ── GitHub ── */}
+      {user.auth_provider === 'github' && user.github_username && (
+        <div className="db-mp-github-row">
+          <IconGithubSm className="db-mp-github-icon" />
+          <span>{user.github_username}</span>
+        </div>
+      )}
+
+      {/* ── Actions ── */}
+      <div className="db-mp-actions">
+        <button className="db-mp-action" onClick={onGoProfile}>
+          <IconProfileSm className="db-mp-action-icon" />
+          <span>Мій профіль</span>
+        </button>
+        {onLogout && (
+          <button className="db-mp-action danger" onClick={onLogout}>
+            <IconLogoutSm className="db-mp-action-icon" />
+            <span>Вийти з акаунту</span>
+          </button>
+        )}
+      </div>
+
+      {/* ── Meta ── */}
+      <div className="db-mp-meta">
+        З нами з {formatDate(user.created_at)}
+      </div>
+
     </div>
   );
 }

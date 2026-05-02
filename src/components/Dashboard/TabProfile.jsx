@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 
 import badge1Img from '@images/pin/bage1.png';
 import badge2Img from '@images/pin/bage2.png';
 
-import { getMyTeams, updateMe, uploadAvatar, uploadBanner, deleteBanner, API_BASE,
+import { getMyTeams, updateMe, uploadAvatar, uploadBanner, deleteBanner,
   submitOrganizerApplication, getMyOrganizerApplication, getMyBadges } from '@utils/authApi';
-import { BANNER_PRESETS, StatusBadge, UserAvatar, formatDate, hasRole, displayName } from './db.shared.jsx';
+import { BANNER_PRESETS, StatusBadge, UserAvatar, formatDate, hasRole, displayName, resolveAvatarUrl } from './db.shared.jsx';
 
 /* ── Badge definitions ────────────────────────── */
 export const ALL_BADGES = [
@@ -263,8 +263,16 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
 
   const bannerHasPhoto = !!user.banner_url;
   const bannerStyle = user.banner_url
-    ? { backgroundImage: `url(${API_BASE + user.banner_url})`, backgroundSize: 'cover', backgroundPosition: 'center top' }
-    : { background: form.banner_color || user.banner_color || '#1e1b2e' };
+    ? { backgroundImage: `url(${resolveAvatarUrl(user.banner_url)})`, backgroundSize: 'cover', backgroundPosition: 'center top' }
+    : { background: `linear-gradient(135deg, ${form.banner_color || user.banner_color || '#1e1b2e'} 0%, #191A23 100%)` };
+
+  const dotPositions = useMemo(() =>
+    [...Array(22)].map(() => ({
+      left:  `${Math.random() * 100}%`,
+      top:   `${Math.random() * 100}%`,
+      delay: `${Math.random() * 4}s`,
+      size:  `${2 + Math.random() * 4}px`,
+    })), []);
 
   const handleDeleteBanner = async () => {
     try { await deleteBanner(); setUser(u => ({ ...u, banner_url: null })); toast.success('Банер видалено'); }
@@ -310,6 +318,26 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━ BANNER ━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <div className={`db-profile-banner${bannerHasPhoto ? ' has-photo' : ''}`} style={bannerStyle}>
+
+        {/* ── Animated effects (тільки для кольорового банера) ── */}
+        {!bannerHasPhoto && (
+          <div className="db-profile-banner-effects">
+            <div className="db-welcome-dots">
+              {dotPositions.map((dot, i) => (
+                <span key={i} className="db-welcome-dot" style={{
+                  left: dot.left, top: dot.top,
+                  width: dot.size, height: dot.size,
+                  animationDelay: dot.delay,
+                }} />
+              ))}
+            </div>
+            <div className="db-welcome-bg-effects">
+              <div className="db-welcome-glow" />
+              <div className="db-welcome-glow db-welcome-glow-2" />
+            </div>
+          </div>
+        )}
+
         {/* ─── Banner editor panel ─── */}
         {editing && (
           <div className="db-bep">
@@ -441,51 +469,68 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
           {editing ? (
             <>
               <div className="db-field-row">
-                <label>Нікнейм
-                  {!canChangeUsername() && <span className="db-field-hint"> (через {daysUntilChange()} дн.)</span>}
+                <label>
+                  Нікнейм
+                  {!canChangeUsername() && <span className="db-field-hint">🔒 через {daysUntilChange()} дн.</span>}
                 </label>
-                <input className="db-field-input" value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
-                  disabled={!canChangeUsername()} placeholder="Ваш нікнейм" />
+                <div className={!canChangeUsername() ? 'db-field-locked' : undefined}>
+                  <input className="db-field-input" value={form.username}
+                    onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
+                    disabled={!canChangeUsername()} placeholder="Ваш нікнейм" />
+                  {!canChangeUsername() && <span className="db-field-locked-badge">🔒 Заблоковано</span>}
+                </div>
               </div>
+
               <div className="db-field-row">
                 <label>Про себе</label>
                 <textarea className="db-field-input" rows={3} value={form.user_description}
                   onChange={e => setForm(f => ({ ...f, user_description: e.target.value.slice(0, 256) }))}
                   placeholder="Розкажіть про себе..."
                   maxLength={256}
-                  style={{ resize: 'vertical', minHeight: 72, maxHeight: 160 }} />
-                <small style={{ color: form.user_description.length >= 240 ? '#f87171' : '#999', fontSize: 11, textAlign: 'right', display: 'block', marginTop: 2 }}>
-                  {form.user_description.length} / 256
-                </small>
+                  style={{ minHeight: 80, maxHeight: 80 }} />
+                <div className="db-char-counter">
+                  <div className="db-char-bar-wrap">
+                    <div className="db-char-bar" style={{
+                      width: `${(form.user_description.length / 256) * 100}%`,
+                      background: form.user_description.length >= 240 ? '#f87171' : '#AC9EF8',
+                    }} />
+                  </div>
+                  <span className="db-char-count" style={{ color: form.user_description.length >= 240 ? '#f87171' : undefined }}>
+                    {form.user_description.length} / 256
+                  </span>
+                </div>
               </div>
-              {/* ── ПІБ inline (edit mode) ── */}
+
+              {/* ── ПІБ ── */}
               <div className="db-pib-section">
                 <div className="db-pib-header">
                   <span>ПІБ</span>
                   <span className="db-pib-hint">потрібно для заявок на турніри</span>
                 </div>
-                <div className="db-field-row">
-                  <label>Прізвище</label>
-                  <input className="db-field-input" value={pibForm.last_name}
-                    onChange={e => setPibForm(f => ({ ...f, last_name: e.target.value }))}
-                    placeholder="Іванов" />
+                <div className="db-pib-grid">
+                  <div className="db-field-row">
+                    <label>Прізвище</label>
+                    <input className="db-field-input" value={pibForm.last_name}
+                      onChange={e => setPibForm(f => ({ ...f, last_name: e.target.value }))}
+                      placeholder="Іванов" />
+                  </div>
+                  <div className="db-field-row">
+                    <label>Ім'я</label>
+                    <input className="db-field-input" value={pibForm.first_name}
+                      onChange={e => setPibForm(f => ({ ...f, first_name: e.target.value }))}
+                      placeholder="Іван" />
+                  </div>
+                  <div className="db-field-row">
+                    <label>По батькові</label>
+                    <input className="db-field-input" value={pibForm.middle_name}
+                      onChange={e => setPibForm(f => ({ ...f, middle_name: e.target.value }))}
+                      placeholder="Іванович" />
+                  </div>
                 </div>
-                <div className="db-field-row">
-                  <label>Ім'я</label>
-                  <input className="db-field-input" value={pibForm.first_name}
-                    onChange={e => setPibForm(f => ({ ...f, first_name: e.target.value }))}
-                    placeholder="Іван" />
-                </div>
-                <div className="db-field-row">
-                  <label>По батькові</label>
-                  <input className="db-field-input" value={pibForm.middle_name}
-                    onChange={e => setPibForm(f => ({ ...f, middle_name: e.target.value }))}
-                    placeholder="Іванович" />
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
-                  <button className="db-btn db-btn-primary" style={{ fontSize: 13, padding: '5px 16px' }}
+                <div className="db-pib-save">
+                  <button className="db-btn db-btn-primary db-btn-sm"
                     onClick={handleSavePib} disabled={savingPib}>
-                    {savingPib ? '⏳...' : '💾 Зберегти ПІБ'}
+                    {savingPib ? '⏳ Збереження...' : '💾 Зберегти ПІБ'}
                   </button>
                 </div>
               </div>
@@ -505,6 +550,9 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
             </div>
           )}
         </div>
+
+        {/* ── Right column — не залежить від висоти лівої картки ── */}
+        <div className="db-profile-cards-right">
 
         <div className="db-info-card db-info-card--teams">
           <h3><span className="db-card-icon">🏆</span> Мої команди</h3>
@@ -624,6 +672,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
           </div>
         </div>
 
+        </div>{/* end db-profile-cards-right */}
       </div>
 
       {selectedBadge && <BadgeModal badge={selectedBadge} pinnedBadge={pinnedBadge} onPin={handlePinBadge} onClose={() => setSelectedBadge(null)} />}

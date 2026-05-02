@@ -166,6 +166,7 @@ function LoginPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Enter your email"
                     autoComplete="email"
+                    minLength="6"
                   />
                 </div>
               </div>
@@ -181,6 +182,8 @@ function LoginPage() {
                     autoComplete="current-password"
                     style={{ paddingRight: '48px' }}
                     disabled={loading}
+                    minLength="8"
+                    maxLength="48"
                   />
                   <button
                     type="button"
