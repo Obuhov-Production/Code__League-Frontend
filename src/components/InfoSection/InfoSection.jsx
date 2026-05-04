@@ -1,27 +1,30 @@
 import { useEffect, useRef, useState } from 'react'
 import { getPlatformStats } from '@utils/authApi'
 
-/** Округлення вниз до найближчого кратного 100: 536→500, 556→500, 601→600 */
-function floorTo100(n) {
-  return Math.floor(n / 100) * 100
+function smartFloor(n) {
+  if (n < 10)   return { value: n,                          suffix: '' }
+  if (n < 100)  return { value: Math.floor(n / 10)  * 10,  suffix: '+' }
+  if (n < 1000) return { value: Math.floor(n / 100) * 100, suffix: '+' }
+  return               { value: Math.floor(n / 1000),       suffix: 'K+' }
 }
 
 const FALLBACK_STATS = [
-  { value: 500, suffix: '+', label: 'зареєстрованих учасників' },
-  { value: 120, suffix: '+', label: 'турнірів на платформі' },
-  { value: 40,  suffix: '+', label: 'завершених турнірів' },
-  { value: 98,  suffix: '+', label: 'усього створено команд' },
+  { value: 0, suffix: '', label: 'зареєстрованих учасників' },
+  { value: 0, suffix: '', label: 'турнірів на платформі' },
+  { value: 0, suffix: '', label: 'завершених турнірів' },
+  { value: 0, suffix: '', label: 'усього створено команд' },
 ]
 
 const STATS_FROM_BACKEND = import.meta.env.VITE_HERO_STATS_FROM_BACKEND === 'true'
 
 function mapBackendStats(data) {
-  return [
-    { value: floorTo100(data.participants        ?? 500), suffix: '+', label: 'зареєстрованих учасників' },
-    { value: floorTo100(data.tournamentsTotal    ?? 120), suffix: '+', label: 'турнірів на платформі' },
-    { value: floorTo100(data.tournamentsFinished ?? 40),  suffix: '+', label: 'завершених турнірів' },
-    { value: floorTo100(data.teams               ?? 10),  suffix: '+', label: 'усього створено команд' },
+  const entries = [
+    { raw: data.participants        ?? 0, label: 'зареєстрованих учасників' },
+    { raw: data.tournamentsTotal    ?? 0, label: 'турнірів на платформі' },
+    { raw: data.tournamentsFinished ?? 0, label: 'завершених турнірів' },
+    { raw: data.teams               ?? 0, label: 'усього створено команд' },
   ]
+  return entries.map(({ raw, label }) => ({ ...smartFloor(raw), label }))
 }
 
 function useCountUp(target, duration = 1400, started = false) {
