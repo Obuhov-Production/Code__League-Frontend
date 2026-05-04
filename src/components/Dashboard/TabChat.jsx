@@ -881,7 +881,7 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
               <>
                 <textarea ref={inputRef} value={text} onChange={handleInput}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(e); } }}
-                  placeholder={chatError || (online ? 'Написати повідомлення... (Shift+Enter — новий рядок)' : 'Підключення...')}
+                  placeholder={chatError || (online ? 'Написати повідомлення...' : 'Підключення...')}
                   disabled={!online || uploading} className={`db-chat-input${chatError ? ' error' : ''}`}
                   maxLength={500} rows={1} />
                 {text.length > 300 && (

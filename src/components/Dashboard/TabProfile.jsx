@@ -317,7 +317,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
       <input ref={bannerInputRef} type="file" accept="image/*" style={{ display:'none' }} onChange={handleBannerPick} />
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━ BANNER ━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <div className={`db-profile-banner${bannerHasPhoto ? ' has-photo' : ''}`} style={bannerStyle}>
+      <div className={`db-profile-banner${bannerHasPhoto ? ' has-photo' : ''}${editing ? ' is-editing' : ''}`} style={bannerStyle}>
 
         {/* ── Animated effects (тільки для кольорового банера) ── */}
         {!bannerHasPhoto && (
@@ -338,9 +338,11 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
           </div>
         )}
 
-        {/* ─── Banner editor panel ─── */}
+        {/* ─── Banner editor — inside banner, absolute bottom-right on desktop ─── */}
         {editing && (
           <div className="db-bep">
+            <span className="db-bep-label">Банер</span>
+
             <div className="db-bep-tabs">
               <button className={`db-bep-tab${bannerMode === 'color' ? ' active' : ''}`}
                 onClick={() => setBannerMode('color')}>🎨 Колір</button>
@@ -357,7 +359,6 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
                       onClick={() => { setForm(f => ({ ...f, banner_color: c })); setHexInput(c); }} />
                   ))}
                 </div>
-                <div className="db-bep-sep" />
                 <div className="db-bep-custom">
                   <label className="db-bep-preview" style={{ background: form.banner_color }}>
                     <input type="color" value={form.banner_color}
