@@ -7,20 +7,20 @@ function floorTo100(n) {
 }
 
 const FALLBACK_STATS = [
-  { value: 500,  suffix: '+', label: 'активних учасників' },
-  { value: 120,  suffix: '+', label: 'завдань на платформі' },
-  { value: 40,   suffix: '+', label: 'проведених турнірів' },
-  { value: 98,   suffix: '%', label: 'задоволених командою' },
+  { value: 500, suffix: '+', label: 'зареєстрованих учасників' },
+  { value: 120, suffix: '+', label: 'турнірів на платформі' },
+  { value: 40,  suffix: '+', label: 'завершених турнірів' },
+  { value: 98,  suffix: '+', label: 'усього створено команд' },
 ]
 
 const STATS_FROM_BACKEND = import.meta.env.VITE_HERO_STATS_FROM_BACKEND === 'true'
 
 function mapBackendStats(data) {
   return [
-    { value: floorTo100(data.users ?? 500),       suffix: '+', label: 'активних учасників' },
-    { value: floorTo100(data.tasks ?? 120),        suffix: '+', label: 'завдань на платформі' },
-    { value: floorTo100(data.tournaments ?? 40),   suffix: '+', label: 'проведених турнірів' },
-    { value: floorTo100(data.teams ?? 98),         suffix: '+', label: 'активних команд' },
+    { value: floorTo100(data.participants        ?? 500), suffix: '+', label: 'зареєстрованих учасників' },
+    { value: floorTo100(data.tournamentsTotal    ?? 120), suffix: '+', label: 'турнірів на платформі' },
+    { value: floorTo100(data.tournamentsFinished ?? 40),  suffix: '+', label: 'завершених турнірів' },
+    { value: floorTo100(data.teams               ?? 10),  suffix: '+', label: 'усього створено команд' },
   ]
 }
 

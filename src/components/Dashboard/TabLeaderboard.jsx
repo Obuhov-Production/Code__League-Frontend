@@ -41,7 +41,7 @@ export default function TabLeaderboard({ toast }) {
             value={selected}
             onChange={setSelected}
             placeholder="— Оберіть турнір —"
-            options={tournaments.map(t => ({
+            options={tournaments.filter(t => t.status !== 'draft').map(t => ({
               value: t.id,
               label: t.name,
               tag: STATUS_LABEL[t.status]?.label,

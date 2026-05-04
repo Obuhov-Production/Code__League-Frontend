@@ -1,10 +1,11 @@
-/**
- * db.shared.jsx
- * Shared constants, helpers, and small UI components used across all Dashboard tabs.
- */
-import { useState, useEffect, useRef } from 'react';
+/* Дашборд - спільні константи, хелпери та компоненти для всього дашборду */
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { io } from 'socket.io-client';
-import { searchUsers, API_BASE, CHECK_BACKEND, getToken } from '@utils/authApi';
+import { searchUsers, getUserProfile, API_BASE, CHECK_BACKEND, getToken } from '@utils/authApi';
+
+import IconGithubSm  from '@images/dashboard_components/icon_github.svg?react';
+import IconLogoutSm  from '@images/dashboard_components/icon_logout.svg?react';
+import IconProfileSm from '@images/dashboard_components/icon_profile.svg?react';
 
 import emote1 from '@images/emote/emote.png';
 import emote2 from '@images/emote/emote2.png';
@@ -12,16 +13,39 @@ import emote3 from '@images/emote/emote3.png';
 import emote4 from '@images/emote/emote4.png';
 import emote5 from '@images/emote/emote5.png';
 import emote6 from '@images/emote/emote6.png';
+import emote7 from '@images/emote/emote7.svg';
+import emote8 from '@images/emote/emote8.svg';
+import emote9 from '@images/emote/emote9.svg';
+import emote10 from '@images/emote/emote10.svg';
+import emote11 from '@images/emote/emote11.svg';
+import emote12 from '@images/emote/emote12.svg';
+import emote13 from '@images/emote/emote13.svg';
+import emote14 from '@images/emote/emote14.svg';
+import emote15 from '@images/emote/emote15.svg';
+import emote16 from '@images/emote/emote16.svg';
+import emote17 from '@images/emote/emote17.svg';
+import emote18 from '@images/emote/emote18.svg';
+import emote19 from '@images/emote/emote19.svg';
+import emote20 from '@images/emote/emote20.svg';
+import emote21 from '@images/emote/emote21.svg';
+import emote22 from '@images/emote/emote22.svg';
+import emote23 from '@images/emote/emote23.svg';
+import emote24 from '@images/emote/emote24.svg';
+import emote25 from '@images/emote/emote25.svg';
+import emote26 from '@images/emote/emote26.svg';
+import emote27 from '@images/emote/emote27.svg';
+import emote28 from '@images/emote/emote28.svg';
+import emote29 from '@images/emote/emote29.svg';
+import emote30 from '@images/emote/emote30.svg';
+
 
 import badge1Img from '@images/pin/bage1.png';
 import badge2Img from '@images/pin/bage2.png';
 
-export const STICKERS = [emote1, emote2, emote3, emote4, emote5, emote6];
+export const STICKERS = [emote1, emote2, emote3, emote4, emote5, emote6, emote7, emote8, emote9, emote10, emote11, emote12, emote13, emote14, emote15, emote16, emote17, emote18, emote19, emote20, emote21, emote22, emote23, emote24, emote25, emote26, emote27, emote28, emote29, emote30];
 export const STICKER_PREFIX = '__sticker__:';
 
-/* ══════════════════════════════════════════════════
-   CONSTANTS
-══════════════════════════════════════════════════ */
+/* constants */
 export const STATUS_LABEL = {
   draft:        { label: 'Draft',   color: '#888',    bg: '#f0f0f0' },
   registration: { label: 'Registration', color: '#7c5ff5', bg: '#eee9ff' },
@@ -30,14 +54,14 @@ export const STATUS_LABEL = {
 };
 
 export const ACCENT = {
-  draft:        ['#888','#f0f0f0'],
-  registration: ['#AC9EF8','#2d1f6e'],
-  running:      ['#4ade80','#163028'],
-  finished:     ['#0ea5e9','#0c2a3b'],
+  draft:        ['#191A23','#2a2a3a'],  // темно-сірий/чорний для draft
+  registration: ['#AC9EF8','#2d1f6e'],    // фіолетовий
+  running:      ['#4ade80','#163028'],   // зелений
+  finished:     ['#0ea5e9','#0c2a3b'],   // синій
 };
 
 export const BANNER_PRESETS = ['#0d1117', '#191A23', '#1a1a2e', '#1e1b2e', '#231b2e', '#2e231b', '#1b3b2e', '#2e1b3b'];
-
+/* в ролі додав емодзі шоб разбавити скучні svg icons */
 export const ROLE_LABELS = { user: '👤 User', jury: '⚖️ Jury', organizer: '🗂️ Organizer', admin: '⚙️ Admin', banned: '🚫 Banned' };
 
 export const BASE_ROOMS = [
@@ -46,20 +70,33 @@ export const BASE_ROOMS = [
   { id: 'offtopic',    label: '# офф-топік',  locked: false },
 ];
 
+export const TOURNAMENT_EMOJIS = [
+  '🏆', '🥇', '🥈', '🥉', '🏅', '🎖️', '👑', '⭐', '🌟', '🔥', '💯',
+  '💻', '⌨️', '🖱️', '🖥️', '📱', '🧑‍💻', '👨‍💻', '👩‍💻', '🤖', '🧠', '📞',
+  '⚙️', '🛠️', '🔧', '🔩', '🧰', '📦', '🗂️', '📊', '📈', '📉', '📧',
+  '🧩', '🎯', '🎲', '♟️', '🧠', '💡', '🔍', '📐', '📏', '🧮', '🔗',
+  '🐛', '🐞', '🔎', '🧪', '✅', '❌', '⚠️', '🚫', '🧹', '🧯', '🧬',
+  '🚀', '⚡', '💥', '✨', '🛸', '🛰️', '🌐', '🔌', '💾', '💿', '✅',
+  '🏢', '💼', '📋', '📄', '📝', '📌', '📍', '🤝', '🪪', '💬', '❌',
+  '🔐', '🔒', '🛡️', '🗄️', '🗃️', '🧱', '🌍', '☁️', '📡', '🛰️', '⚠️',
+  '🎨', '🖌️', '🖍️', '✏️', '🖼️', '📐', '🧵', '🎭', '🪄', '🚀', '🔥',
+  '🎮', '🕹️', '👾', '🎰', '🎪', '🎊', '🎉', '🎈', '🎁', '🎀', '🪐',
+  '⚔️', '🛡️', '🗡️', '🏹', '🥊', '💪', '⏱️', '⏳', '🚦', '🏁', '📡',
+  '📚', '📖', '🎓', '🧑‍🏫', '🔬', '⚗️', '🧪', '📝', '💡', '🧭', '🌍',
+  '👥', '🧑‍🤝‍🧑', '🤝', '💬', '📣', '📢', '📨', '🌐', '💙', '💜', '🖤',
+];
+
 export const EMOJI_QUICK = [
-  // Емоції
   '😀','😂','😭','🥹','😤','😡','🤯','🥵','🥶','😴','🤢','🤮','😱','🤩','😎','🤓',
-  // Жести
   '👍','👎','👏','🙌','🤝','💪','🫡','🫶','✌️','🤙','☝️','🖕',
-  // Серця та символи
   '❤️','🧡','💛','💚','💙','💜','🖤','💯','⭐','✨','🔥','⚡','💥','❄️','🌊','💫',
-  // Геймінг / змагання
   '🏆','🥇','🥈','🥉','🎯','🎮','🕹️','⚔️','🛡️','🧠','💻','🐛','💀','👑','🚀','🤖',
-  // Святкування
   '🎉','🎊','🎁','🎈','🥳','🍾','🥂','🎶',
 ];
-export const EMOJI_REACT = ['👍','❤️','🔥','😂','😮','😭','👏','🎉','💯','🏆','⚡','🤯'];
+/* Швидкі реакції на повідомлення */
+export const EMOJI_REACT = ['👍','❤️','🔥','😂','😭','💯','🏆','⚡'];
 
+/* Бейджі в профілі */
 export const ALL_BADGES = [
   {
     id: 'identity_confirmed',
@@ -98,19 +135,18 @@ export const EVAL_CRITERIA = [
 ];
 
 export const TAB_TIPS = {
-  overview:    { icon: '🏠', title: 'Головна',     text: 'Тут зібрана вся важлива інформація: ваші турніри, команди та швидка навігація.' },
-  tournaments: { icon: '🏆', title: 'Турніри',   text: 'Переглядайте актуальні змагання, фільтруйте за статусом та реєструйте команди.' },
+  overview:    { icon: '🏠', title: 'Головна',     text: 'Тут зібрана вся важлива інформація: ваші турніри, команди та навігація.' },
+  tournaments: { icon: '🏆', title: 'Турніри',   text: 'Переглядайте актуальні змагання, турніри та реєструйтесь!.' },
   teams:       { icon: '👥', title: 'Команди',   text: 'Усі ваші команди в одному місці. Команди прив\'язані до конкретних турнірів.' },
   leaderboard: { icon: '📊', title: 'Лідерборд', text: 'Рейтинг команд по кожному турніру. Оберіть турнір щоб побачити результати.' },
   chat:        { icon: '💬', title: 'Чат',       text: 'Загальний чат та приватні кімнати для вашої команди. ПКМ на повідомлення — дії.' },
   profile:     { icon: '👤', title: 'Профіль',   text: 'Налаштуйте нікнейм, аватар, банер та опис профілю.' },
-  admin:       { icon: '⚙️', title: 'Адмін',        text: 'Управляйте турнірами, користувачами та чатом платформи.' },
   organizer:   { icon: '🗂️', title: 'Організатор', text: 'Створюйте турніри, керуйте раундами та переглядайте команди.' },
+  admin:       { icon: '⚙️', title: 'Адмін',        text: 'Керуйте усіма аспектами платформи. :)' },
 };
 
-/* ══════════════════════════════════════════════════
-   HELPERS
-══════════════════════════════════════════════════ */
+/* Helpers (хелперы) (вдруг не понял с первого раза) */
+
 export function formatDate(d) {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('uk-UA', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -129,7 +165,12 @@ export function resolveAvatarUrl(url) {
 
 export function avatarUrl(user) {
   if (!user) return null;
-  return resolveAvatarUrl(user.user_avatar_url);
+  // Проверяем оба варианта поля (user_avatar_url для /me, avatar_url для admin/users)
+  const url = user.user_avatar_url || user.avatar_url;
+  if (url) return resolveAvatarUrl(url);
+  // Fallback: GitHub avatar по github_username
+  if (user.github_username) return `https://avatars.githubusercontent.com/${user.github_username}`;
+  return null;
 }
 
 export function hasRole(user, role) {
@@ -189,28 +230,52 @@ export function RoleBadges({ role }) {
   ))}</>;
 }
 
-export function UserAvatar({ user, size = 36, onClick, className = '' }) {
+export function UserAvatar({ user, size = 36, onClick, className = '', showStatus = false }) {
   const [imgError, setImgError] = useState(false);
   const url = avatarUrl(user);
+  useEffect(() => { setImgError(false); }, [url]);
   const initials = user?.username ? user.username.slice(0,2).toUpperCase() : (user?.email?.[0]?.toUpperCase() ?? '?');
   const style = { width: size, height: size, borderRadius: '50%', cursor: onClick ? 'pointer' : 'default', flexShrink: 0 };
-  if (url && !imgError) return <img src={url} alt="" style={{ ...style, objectFit: 'cover', display: 'block' }} onClick={onClick} className={className} onError={() => setImgError(true)} />;
-  return (
-    <div style={{
-      ...style,
-      background: 'var(--main_color)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: '"Space Grotesk", sans-serif',
-      fontWeight: 700,
-      fontSize: Math.round(size * 0.36),
-      lineHeight: 1,
-      letterSpacing: '0.03em',
-      color: '#191A23',
-      userSelect: 'none',
-      WebkitFontSmoothing: 'antialiased',
-    }}
-      onClick={onClick} className={className}>
+  const status = user?.status || 'offline';
+  
+  const avatarContent = url && !imgError ? (
+    <img 
+      src={url} 
+      alt={user?.username || 'User'} 
+      title={user?.username || user?.email}
+      style={{ ...style, objectFit: 'cover', display: 'block' }} 
+      onClick={onClick} 
+      className={`db-avatar-img ${className}`} 
+      onError={() => setImgError(true)} 
+    />
+  ) : (
+    <div 
+      style={{
+        ...style,
+        background: 'var(--main_color)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontFamily: '"Space Grotesk", sans-serif',
+        fontWeight: 700,
+        fontSize: Math.round(size * 0.36),
+        lineHeight: 1,
+        letterSpacing: '0.03em',
+        color: '#191A23',
+        userSelect: 'none',
+        WebkitFontSmoothing: 'antialiased',
+      }}
+      title={user?.username || user?.email}
+      onClick={onClick} 
+      className={`db-avatar-fallback ${className}`}>
       {initials}
+    </div>
+  );
+  
+  if (!showStatus) return avatarContent;
+  
+  return (
+    <div className="db-avatar-with-status" style={{ position: 'relative', display: 'inline-block' }}>
+      {avatarContent}
+      <div className={`db-avatar-status db-avatar-status--${status}`} />
     </div>
   );
 }
@@ -281,34 +346,144 @@ export function TabTip({ tab }) {
   );
 }
 
-export function MiniProfileModal({ user, onClose, onGoProfile }) {
+const ROLE_CONFIG = {
+  admin:     { label: 'Адмін',       color: '#f59e0b', bg: 'rgba(245,158,11,.13)' },
+  organizer: { label: 'Організатор', color: '#0ea5e9', bg: 'rgba(14,165,233,.13)' },
+  jury:      { label: 'Журі',        color: '#6366f1', bg: 'rgba(99,102,241,.13)'  },
+  banned:    { label: 'Заблок.',     color: '#ef4444', bg: 'rgba(239,68,68,.13)'   },
+};
+
+export function MiniProfileModal({ user, onClose, onGoProfile, onLogout }) {
   const ref = useRef(null);
+  const [copied,  setCopied]  = useState(false);
+  const [glowPos, setGlowPos] = useState({ x: 50, y: 50 });
+
   useEffect(() => {
-    const fn = e => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
-    document.addEventListener('mousedown', fn);
-    return () => document.removeEventListener('mousedown', fn);
+    const onMouse = e => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    const onKey   = e => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('mousedown', onMouse);
+    document.addEventListener('keydown',   onKey);
+    return () => { document.removeEventListener('mousedown', onMouse); document.removeEventListener('keydown', onKey); };
   }, [onClose]);
 
+  const dotPositions = useMemo(() =>
+    [...Array(18)].map(() => ({
+      left:  `${Math.random() * 100}%`,
+      top:   `${Math.random() * 100}%`,
+      delay: `${Math.random() * 3}s`,
+      size:  `${2 + Math.random() * 3}px`,
+    })), []);
+
   const bannerStyle = user.banner_url
-    ? { backgroundImage: `url(${API_BASE + user.banner_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-    : { background: user.banner_color || '#1e1b2e' };
+    ? { backgroundImage: `url(${resolveAvatarUrl(user.banner_url)})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+    : { background: user.banner_color
+        ? `linear-gradient(135deg, ${user.banner_color} 0%, ${user.banner_color}99 60%, #1a1333 100%)`
+        : 'linear-gradient(135deg, #1a1333 0%, #2d1f6e 50%, #1e1b2e 100%)' };
+
+  const roleConf = ROLE_CONFIG[user.role] || { label: 'Учасник', color: '#AC9EF8', bg: 'rgba(172,158,248,.13)' };
+  const name = displayName(user);
+
+  const handleCopyUsername = () => {
+    if (!user.username) return;
+    navigator.clipboard.writeText(user.username).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  };
+
+  const handleBannerMouseMove = (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setGlowPos({
+      x: ((e.clientX - r.left) / r.width)  * 100,
+      y: ((e.clientY - r.top)  / r.height) * 100,
+    });
+  };
 
   return (
     <div className="db-mini-profile" ref={ref} onClick={e => e.stopPropagation()}>
-      <div className="db-mp-banner" style={bannerStyle} />
-      <div className="db-mp-body">
-        <div className="db-mp-avatar-wrap"><UserAvatar user={user} size={56} /></div>
-        <div className="db-mp-info">
-          <strong>{displayName(user)}</strong>
-          {(user.first_name || user.last_name) && <span style={{ fontSize: 12, color: '#aaa', display: 'block' }}>@{user.username}</span>}
-          <span className="db-role-badge" style={{ display:'inline-block', marginTop:4 }}>{user.role}</span>
-        </div>
-        {user.user_description && <p className="db-mp-desc">{user.user_description}</p>}
-        <div className="db-mp-footer">
-          <span style={{ fontSize:12, color:'#aaa' }}>Реєстрація: {formatDate(user.created_at)}</span>
-          <button className="db-btn db-btn-primary db-btn-sm" onClick={onGoProfile}>Редагувати профіль</button>
+
+      {/* ── Banner + avatar ── */}
+      <div className="db-mp-banner" style={bannerStyle}
+        onMouseMove={!user.banner_url ? handleBannerMouseMove : undefined}
+        onMouseLeave={!user.banner_url ? () => setGlowPos({ x: 50, y: 50 }) : undefined}>
+
+        {/* Animated effects — тільки для кольорового банера */}
+        {!user.banner_url && (
+          <div className="db-mp-effects">
+            <div className="db-mp-dots">
+              {dotPositions.map((d, i) => (
+                <span key={i} className="db-welcome-dot" style={{
+                  left: d.left, top: d.top,
+                  width: d.size, height: d.size,
+                  animationDelay: d.delay,
+                }} />
+              ))}
+            </div>
+            <div className="db-mp-glow" style={{
+              top:   `${-60 + (glowPos.y / 100) * 50}px`,
+              right: `${-20 + ((100 - glowPos.x) / 100) * 50}px`,
+              transition: 'top .5s ease, right .5s ease',
+            }} />
+            <div className="db-mp-glow db-mp-glow-2" style={{
+              bottom: `${-30 + ((100 - glowPos.y) / 100) * 30}px`,
+              left:   `${15 + (glowPos.x / 100) * 30}%`,
+              transition: 'bottom .5s ease, left .5s ease',
+            }} />
+          </div>
+        )}
+
+        <button className="db-mp-banner-edit" onClick={onGoProfile} title="Редагувати профіль">
+          ✏ Змінити
+        </button>
+        <div className="db-mp-avatar-wrap">
+          <UserAvatar user={user} size={62} showStatus={true} />
         </div>
       </div>
+
+      {/* ── Identity ── */}
+      <div className="db-mp-identity">
+        <strong className="db-mp-name">{name}</strong>
+        {user.username && (
+          <button className={`db-mp-at${copied ? ' copied' : ''}`} onClick={handleCopyUsername} title="Натисни щоб скопіювати">
+            {copied ? '✓ Скопійовано' : `@${user.username}`}
+          </button>
+        )}
+        <span className="db-mp-role-badge" style={{ color: roleConf.color, background: roleConf.bg }}>
+          {roleConf.label}
+        </span>
+      </div>
+
+      {/* ── Bio ── */}
+      {user.user_description && (
+        <p className="db-mp-bio">{user.user_description}</p>
+      )}
+
+      {/* ── GitHub ── */}
+      {user.auth_provider === 'github' && user.github_username && (
+        <div className="db-mp-github-row">
+          <IconGithubSm className="db-mp-github-icon" />
+          <span>{user.github_username}</span>
+        </div>
+      )}
+
+      {/* ── Actions ── */}
+      <div className="db-mp-actions">
+        <button className="db-mp-action" onClick={onGoProfile}>
+          <IconProfileSm className="db-mp-action-icon" />
+          <span>Мій профіль</span>
+        </button>
+        {onLogout && (
+          <button className="db-mp-action danger" onClick={onLogout}>
+            <IconLogoutSm className="db-mp-action-icon" />
+            <span>Вийти з акаунту</span>
+          </button>
+        )}
+      </div>
+
+      {/* ── Meta ── */}
+      <div className="db-mp-meta">
+        З нами з {formatDate(user.created_at)}
+      </div>
+
     </div>
   );
 }
@@ -324,7 +499,7 @@ function UserProfileViewModal({ user, onClose }) {
         <div className="db-upv-body">
           <button className="modal-close" onClick={onClose}>✕</button>
           <div className="db-upv-head">
-            <UserAvatar user={user} size={64} />
+            <UserAvatar user={user} size={64} showStatus={true} />
             <div>
               <h3 style={{ margin: 0 }}>{displayName(user)}</h3>
               <span className="db-role-badge">{user.role}</span>
@@ -389,7 +564,7 @@ export function UserSearchModal({ onClose }) {
           )}
           {!loading && results.map(u => (
             <div key={u.id} className="db-usm-card" onClick={() => setSelected(u)}>
-              <UserAvatar user={u} size={40} />
+              <UserAvatar user={u} size={40} showStatus={true} />
               <div className="db-usm-info">
                 <strong>{u.username}</strong>
                 <span className="db-role-badge" style={{ marginLeft: 6 }}>{u.role}</span>
@@ -424,12 +599,12 @@ export function UserProfileModal({ profile, meId, onClose, onGoOwnProfile }) {
         </div>
         <div className="db-upm-body">
           <div className={`db-upm-avatar${isAdmin ? ' admin' : ''}`}>
-            {profile.user_avatar_url
-              ? <img src={resolveAvatarUrl(profile.user_avatar_url)} alt={profile.username} className="db-upm-avatar-img"
+            {avatarUrl(profile)
+              ? <img src={avatarUrl(profile)} alt={profile.username} className="db-upm-avatar-img"
                   onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextElementSibling.style.removeProperty('display'); }} />
               : null
             }
-            <span className="db-upm-avatar-initials" style={profile.user_avatar_url ? { display: 'none' } : undefined}>{(profile.username || '?').slice(0, 2).toUpperCase()}</span>
+            <span className="db-upm-avatar-initials" style={avatarUrl(profile) ? { display: 'none' } : undefined}>{(profile.username || '?').slice(0, 2).toUpperCase()}</span>
           </div>
           <div className="db-upm-name-row">
             <span className="db-upm-name">{displayName(profile)}</span>
@@ -488,4 +663,612 @@ export function playMsgSound() {
     osc.stop(ctx.currentTime + 0.25);
     osc.onended = () => ctx.close();
   } catch {}
+}
+
+/* ══════════════════════════════════════════════════
+   JURY SEARCH SELECTOR
+   Пошук користувачів з фільтрацією за ролями (organizer/jury)
+══════════════════════════════════════════════════ */
+function JurySearchSelector({ selectedJury, onChange }) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedUsers, setSelectedUsers] = useState([]);
+  const debounceRef = useRef(null);
+
+  // Завантажуємо деталі обраних журі
+  useEffect(() => {
+    const loadSelected = async () => {
+      if (selectedJury.length === 0) {
+        setSelectedUsers([]);
+        return;
+      }
+      try {
+        const users = await Promise.all(selectedJury.map(id => getUserProfile(id)));
+        setSelectedUsers(users.filter(u => u && u.id));
+      } catch {
+        setSelectedUsers([]);
+      }
+    };
+    loadSelected();
+  }, [selectedJury]);
+
+  // Пошук з debounce
+  useEffect(() => {
+    if (query.trim().length < 2) {
+      setResults([]);
+      return;
+    }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const all = await searchUsers(query);
+        const filtered = all.filter(u => !selectedJury.includes(u.id));
+        setResults(filtered);
+      } catch {
+        setResults([]);
+      } finally {
+        setLoading(false);
+      }
+    }, 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query, selectedJury]);
+
+  const addJury = (user) => {
+    if (!selectedJury.includes(user.id)) {
+      onChange([...selectedJury, user.id]);
+    }
+    setQuery('');
+    setResults([]);
+  };
+
+  const removeJury = (id) => {
+    onChange(selectedJury.filter(jid => jid !== id));
+  };
+
+  const getRoleBadge = (role) => {
+    switch(role) {
+      case 'admin': return '⚙️ Адмін';
+      case 'organizer': return '🗂️ Організатор';
+      case 'jury': return '⚖️ Журі';
+      default: return '👤 Користувач';
+    }
+  };
+
+  return (
+    <div className="db-jury-search-selector">
+      {/* Обрані журі чіпси */}
+      <div className="db-jury-chips">
+        {selectedUsers.length === 0 ? (
+          <span className="db-jury-empty">Журі не призначено</span>
+        ) : (
+          selectedUsers.map(user => (
+            <span key={user.id} className="db-jury-chip">
+              <UserAvatar user={user} size={20} />
+              <span>{user.username}</span>
+              <small>({getRoleBadge(user.role)})</small>
+              <button type="button" onClick={() => removeJury(user.id)}>✕</button>
+            </span>
+          ))
+        )}
+      </div>
+
+      {/* Пошук */}
+      <div className="db-jury-search-wrap">
+        <input
+          type="text"
+          className="db-input db-jury-search-input"
+          placeholder="Пошук організаторів та журі..."
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+        />
+        {loading && <span className="db-jury-search-loading">⏳</span>}
+        
+        {/* Результати пошуку */}
+        {results.length > 0 && (
+          <div className="db-jury-search-results">
+            {results.map(user => (
+              <div 
+                key={user.id} 
+                className="db-jury-search-item"
+                onClick={() => addJury(user)}
+              >
+                <UserAvatar user={user} size={32} />
+                <div className="db-jury-search-info">
+                  <strong>{user.username}</strong>
+                  <span>{user.email}</span>
+                </div>
+                <span className="db-jury-search-role">{getRoleBadge(user.role)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        
+        {query.trim().length >= 2 && !loading && results.length === 0 && (
+          <div className="db-jury-search-empty">
+            Не знайдено користувачів з ролями організатор/журі
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════
+   MARKDOWN RENDERER
+══════════════════════════════════════════════════ */
+function MarkdownRenderer({ text }) {
+  const formatMarkdown = (txt) => {
+    if (!txt) return '';
+    let html = txt
+      .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+      .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+      .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/__(.*?)__/g, '<u>$1</u>')
+      .replace(/~~(.*?)~~/g, '<del>$1</del>')
+      .replace(/`(.*?)`/g, '<code>$1</code>')
+      .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+      .replace(/^- (.*$)/gim, '<li>$1</li>')
+      .replace(/<li>(.*?)<\/li>/g, (match) => match)
+      .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+      .replace(/\n/g, '<br/>');
+    return html;
+  };
+
+  return (
+    <div 
+      className="db-markdown-rendered" 
+      dangerouslySetInnerHTML={{ __html: formatMarkdown(text) }}
+    />
+  );
+}
+
+/* ══════════════════════════════════════════════════
+   UNIFIED TOURNAMENT FORM (Create / Edit)
+══════════════════════════════════════════════════ */
+
+export function TournamentForm({
+  mode = 'edit', // 'create' | 'edit'
+  tournament = null,
+  onSubmit,
+  onCancel,
+  submitLabel = null,
+  loading = false,
+  extraFields = null, // дополнительные поля для админа/организатора
+}) {
+  const isCreate = mode === 'create';
+  const t = tournament || {};
+
+  // Form state
+  const [name, setName] = useState(t.name || '');
+  const [description, setDescription] = useState(t.description || '');
+  const [rules, setRules] = useState(t.rules || '');
+  const [startDate, setStartDate] = useState(toDateInput(t.start_date));
+  const [endDate, setEndDate] = useState(toDateInput(t.end_date));
+  const [regStart, setRegStart] = useState(toDateInput(t.registration_start));
+  const [regEnd, setRegEnd] = useState(toDateInput(t.registration_end));
+  const [teamsLimit, setTeamsLimit] = useState(t.teams_limit ?? '');
+  const [minSize, setMinSize] = useState(t.min_team_size ?? 2);
+  const [maxSize, setMaxSize] = useState(t.max_team_size ?? 5);
+  const [roundsCount, setRoundsCount] = useState(t.rounds_count ?? 1);
+  const [emoji, setEmoji] = useState(t.emoji || '🏆');
+  const [status, setStatus] = useState(t.status || 'draft');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  
+  // ELO/EXP rewards
+  const [eloParticipation, setEloParticipation] = useState(t.elo_participation ?? 10);
+  const [eloPerRound, setEloPerRound] = useState(t.elo_per_round ?? 20);
+  const [eloWinner, setEloWinner] = useState(t.elo_winner ?? 100);
+  
+  // TZ / Technical task
+  const [tz, setTz] = useState(t.tz || t.technical_task || '');
+  const [showPreview, setShowPreview] = useState(false);
+  
+  // Jury selection (for admin/organizer)
+  const [selectedJury, setSelectedJury] = useState(t.jury_ids || []);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+
+    const payload = {
+      name: name.trim(),
+      description: description.trim() || null,
+      rules: rules.trim() || null,
+      start_date: startDate || null,
+      end_date: endDate || null,
+      registration_start: regStart || null,
+      registration_end: regEnd || null,
+      teams_limit: teamsLimit === '' ? null : Number(teamsLimit),
+      min_team_size: Number(minSize),
+      max_team_size: Number(maxSize),
+      rounds_count: Number(roundsCount),
+      emoji: emoji || '🏆',
+      elo_participation: Number(eloParticipation),
+      elo_per_round: Number(eloPerRound),
+      elo_winner: Number(eloWinner),
+      tz: tz.trim() || null,
+    };
+
+    if (selectedJury.length > 0) payload.jury_ids = selectedJury;
+
+    // Для создания добавляем статус
+    if (isCreate) {
+      payload.status = status;
+    }
+
+    await onSubmit(payload);
+  };
+
+  const ac = ACCENT[isCreate ? status : t.status] || ACCENT.draft;
+  const formTitle = isCreate ? 'Створення турніру' : (t.name || 'Редагування');
+  const btnText = submitLabel || (isCreate ? 'Створити турнір' : (loading ? 'Збереження...' : '💾 Зберегти'));
+
+  return (
+    <form className="db-edit-tournament-form" onSubmit={handleSubmit}>
+      <div className="db-edit-header">
+        <h3 className="db-edit-title">{formTitle}</h3>
+        {!isCreate && <span className="db-edit-id">id #{t.id}</span>}
+      </div>
+
+      {/* Іконка турніру (emoji) - показываем всегда */}
+      <div className="db-edit-field">
+        <label className="db-edit-label">Іконка турніру</label>
+        <div className="db-emoji-preview" style={{ background: ac[0] }}>
+          <span className="db-emoji-preview-icon">{emoji}</span>
+        </div>
+        <div className="db-emoji-picker-toggle">
+          <button
+            type="button"
+            className="db-btn db-btn-ghost db-btn-sm"
+            onClick={() => setShowEmojiPicker(v => !v)}
+          >
+            {showEmojiPicker ? 'Сховати емоджі' : 'Обрати емоджі 🎨'}
+          </button>
+        </div>
+        {showEmojiPicker && (
+          <div className="db-emoji-grid">
+            {TOURNAMENT_EMOJIS.map(e => (
+              <button
+                key={e}
+                type="button"
+                className={`db-emoji-item${emoji === e ? ' active' : ''}`}
+                onClick={() => setEmoji(e)}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Статус - только при создании */}
+      {isCreate && (
+        <div className="db-edit-field">
+          <label className="db-edit-label">Статус <span className="db-required">*</span></label>
+          <CustomSelect
+            value={status}
+            onChange={setStatus}
+            options={[
+              { value: 'draft', label: 'Draft (чернетка)' },
+              { value: 'registration', label: 'Registration (реєстрація)' },
+              { value: 'running', label: 'Running (активний)' },
+              { value: 'finished', label: 'Finished (завершений)' },
+            ]}
+          />
+        </div>
+      )}
+
+      <div className="db-edit-field">
+        <label className="db-edit-label">Назва <span className="db-required">*</span></label>
+        <input
+          className="db-input"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          placeholder="Назва турніру"
+          required
+        />
+      </div>
+
+      <div className="db-edit-field">
+        <label className="db-edit-label">Опис</label>
+        <textarea
+          className="db-input db-textarea"
+          rows={3}
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          placeholder="Опис турніру..."
+        />
+      </div>
+
+      <div className="db-edit-field">
+        <label className="db-edit-label">Правила</label>
+        <textarea
+          className="db-input db-textarea"
+          rows={3}
+          value={rules}
+          onChange={e => setRules(e.target.value)}
+          placeholder="Правила турніру..."
+        />
+      </div>
+
+      {/* TZ Section - Technical Task */}
+      <div className="db-edit-section db-edit-section-tz">
+        <h4 className="db-edit-section-title">📋 Технічне завдання (ТЗ)</h4>
+        <div className="db-edit-field">
+          <label className="db-edit-label">Опис завдання</label>
+          
+          {/* Rich Text Editor Toolbar */}
+          <div className="db-rt-toolbar">
+            <div className="db-rt-group">
+              <button type="button" className="db-rt-btn" title="Жирний (Ctrl+B)" onClick={() => {
+                const ta = document.getElementById('tz-textarea');
+                if (ta) {
+                  const start = ta.selectionStart;
+                  const end = ta.selectionEnd;
+                  const selected = ta.value.substring(start, end);
+                  if (selected) {
+                    const newVal = ta.value.substring(0, start) + `**${selected}**` + ta.value.substring(end);
+                    setTz(newVal);
+                  }
+                }
+              }}><b>B</b></button>
+              <button type="button" className="db-rt-btn" title="Курсив (Ctrl+I)" onClick={() => {
+                const ta = document.getElementById('tz-textarea');
+                if (ta) {
+                  const start = ta.selectionStart;
+                  const end = ta.selectionEnd;
+                  const selected = ta.value.substring(start, end);
+                  if (selected) {
+                    const newVal = ta.value.substring(0, start) + `*${selected}*` + ta.value.substring(end);
+                    setTz(newVal);
+                  }
+                }
+              }}><i>I</i></button>
+              <button type="button" className="db-rt-btn" title="Підкреслення" onClick={() => {
+                const ta = document.getElementById('tz-textarea');
+                if (ta) {
+                  const start = ta.selectionStart;
+                  const end = ta.selectionEnd;
+                  const selected = ta.value.substring(start, end);
+                  if (selected) {
+                    const newVal = ta.value.substring(0, start) + `__${selected}__` + ta.value.substring(end);
+                    setTz(newVal);
+                  }
+                }
+              }}><u>U</u></button>
+              <button type="button" className="db-rt-btn" title="Закреслення" onClick={() => {
+                const ta = document.getElementById('tz-textarea');
+                if (ta) {
+                  const start = ta.selectionStart;
+                  const end = ta.selectionEnd;
+                  const selected = ta.value.substring(start, end);
+                  if (selected) {
+                    const newVal = ta.value.substring(0, start) + `~~${selected}~~` + ta.value.substring(end);
+                    setTz(newVal);
+                  }
+                }
+              }}><s>S</s></button>
+            </div>
+            <div className="db-rt-divider" />
+            <div className="db-rt-group">
+              <button type="button" className="db-rt-btn db-rt-btn-small" title="Заголовок" onClick={() => {
+                const ta = document.getElementById('tz-textarea');
+                if (ta) {
+                  const start = ta.selectionStart;
+                  const lineStart = ta.value.lastIndexOf('\n', start - 1) + 1;
+                  const newVal = ta.value.substring(0, lineStart) + '## ' + ta.value.substring(lineStart);
+                  setTz(newVal);
+                }
+              }}>H</button>
+              <button type="button" className="db-rt-btn" title="Список" onClick={() => {
+                const ta = document.getElementById('tz-textarea');
+                if (ta) {
+                  const start = ta.selectionStart;
+                  const lineStart = ta.value.lastIndexOf('\n', start - 1) + 1;
+                  const newVal = ta.value.substring(0, lineStart) + '- ' + ta.value.substring(lineStart);
+                  setTz(newVal);
+                }
+              }}>☰</button>
+              <button type="button" className="db-rt-btn" title="Посилання" onClick={() => {
+                const url = prompt('Введіть URL:');
+                if (url) {
+                  const ta = document.getElementById('tz-textarea');
+                  if (ta) {
+                    const start = ta.selectionStart;
+                    const end = ta.selectionEnd;
+                    const selected = ta.value.substring(start, end) || 'посилання';
+                    const newVal = ta.value.substring(0, start) + `[${selected}](${url})` + ta.value.substring(end);
+                    setTz(newVal);
+                  }
+                }
+              }}>🔗</button>
+              <button type="button" className="db-rt-btn" title="Код" onClick={() => {
+                const ta = document.getElementById('tz-textarea');
+                if (ta) {
+                  const start = ta.selectionStart;
+                  const end = ta.selectionEnd;
+                  const selected = ta.value.substring(start, end);
+                  if (selected) {
+                    const newVal = ta.value.substring(0, start) + `\`\`\`\n${selected}\n\`\`\`` + ta.value.substring(end);
+                    setTz(newVal);
+                  }
+                }
+              }}>{'<>'}</button>
+            </div>
+            <div className="db-rt-divider" />
+            <div className="db-rt-group">
+              <button type="button" className="db-rt-btn db-rt-btn-preview" title="Попередній перегляд" onClick={() => setShowPreview(true)}>👁</button>
+            </div>
+          </div>
+          
+          {/* Preview Modal */}
+          {showPreview && (
+            <div className="modal-overlay" onClick={() => setShowPreview(false)}>
+              <div className="db-preview-modal" onClick={e => e.stopPropagation()}>
+                <div className="db-preview-header">
+                  <h4>Попередній перегляд ТЗ</h4>
+                  <button type="button" className="db-preview-close" onClick={() => setShowPreview(false)}>✕</button>
+                </div>
+                <div className="db-preview-content">
+                  <MarkdownRenderer text={tz || '*(Технічне завдання порожнє)*'} />
+                </div>
+                <div className="db-preview-footer">
+                  <button type="button" className="db-btn db-btn-ghost" onClick={() => setShowPreview(false)}>Закрити</button>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Resizable Textarea */}
+          <div className="db-rt-editor">
+            <textarea
+              id="tz-textarea"
+              className="db-input db-textarea db-tz-textarea"
+              rows={6}
+              value={tz}
+              onChange={e => setTz(e.target.value)}
+              placeholder="Опишіть технічне завдання для учасників...&#10;&#10;Наприклад:&#10;- Створіть кліматичну модель прогнозування&#10;- Використовуйте наданий датасет&#10;- Результат: робочий прототип + презентація"
+            />
+            <div className="db-rt-resize-handle" title="Потягніть щоб змінити розмір">
+              <svg width="12" height="12" viewBox="0 0 12 12">
+                <path d="M9 9L3 3M9 6L6 3M6 9L3 6" stroke="#999" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </div>
+          </div>
+          
+          <small className="db-field-hint">
+            💡 Підтримує Markdown: **жирний**, *курсив*, `код`, ## заголовок<br/>
+            💡 ТЗ буде доступне всім учасникам після старту турніру
+          </small>
+        </div>
+        
+      </div>
+
+      {/* Jury Selection */}
+      <div className="db-edit-section db-edit-section-jury">
+        <h4 className="db-edit-section-title">⚖️ Призначення журі</h4>
+        <div className="db-edit-field">
+          <label className="db-edit-label">Виберіть журі для оцінювання</label>
+          <JurySearchSelector 
+            selectedJury={selectedJury}
+            onChange={setSelectedJury}
+          />
+          <small className="db-field-hint">
+            💡 Журі зможуть оцінювати проєкти у всіх раундах цього турніру. Можна призначати користувачів з ролями Організатор або Журі.
+          </small>
+        </div>
+      </div>
+
+      <div className="db-edit-row-2">
+        <div className="db-edit-field">
+          <label className="db-edit-label">Дата старту</label>
+          <input type="date" className="db-input" value={startDate} onChange={e => setStartDate(e.target.value)} />
+        </div>
+        <div className="db-edit-field">
+          <label className="db-edit-label">Дата закінчення</label>
+          <input type="date" className="db-input" value={endDate} onChange={e => setEndDate(e.target.value)} />
+        </div>
+      </div>
+
+      <div className="db-edit-row-2">
+        <div className="db-edit-field">
+          <label className="db-edit-label">Реєстрація від</label>
+          <input type="date" className="db-input" value={regStart} onChange={e => setRegStart(e.target.value)} />
+        </div>
+        <div className="db-edit-field">
+          <label className="db-edit-label">Реєстрація до</label>
+          <input type="date" className="db-input" value={regEnd} onChange={e => setRegEnd(e.target.value)} />
+        </div>
+      </div>
+
+      <div className="db-edit-row-3">
+        <div className="db-edit-field">
+          <label className="db-edit-label">Макс. команд</label>
+          <input type="number" className="db-input" min={0} value={teamsLimit} onChange={e => setTeamsLimit(e.target.value)} placeholder="∞" />
+        </div>
+        <div className="db-edit-field">
+          <label className="db-edit-label">Мін. осіб</label>
+          <input type="number" className="db-input" min={1} value={minSize} onChange={e => setMinSize(e.target.value)} />
+        </div>
+        <div className="db-edit-field">
+          <label className="db-edit-label">Макс. осіб</label>
+          <input type="number" className="db-input" min={1} value={maxSize} onChange={e => setMaxSize(e.target.value)} />
+        </div>
+      </div>
+
+      <div className="db-edit-field">
+        <label className="db-edit-label">Кількість раундів</label>
+        <input type="number" className="db-input" min={1} value={roundsCount} onChange={e => setRoundsCount(e.target.value)} />
+      </div>
+
+      {/* ELO настройки */}
+      <div className="db-edit-section">
+        <h4 className="db-edit-section-title">🏆 Нагороди ELO</h4>
+        <div className="db-edit-row-3">
+          <div className="db-edit-field">
+            <label className="db-edit-label">За участь</label>
+            <input 
+              type="number" 
+              className="db-input" 
+              min={0} 
+              value={eloParticipation} 
+              onChange={e => setEloParticipation(e.target.value)}
+              placeholder="10"
+            />
+            <small className="db-field-hint">Базові очки</small>
+          </div>
+          <div className="db-edit-field">
+            <label className="db-edit-label">За раунд</label>
+            <input 
+              type="number" 
+              className="db-input" 
+              min={0} 
+              value={eloPerRound} 
+              onChange={e => setEloPerRound(e.target.value)}
+              placeholder="20"
+            />
+            <small className="db-field-hint">× номер раунду</small>
+          </div>
+          <div className="db-edit-field">
+            <label className="db-edit-label">За перемогу</label>
+            <input 
+              type="number" 
+              className="db-input" 
+              min={0} 
+              value={eloWinner} 
+              onChange={e => setEloWinner(e.target.value)}
+              placeholder="100"
+            />
+            <small className="db-field-hint">1-ше місце</small>
+          </div>
+        </div>
+        <p className="db-elo-preview">
+          💡 Формула: <strong>{eloParticipation}</strong> + (раунд × <strong>{eloPerRound}</strong>) + <strong>{eloWinner}</strong> за 1-ше місце
+        </p>
+      </div>
+
+      {/* Дополнительные поля от родителя (для админа/организатора) */}
+      {extraFields}
+
+      <div className="db-edit-actions">
+        <button type="button" className="db-btn db-btn-ghost" onClick={onCancel}>Скасувати</button>
+        <button type="submit" className="db-btn db-btn-primary db-btn-submit" disabled={loading || !name.trim()}>
+          {btnText}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// Helper для конвертации даты в input[type=date]
+function toDateInput(d) {
+  if (!d) return '';
+  try { return new Date(d).toISOString().slice(0, 10); } catch { return ''; }
 }

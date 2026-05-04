@@ -13,12 +13,14 @@ import Accordion from '@components/Accordion'
 import RewiewsSection from '@components/rewiewsSection'
 import RewiewsPage from '@components/rewiews_page'
 import ContactSection from '@components/ContactSection'
+import NotFoundPage from '@components/NotFoundPage'
 
 // Auth Pages
 import LoginPage from '@components/auth/modal/login'
 import RegisterPage from '@components/auth/modal/register'
 import Dashboard from '@components/Dashboard'
 import LeaderboardPage from '@components/LeaderboardPage'
+import BannedPage from '@components/BannedPage/BannedPage.jsx'
 
 function HomePage() {
   return (
@@ -59,8 +61,10 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/banned" element={<BannedPage />} />
           <Route path="/reviews" element={<RewiewsPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </ToastProvider>
     </BrowserRouter>

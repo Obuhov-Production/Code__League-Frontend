@@ -10,29 +10,13 @@ import {
   getAdminOrganizerApplications, reviewOrganizerApplication,
   getAdminUserBadges, adminGrantBadge, adminRevokeBadge,
 } from '@utils/authApi';
-import { StatusBadge, RoleBadges, CustomSelect, ConfirmModal, formatDate, STATUS_LABEL, UserAvatar, UserProfileModal, ALL_BADGES } from './db.shared.jsx';
-
-/* ── Options for tournament form ───────────────────── */
-const CATEGORY_OPTIONS = [
-  { value: 'hackathon',  label: '⚡ Хакатон' },
-  { value: 'olympiad',   label: '🎓 Олімпіада' },
-  { value: 'marathon',   label: '🏃 Марафон' },
-  { value: 'sprint',     label: '⏱ Спринт' },
-  { value: 'challenge',  label: '🎯 Челендж' },
-  { value: 'other',      label: '📦 Інше' },
-];
-
-const FORMAT_OPTIONS = [
-  { value: 'online',  label: '🌐 Онлайн' },
-  { value: 'offline', label: '📍 Офлайн' },
-  { value: 'hybrid',  label: '🔀 Гібрид' },
-];
+import { StatusBadge, RoleBadges, CustomSelect, ConfirmModal, formatDate, STATUS_LABEL, UserAvatar, UserProfileModal, ALL_BADGES, TournamentForm } from './db.shared.jsx';
 
 const TOUR_STATUS_OPTS = [
-  { value: 'draft',        label: 'Draft',   color: '#888' },
+  { value: 'draft',        label: 'Draft',        color: '#888' },
   { value: 'registration', label: 'Registration', color: '#7c5ff5' },
-  { value: 'running',      label: 'Running',   color: '#16a34a' },
-  { value: 'finished',     label: 'Finished', color: '#0ea5e9' },
+  { value: 'running',      label: 'Running',      color: '#16a34a' },
+  { value: 'finished',     label: 'Finished',     color: '#0ea5e9' },
 ];
 
 /* ── StatusPicker — custom colored status dropdown ─── */
@@ -80,6 +64,54 @@ function StatusPicker({ value, onChange, compact = false }) {
               <span className="db-sp-dot" style={{ background: o.color }} />
               <span style={{ flex: 1, color: o.color, fontWeight: 500 }}>{o.label}</span>
               {o.value === value && <span className="db-sp-check">✓</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Role Filter Dropdown (custom) ─────────────────── */
+const ROLE_FILTER_OPTIONS = [
+  { value: 'all',       label: 'Всі ролі',    icon: '👥', color: '#7c5ff5' },
+  { value: 'admin',     label: 'Адмін',        icon: '⚙️', color: '#7c5ff5' },
+  { value: 'organizer', label: 'Організатор',  icon: '🗂️', color: '#0ea5e9' },
+  { value: 'jury',      label: 'Журі',         icon: '⚖️', color: '#16a34a' },
+  { value: 'user',      label: 'Учасник',      icon: '👤', color: '#888' },
+  { value: 'banned',    label: 'Забанені',     icon: '🚫', color: '#ef4444' },
+];
+
+function RoleFilterDropdown({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const current = ROLE_FILTER_OPTIONS.find(o => o.value === value) || ROLE_FILTER_OPTIONS[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  return (
+    <div className="db-role-filter" ref={ref}>
+      <button type="button" className="db-role-filter-trigger" onClick={() => setOpen(p => !p)}>
+        <span className="db-role-filter-icon">{current.icon}</span>
+        <span className="db-role-filter-label">{current.label}</span>
+        <span className="db-role-filter-arrow">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="db-role-filter-dropdown">
+          {ROLE_FILTER_OPTIONS.map(o => (
+            <div
+              key={o.value}
+              className={`db-role-filter-option${o.value === value ? ' active' : ''}`}
+              onClick={() => { onChange(o.value); setOpen(false); }}
+            >
+              <span className="db-role-filter-opt-icon">{o.icon}</span>
+              <span className="db-role-filter-opt-label" style={{ color: o.value === value ? o.color : undefined }}>{o.label}</span>
+              {o.value === value && <span className="db-role-filter-check">✓</span>}
             </div>
           ))}
         </div>
@@ -164,7 +196,7 @@ function ManageUserModal({ user, toast, onClose, onRoleChange, onDelete }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box modal-box--light db-manage-user-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 440, padding: 0, overflow: 'hidden' }}>
         <div className="db-mu-header">
-          <div className="db-mu-avatar">{(user.username || '?').slice(0,2).toUpperCase()}</div>
+          <div className="db-mu-avatar"><UserAvatar user={user} size={52} /></div>
           <div>
             <div className="db-mu-name">{user.username}</div>
             <div className="db-mu-email">{user.email}</div>
@@ -236,27 +268,14 @@ function ManageUserModal({ user, toast, onClose, onRoleChange, onDelete }) {
   );
 }
 
+/* ── helpers ── */
+function toDateInput(d) { if (!d) return ''; try { return new Date(d).toISOString().slice(0, 10); } catch { return ''; } }
+
 /* ── Edit Tournament Modal ──────────────────────────── */
 function EditTournamentModal({ tournament, allTeams, toast, onClose, onSuccess, onDeleteTeam }) {
-  const today = new Date().toISOString().split('T')[0];
-  const [f, setF] = useState({
-    name:               tournament.name               || '',
-    description:        tournament.description        || '',
-    rules:              tournament.rules              || '',
-    start_date:         tournament.start_date         || today,
-    end_date:           tournament.end_date           || '',
-    registration_start: tournament.registration_start || today,
-    registration_end:   tournament.registration_end   || '',
-    teams_limit:        tournament.teams_limit        || '',
-    min_team_size:      tournament.min_team_size      || 2,
-    max_team_size:      tournament.max_team_size      || 5,
-  });
-  const [loading,      setLoading]      = useState(false);
   const [activeTab,    setActiveTab]    = useState('info');
   const [tourTeams,    setTourTeams]    = useState([]);
   const [teamsLoading, setTeamsLoading] = useState(false);
-
-  const upd = (k, v) => setF(x => ({ ...x, [k]: v }));
 
   useEffect(() => {
     if (activeTab === 'teams') {
@@ -272,63 +291,35 @@ function EditTournamentModal({ tournament, allTeams, toast, onClose, onSuccess, 
     }
   }, [activeTab, allTeams, tournament.id]);
 
-  const handleSubmit = async e => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await updateTournament(tournament.id, {
-        ...f,
-        teams_limit:   f.teams_limit ? Number(f.teams_limit) : null,
-        min_team_size: Number(f.min_team_size),
-        max_team_size: Number(f.max_team_size),
-      });
-      onSuccess();
-    } catch (err) { toast.error(err.message); }
-    finally { setLoading(false); }
-  };
-
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="db-et-modal" onClick={e => e.stopPropagation()}>
-        <div className="db-et-header">
-          <div>
-            <div className="db-et-title">{f.name || 'Редагування турніру'}</div>
-            <div className="db-et-subtitle">id #{tournament.id}</div>
+      <div className="modal-box modal-box--light db-tournament-modal" onClick={e => e.stopPropagation()}>
+        <button className="db-tm-close" onClick={onClose}>✕</button>
+        <div className="db-modal-scroll-body">
+          <div className="db-edit-header">
+            <h3 className="db-edit-title">{tournament.name}</h3>
+            <span className="db-edit-id">id #{tournament.id}</span>
           </div>
-          <button className="db-mu-close" onClick={onClose}>✕</button>
-        </div>
-        <div className="db-et-tabs">
-          {[['info','📋 Інформація'], ['teams','👫 Команди']].map(([id, lbl]) => (
-            <button key={id} className={`db-et-tab-btn${activeTab === id ? ' active' : ''}`} onClick={() => setActiveTab(id)}>{lbl}</button>
-          ))}
-        </div>
-        <div className="db-et-body">
+          <div className="db-et-tabs">
+            {[['info','📋 Інформація'], ['teams','👫 Команди']].map(([id, lbl]) => (
+              <button key={id} className={`db-et-tab-btn${activeTab === id ? ' active' : ''}`} onClick={() => setActiveTab(id)}>{lbl}</button>
+            ))}
+          </div>
+
           {activeTab === 'info' && (
-            <form onSubmit={handleSubmit}>
-              <div className="db-form-row"><label>Назва *</label><input className="db-input" value={f.name} onChange={e => upd('name', e.target.value)} required /></div>
-              <div className="db-form-row"><label>Опис</label><textarea className="db-input" rows={2} value={f.description} onChange={e => upd('description', e.target.value)} /></div>
-              <div className="db-form-row"><label>Правила</label><textarea className="db-input" rows={2} value={f.rules} onChange={e => upd('rules', e.target.value)} /></div>
-              <div className="db-form-row-2">
-                <div className="db-form-row"><label>Старт</label><input className="db-input" type="date" value={f.start_date} onChange={e => upd('start_date', e.target.value)} /></div>
-                <div className="db-form-row"><label>Кінець</label><input className="db-input" type="date" value={f.end_date} onChange={e => upd('end_date', e.target.value)} /></div>
-              </div>
-              <div className="db-form-row-2">
-                <div className="db-form-row"><label>Реєстрація від</label><input className="db-input" type="date" value={f.registration_start} onChange={e => upd('registration_start', e.target.value)} /></div>
-                <div className="db-form-row"><label>Реєстрація до</label><input className="db-input" type="date" value={f.registration_end} onChange={e => upd('registration_end', e.target.value)} /></div>
-              </div>
-              <div className="db-form-row-3">
-                <div className="db-form-row"><label>Макс. команд</label><input className="db-input" type="number" min="1" value={f.teams_limit} onChange={e => upd('teams_limit', e.target.value)} placeholder="∞" /></div>
-                <div className="db-form-row"><label>Мін. осіб</label><input className="db-input" type="number" min="1" max="20" value={f.min_team_size} onChange={e => upd('min_team_size', e.target.value)} /></div>
-                <div className="db-form-row"><label>Макс. осіб</label><input className="db-input" type="number" min="1" max="20" value={f.max_team_size} onChange={e => upd('max_team_size', e.target.value)} /></div>
-              </div>
-              <div className="db-form-actions" style={{ marginTop: 16 }}>
-                <button type="button" className="db-btn db-btn-ghost" onClick={onClose}>Скасувати</button>
-                <button type="submit" className="db-btn db-btn-primary" disabled={loading}>{loading ? 'Збереження...' : '💾 Зберегти'}</button>
-              </div>
-            </form>
+            <TournamentForm
+              mode="edit"
+              tournament={tournament}
+              onSubmit={async (payload) => {
+                await updateTournament(tournament.id, payload);
+                toast.success('Турнір оновлено!');
+                onSuccess();
+              }}
+              onCancel={onClose}
+            />
           )}
           {activeTab === 'teams' && (
-            <div>
+            <div style={{ marginTop: 16 }}>
               {teamsLoading ? (
                 <div style={{ padding: 24, textAlign: 'center', color: '#aaa' }}>Завантаження...</div>
               ) : tourTeams.length === 0 ? (
@@ -363,174 +354,73 @@ function EditTournamentModal({ tournament, allTeams, toast, onClose, onSuccess, 
   );
 }
 
-/* ── Create Tournament Form ─────────────────────────── */
-function CreateTournamentForm({ toast, onSuccess, onCancel }) {
-  const today = new Date().toISOString().split('T')[0];
-  const [f, setF] = useState({
-    name: '', description: '', rules: '', prize: '',
-    category: 'hackathon', format: 'online', status: 'draft',
-    start_date: today, end_date: '',
-    registration_start: today, registration_end: '',
-    teams_limit: '', rounds_count: 1, min_team_size: 2, max_team_size: 5,
-  });
-  const [loading, setLoading] = useState(false);
-  const upd = (k, v) => setF(x => ({ ...x, [k]: v }));
-
-  const handleSubmit = async e => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await createTournament({
-        ...f,
-        teams_limit:   f.teams_limit ? Number(f.teams_limit) : null,
-        rounds_count:  Number(f.rounds_count),
-        min_team_size: Number(f.min_team_size),
-        max_team_size: Number(f.max_team_size),
-      });
-      onSuccess();
-    } catch (err) { toast.error(err.message); }
-    finally { setLoading(false); }
-  };
-
-  return (
-    <form className="db-create-form" onSubmit={handleSubmit}>
-
-      {/* Header */}
-      <div className="db-create-form-header">
-        <div className="db-create-form-icon">🏆</div>
-        <div>
-          <h3>Новий турнір</h3>
-          <p>Заповніть інформацію для створення турніру</p>
-        </div>
-      </div>
-
-      {/* Section: Основна інформація */}
-      <div className="db-cfs-section">
-        <div className="db-cfs-title"><span className="db-cfs-icon">📋</span> Основна інформація</div>
-        <div className="db-form-row">
-          <label>Назва *</label>
-          <input placeholder="Введіть назву турніру" value={f.name} onChange={e => upd('name', e.target.value)} required />
-        </div>
-        <div className="db-form-row-2">
-          <div className="db-form-row">
-            <label>Категорія</label>
-            <CustomSelect value={f.category} onChange={v => upd('category', v)} options={CATEGORY_OPTIONS} placeholder="Оберіть категорію" />
-          </div>
-          <div className="db-form-row">
-            <label>Формат</label>
-            <CustomSelect value={f.format} onChange={v => upd('format', v)} options={FORMAT_OPTIONS} placeholder="Оберіть формат" />
-          </div>
-        </div>
-        <div className="db-form-row">
-          <label>Опис</label>
-          <textarea rows={2} placeholder="Короткий опис турніру..." value={f.description} onChange={e => upd('description', e.target.value)} />
-        </div>
-        <div className="db-form-row">
-          <label>Правила участі</label>
-          <textarea rows={2} placeholder="Умови участі, критерії оцінювання..." value={f.rules} onChange={e => upd('rules', e.target.value)} />
-        </div>
-      </div>
-
-      {/* Section: Дати */}
-      <div className="db-cfs-section">
-        <div className="db-cfs-title"><span className="db-cfs-icon">📅</span> Дати</div>
-        <div className="db-form-row-2">
-          <div className="db-form-row"><label>Реєстрація від *</label><input type="date" value={f.registration_start} onChange={e => upd('registration_start', e.target.value)} required /></div>
-          <div className="db-form-row"><label>Реєстрація до *</label><input type="date" value={f.registration_end} onChange={e => upd('registration_end', e.target.value)} required /></div>
-        </div>
-        <div className="db-form-row-2">
-          <div className="db-form-row"><label>Старт *</label><input type="date" value={f.start_date} onChange={e => upd('start_date', e.target.value)} required /></div>
-          <div className="db-form-row"><label>Кінець *</label><input type="date" value={f.end_date} onChange={e => upd('end_date', e.target.value)} required /></div>
-        </div>
-      </div>
-
-      {/* Section: Команди */}
-      <div className="db-cfs-section">
-        <div className="db-cfs-title"><span className="db-cfs-icon">👥</span> Команди</div>
-        <div className="db-form-row-3">
-          <div className="db-form-row"><label>Макс. команд</label><input type="number" min="1" value={f.teams_limit} onChange={e => upd('teams_limit', e.target.value)} placeholder="∞" /></div>
-          <div className="db-form-row"><label>Мін. учасників</label><input type="number" min="1" max="20" value={f.min_team_size} onChange={e => upd('min_team_size', e.target.value)} /></div>
-          <div className="db-form-row"><label>Макс. учасників</label><input type="number" min="1" max="20" value={f.max_team_size} onChange={e => upd('max_team_size', e.target.value)} /></div>
-        </div>
-        <div className="db-form-row" style={{ maxWidth: 160 }}>
-          <label>Кількість раундів</label>
-          <input type="number" min="1" max="10" value={f.rounds_count} onChange={e => upd('rounds_count', e.target.value)} />
-        </div>
-      </div>
-
-      {/* Section: Статус та нагорода */}
-      <div className="db-cfs-section">
-        <div className="db-cfs-title"><span className="db-cfs-icon">🏷</span> Статус та нагорода</div>
-        <div className="db-form-row-2">
-          <div className="db-form-row">
-            <label>Початковий статус</label>
-            <StatusPicker value={f.status} onChange={v => upd('status', v)} />
-          </div>
-          <div className="db-form-row">
-            <label>Нагорода / Призи</label>
-            <input placeholder="Опис призів переможцям..." value={f.prize} onChange={e => upd('prize', e.target.value)} />
-          </div>
-        </div>
-      </div>
-
-      <div className="db-form-actions">
-        <button type="button" className="db-btn db-btn-ghost" onClick={onCancel}>Скасувати</button>
-        <button type="submit" className="db-btn db-btn-primary" disabled={loading}>
-          {loading ? 'Збереження...' : '🏆 Створити турнір'}
-        </button>
-      </div>
-    </form>
-  );
-}
 
 /* ── Application View Modal ──────────────────── */
 function ApplicationViewModal({ app, onClose, onAccept, onDecline }) {
-  const STATUS_COLOR = { pending: '#f59e0b', accepted: '#16a34a', rejected: '#ef4444' };
-  const STATUS_LABEL_MAP = { pending: 'Очікує', accepted: 'Прийнято', rejected: 'Відхилено' };
+  const STATUS_COLOR = { pending: '#f59e0b', approved: '#16a34a', rejected: '#ef4444' };
+  const STATUS_LABEL_MAP = { pending: '⏳ Очікує', approved: '✓ Прийнято', rejected: '✗ Відхилено' };
   const [viewProfile, setViewProfile] = useState(null);
+
+  const contacts = [
+    app.contact_email    && { icon: '📧', label: 'Email',    value: app.contact_email },
+    app.contact_telegram && { icon: '💬', label: 'Telegram', value: app.contact_telegram },
+    app.contact_phone    && { icon: '📱', label: 'Телефон',  value: app.contact_phone },
+  ].filter(Boolean);
 
   return (
     <>
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box modal-box--light" onClick={e => e.stopPropagation()} style={{ maxWidth: 520, padding: 0, overflow: 'hidden' }}>
-        <div className="db-mu-header" style={{ background: 'rgba(124,95,245,.1)' }}>
-          <div style={{ cursor: 'pointer' }} onClick={() => setViewProfile(app)} title="Переглянути профіль">
-            <UserAvatar user={app} size={44} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div className="db-mu-name" style={{ cursor: 'pointer', textDecoration: 'underline dotted' }}
-              onClick={() => setViewProfile(app)} title="Переглянути профіль">
-              {app.username}
+      <div className="modal-box modal-box--light db-tournament-modal" onClick={e => e.stopPropagation()}>
+        <button className="db-tm-close" onClick={onClose}>✕</button>
+        <div className="db-modal-scroll-body">
+
+          <div className="db-app-review-user" onClick={() => setViewProfile(app)} title="Переглянути профіль">
+            <UserAvatar user={app} size={48} showStatus={true} />
+            <div className="db-app-review-user-info">
+              <span className="db-app-review-name">{app.username}</span>
+              <span className="db-app-review-email">{app.email}</span>
             </div>
-            <div className="db-mu-email">{app.email}</div>
+            <span className="db-app-review-status" style={{ '--status-c': STATUS_COLOR[app.status] || '#888' }}>
+              {STATUS_LABEL_MAP[app.status] || app.status}
+            </span>
           </div>
-          <span style={{ fontSize: 12, fontWeight: 600, color: STATUS_COLOR[app.status] || '#888', background: 'rgba(0,0,0,.2)', padding: '3px 10px', borderRadius: 20 }}>
-            {STATUS_LABEL_MAP[app.status] || app.status}
-          </span>
-          <button className="db-mu-close" onClick={onClose}>✕</button>
-        </div>
-        <div className="db-mu-body">
-          <div className="db-mu-section">
-            <label className="db-mu-label">💬 Мотивація</label>
-            <div style={{ background: 'rgba(255,255,255,.04)', borderRadius: 8, padding: '12px 14px', fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-              {app.motivation || '—'}
-            </div>
+
+          <div className="db-app-review-section">
+            <label className="db-edit-label">💬 Мотивація</label>
+            <div className="db-app-review-text">{app.motivation || '—'}</div>
           </div>
-          <div className="db-mu-section">
-            <label className="db-mu-label">💼 Досвід та навички</label>
-            <div style={{ background: 'rgba(255,255,255,.04)', borderRadius: 8, padding: '12px 14px', fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap', color: app.experience ? 'inherit' : '#666' }}>
-              {app.experience || '—'}
-            </div>
+
+          <div className="db-app-review-section">
+            <label className="db-edit-label">💼 Досвід та навички</label>
+            <div className="db-app-review-text" style={{ color: app.experience ? undefined : '#999' }}>{app.experience || 'Не вказано'}</div>
           </div>
-          <div className="db-mu-section" style={{ color: '#888', fontSize: 12 }}>
-            📅 Подано: {formatDate(app.created_at)}
-          </div>
-          {app.status === 'pending' && (
-            <div className="db-form-actions" style={{ padding: '0 0 4px' }}>
-              <button className="db-btn db-btn-danger" onClick={() => { onDecline(app.id); onClose(); }}>❌ Відхилити</button>
-              <button className="db-btn db-btn-primary" style={{ background: '#16a34a' }} onClick={() => { onAccept(app.id); onClose(); }}>✓ Прийняти</button>
+
+          {contacts.length > 0 && (
+            <div className="db-app-review-section">
+              <label className="db-edit-label">📞 Контакти</label>
+              <div className="db-app-review-contacts">
+                {contacts.map(c => (
+                  <div key={c.label} className="db-app-review-contact-row">
+                    <span className="db-app-contact-icon">{c.icon}</span>
+                    <span className="db-app-review-contact-label">{c.label}</span>
+                    <span className="db-app-review-contact-value">{c.value}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
+
+          <div className="db-app-review-meta">
+            📅 Подано: {formatDate(app.created_at)}
+          </div>
+
+          {app.status === 'pending' && (
+            <div className="db-app-review-actions">
+              <button className="db-btn db-btn-danger db-app-review-btn" onClick={() => { onDecline(app.id); onClose(); }}>❌ Відхилити</button>
+              <button className="db-btn db-btn-primary db-app-review-btn db-app-review-btn--accept" onClick={() => { onAccept(app.id); onClose(); }}>✓ Прийняти</button>
+            </div>
+          )}
+
         </div>
       </div>
     </div>
@@ -580,12 +470,92 @@ export default function TabAdmin({ toast }) {
   const [savingSettings, setSavingSettings] = useState(false);
   const [creatingRoom,   setCreatingRoom]   = useState(false);
 
+  // Users management state
+  const [userSearch, setUserSearch] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState('all');
+  const [userSortBy, setUserSortBy] = useState('created_at');
+  const [userSortDesc, setUserSortDesc] = useState(true);
+  const [selectedUsers, setSelectedUsers] = useState([]);
+
   const ALL_CHAT_ROOMS = useMemo(() => [
     { id: 'general',     label: '# загальний' },
     { id: 'tournaments', label: '# турніри' },
     { id: 'offtopic',    label: '# офф-топік' },
     ...customRooms.map(r => ({ id: r.name, label: `# ${r.label}`, customId: r.id })),
   ], [customRooms]);
+
+  // Filtered and sorted users
+  const filteredUsers = useMemo(() => {
+    let result = [...users];
+    
+    // Search filter
+    if (userSearch.trim()) {
+      const query = userSearch.toLowerCase();
+      result = result.filter(u => 
+        (u.username?.toLowerCase().includes(query)) ||
+        (u.email?.toLowerCase().includes(query))
+      );
+    }
+    
+    // Role filter
+    if (userRoleFilter !== 'all') {
+      result = result.filter(u => u.role?.includes(userRoleFilter));
+    }
+    
+    // Sorting
+    result.sort((a, b) => {
+      let aVal, bVal;
+      switch (userSortBy) {
+        case 'username':
+          aVal = a.username?.toLowerCase() || '';
+          bVal = b.username?.toLowerCase() || '';
+          break;
+        case 'email':
+          aVal = a.email?.toLowerCase() || '';
+          bVal = b.email?.toLowerCase() || '';
+          break;
+        case 'role':
+          aVal = a.role || '';
+          bVal = b.role || '';
+          break;
+        case 'created_at':
+        default:
+          aVal = new Date(a.created_at || 0);
+          bVal = new Date(b.created_at || 0);
+          return userSortDesc ? bVal - aVal : aVal - bVal;
+      }
+      if (aVal < bVal) return userSortDesc ? 1 : -1;
+      if (aVal > bVal) return userSortDesc ? -1 : 1;
+      return 0;
+    });
+    
+    return result;
+  }, [users, userSearch, userRoleFilter, userSortBy, userSortDesc]);
+
+  const toggleUserSelection = (userId) => {
+    setSelectedUsers(prev => 
+      prev.includes(userId) 
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
+  const selectAllUsers = () => {
+    if (selectedUsers.length === filteredUsers.length) {
+      setSelectedUsers([]);
+    } else {
+      setSelectedUsers(filteredUsers.map(u => u.id));
+    }
+  };
+
+  const handleSort = (column) => {
+    if (userSortBy === column) {
+      setUserSortDesc(!userSortDesc);
+    } else {
+      setUserSortBy(column);
+      setUserSortDesc(true);
+    }
+  };
 
   const loadChatData = useCallback(async () => {
     try { setCustomRooms(await getCustomChatRooms()); } catch {}
@@ -616,6 +586,9 @@ export default function TabAdmin({ toast }) {
     } catch { toast.error('Помилка завантаження'); }
     finally { setLoading(false); }
   }, [toast]);
+
+  // Load applications on mount so badge count shows immediately
+  useEffect(() => { loadApplications(); }, [loadApplications]);
 
   const loadTeams = useCallback(async () => {
     try { setAdminTeams(await getAdminTeams()); } catch {}
@@ -666,8 +639,8 @@ export default function TabAdmin({ toast }) {
 
   const handleAcceptApplication = async (id) => {
     try {
-      await reviewOrganizerApplication(id, 'accepted');
-      setApplications(prev => prev.map(a => a.id === id ? { ...a, status: 'accepted' } : a));
+      await reviewOrganizerApplication(id, 'approved');
+      setApplications(prev => prev.map(a => a.id === id ? { ...a, status: 'approved' } : a));
       toast.success('Заявку прийнято — користувач отримав роль Організатора');
     } catch (err) { toast.error(err.message); }
   };
@@ -750,12 +723,73 @@ export default function TabAdmin({ toast }) {
     ...prev, [settingsRoom]: { ...(prev[settingsRoom] || {}), [k]: v },
   }));
 
+  // Новые карточки статистики - расширенный набор
   const adminStats = stats ? [
-    { label: 'Користувачів', value: stats.users,      color: '#AC9EF8', icon: '👤' },
-    { label: 'Команд',       value: stats.teams,       color: '#7c5ff5', icon: '👥' },
-    { label: 'Турнірів',     value: stats.tournaments, color: '#4ade80', icon: '🏆' },
-    { label: 'Повідомлень',  value: stats.messages,    color: '#0ea5e9', icon: '💬' },
-    { label: 'Заблоковано',  value: stats.banned,      color: '#f87171', icon: '🚫' },
+    { 
+      label: 'Live Tournaments', 
+      value: tournaments.filter(t => t.status === 'running').length, 
+      color: '#7c5ff5', 
+      icon: '🏆',
+      badge: { text: 'ACTIVE', color: '#4ade80', bg: 'rgba(74,222,128,.15)' },
+      trend: '+12%'
+    },
+    { 
+      label: 'Registered Teams', 
+      value: stats.teams, 
+      color: '#0ea5e9', 
+      icon: '👥',
+      badge: { text: '+14%', color: '#0ea5e9', bg: 'rgba(14,165,233,.1)' },
+      trend: null
+    },
+    { 
+      label: 'Total Submissions', 
+      value: stats.submissions || tournaments.reduce((s, t) => s + (t.submission_count || 0), 0), 
+      color: '#f59e0b', 
+      icon: '📤',
+      badge: { text: 'This Week', color: '#888', bg: 'rgba(136,136,136,.1)' },
+      trend: null
+    },
+    { 
+      label: 'Judges Assigned', 
+      value: users.filter(u => (u.role || '').includes('jury')).length, 
+      color: '#ec4899', 
+      icon: '⚖️',
+      badge: { text: 'PENDING', color: '#f59e0b', bg: 'rgba(245,158,11,.15)' },
+      trend: null
+    },
+    // Дополнительные карточки
+    { 
+      label: 'Total Users', 
+      value: stats.users, 
+      color: '#8b5cf6', 
+      icon: '👤',
+      badge: { text: 'PLATFORM', color: '#8b5cf6', bg: 'rgba(139,92,246,.1)' },
+      trend: '+8%'
+    },
+    { 
+      label: 'Active Now', 
+      value: stats.active_users || Math.round(stats.users * 0.15), 
+      color: '#22c55e', 
+      icon: '🟢',
+      badge: { text: 'ONLINE', color: '#22c55e', bg: 'rgba(34,197,94,.15)' },
+      trend: null
+    },
+    { 
+      label: 'Total Messages', 
+      value: stats.messages, 
+      color: '#06b6d4', 
+      icon: '💬',
+      badge: { text: 'CHAT', color: '#06b6d4', bg: 'rgba(6,182,212,.1)' },
+      trend: '+23%'
+    },
+    { 
+      label: 'Open Registration', 
+      value: tournaments.filter(t => t.status === 'registration').length, 
+      color: '#f97316', 
+      icon: '📝',
+      badge: { text: 'OPEN', color: '#f97316', bg: 'rgba(249,115,22,.15)' },
+      trend: null
+    },
   ] : [];
 
   const pendingAppsCount = applications.filter(a => a.status === 'pending').length;
@@ -800,14 +834,109 @@ export default function TabAdmin({ toast }) {
           {/* ─── OVERVIEW ─── */}
           {adminTab === 'overview' && (
             <div>
-              <div className="db-admin-stats" style={{ marginBottom: 24 }}>
+              {/* Stat Cards v2 - новый дизайн */}
+              <div className="db-admin-stats-v2" style={{ marginBottom: 24 }}>
                 {adminStats.map(s => (
-                  <div key={s.label} className="db-admin-stat" style={{ '--c': s.color }}>
-                    <span className="db-admin-stat-icon">{s.icon}</span>
-                    <span className="db-admin-stat-val">{s.value ?? '—'}</span>
-                    <span className="db-admin-stat-label">{s.label}</span>
+                  <div key={s.label} className="db-admin-stat-card" style={{ '--accent': s.color }}>
+                    <div className="db-admin-stat-card-header">
+                      <div className="db-admin-stat-card-icon" style={{ background: `${s.color}15` }}>{s.icon}</div>
+                      <div className="db-admin-stat-card-meta">
+                        {s.trend && (
+                          <span className="db-admin-stat-card-trend" style={{ color: '#22c55e' }}>
+                            ↗ {s.trend}
+                          </span>
+                        )}
+                        {s.badge && (
+                          <span className="db-admin-stat-card-badge" style={{ color: s.badge.color, background: s.badge.bg }}>
+                            {s.badge.text}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="db-admin-stat-card-body">
+                      <span className="db-admin-stat-card-value">{s.value ?? '—'}</span>
+                      <span className="db-admin-stat-card-label">{s.label}</span>
+                    </div>
                   </div>
                 ))}
+              </div>
+              
+              {/* Submission Activity Chart */}
+              <div className="db-admin-charts-row">
+                <div className="db-admin-chart-card">
+                  <div className="db-admin-chart-header">
+                    <div>
+                      <h3 className="db-admin-chart-title">Submission Activity</h3>
+                      <p className="db-admin-chart-subtitle">Daily submission volume across all active tournaments</p>
+                    </div>
+                    <select className="db-admin-chart-select">
+                      <option>Last 7 Days</option>
+                      <option>Last 30 Days</option>
+                    </select>
+                  </div>
+                  <div className="db-admin-chart-body">
+                    <svg viewBox="0 0 400 150" className="db-admin-chart-svg">
+                      <defs>
+                        <linearGradient id="chartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                          <stop offset="0%" stopColor="#AC9EF8" stopOpacity="0.3" />
+                          <stop offset="100%" stopColor="#AC9EF8" stopOpacity="0" />
+                        </linearGradient>
+                      </defs>
+                      {/* График линии */}
+                      <path 
+                        d="M0,120 Q50,100 100,80 T200,60 T300,40 T400,20" 
+                        fill="none" 
+                        stroke="#AC9EF8" 
+                        strokeWidth="2"
+                      />
+                      {/* Заливка под графиком */}
+                      <path 
+                        d="M0,120 Q50,100 100,80 T200,60 T300,40 T400,20 L400,150 L0,150 Z" 
+                        fill="url(#chartGradient)"
+                      />
+                      {/* Точки */}
+                      <circle cx="0" cy="120" r="4" fill="#AC9EF8" />
+                      <circle cx="100" cy="80" r="4" fill="#AC9EF8" />
+                      <circle cx="200" cy="60" r="4" fill="#AC9EF8" />
+                      <circle cx="300" cy="40" r="4" fill="#AC9EF8" />
+                      <circle cx="400" cy="20" r="4" fill="#AC9EF8" />
+                    </svg>
+                  </div>
+                </div>
+                
+                {/* Upcoming Deadlines */}
+                <div className="db-admin-deadlines-card">
+                  <div className="db-admin-deadlines-header">
+                    <h3 className="db-admin-deadlines-title">Upcoming Deadlines</h3>
+                    <button className="db-admin-deadlines-viewall">View All</button>
+                  </div>
+                  <div className="db-admin-deadlines-list">
+                    {tournaments
+                      .filter(t => t.status === 'registration' && t.registration_end)
+                      .slice(0, 3)
+                      .map(t => {
+                        const daysLeft = Math.ceil((new Date(t.registration_end) - new Date()) / 86400000);
+                        const progress = Math.max(0, Math.min(100, (daysLeft / 7) * 100));
+                        return (
+                          <div key={t.id} className="db-admin-deadline-item">
+                            <div className="db-admin-deadline-icon" style={{ background: daysLeft < 2 ? '#fef3c7' : '#ede9fe' }}>
+                              {daysLeft < 2 ? '⏰' : '🏆'}
+                            </div>
+                            <div className="db-admin-deadline-info">
+                              <strong>{t.name}</strong>
+                              <span>Closes in {daysLeft} days</span>
+                              <div className="db-admin-deadline-progress">
+                                <div className="db-admin-deadline-bar" style={{ width: `${progress}%`, background: daysLeft < 2 ? '#f59e0b' : '#7c5ff5' }} />
+                              </div>
+                            </div>
+                            <span className="db-admin-deadline-percent" style={{ color: daysLeft < 2 ? '#f59e0b' : '#7c5ff5' }}>
+                              {Math.round(progress)}%
+                            </span>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
               </div>
               <div className="db-admin-chat-grid">
                 <div className="db-admin-card">
@@ -885,7 +1014,7 @@ export default function TabAdmin({ toast }) {
             <div>
               <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
                 <span style={{ fontSize: 13, color: '#888' }}>Фільтр:</span>
-                {[['pending','⏳ Очікують'], ['accepted','✓ Прийняті'], ['rejected','✗ Відхилені'], ['all','Усі']].map(([v, l]) => (
+                {[['pending','⏳ Очікують'], ['approved','✓ Прийняті'], ['rejected','✗ Відхилені'], ['all','Усі']].map(([v, l]) => (
                   <button key={v}
                     className={`db-admin-tab-btn${appFilter === v ? ' active' : ''}`}
                     style={{ padding: '4px 12px', fontSize: 13 }}
@@ -918,7 +1047,7 @@ export default function TabAdmin({ toast }) {
                         <tr key={a.id}>
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <UserAvatar user={a} size={28} />
+                              <UserAvatar user={a} size={28} showStatus={true} />
                               <strong>{a.username}</strong>
                             </div>
                           </td>
@@ -931,7 +1060,7 @@ export default function TabAdmin({ toast }) {
                           <td style={{ fontSize: 12, color: '#888', whiteSpace: 'nowrap' }}>{formatDate(a.created_at)}</td>
                           <td>
                             {a.status === 'pending' && <span style={{ color: '#f59e0b', fontWeight: 600, fontSize: 12 }}>⏳ Очікує</span>}
-                            {a.status === 'accepted' && <span style={{ color: '#16a34a', fontWeight: 600, fontSize: 12 }}>✓ Прийнято</span>}
+                            {a.status === 'approved' && <span style={{ color: '#16a34a', fontWeight: 600, fontSize: 12 }}>✓ Прийнято</span>}
                             {a.status === 'rejected' && <span style={{ color: '#ef4444', fontWeight: 600, fontSize: 12 }}>✗ Відхилено</span>}
                           </td>
                           <td>
@@ -956,9 +1085,14 @@ export default function TabAdmin({ toast }) {
           {adminTab === 'tournaments' && (
             <>
               {showCreate && (
-                <CreateTournamentForm toast={toast}
-                  onSuccess={() => { setShowCreate(false); load(); loadAll(); toast.success('Турнір створено!'); }}
-                  onCancel={() => setShowCreate(false)} />
+                <TournamentForm
+                  mode="create"
+                  onSubmit={async (payload) => {
+                    await createTournament(payload);
+                    setShowCreate(false); load(); loadAll(); toast.success('Турнір створено!');
+                  }}
+                  onCancel={() => setShowCreate(false)}
+                />
               )}
               <div className="db-admin-table-wrap">
                 <table className="db-admin-table">
@@ -987,24 +1121,135 @@ export default function TabAdmin({ toast }) {
 
           {/* ─── USERS ─── */}
           {adminTab === 'users' && (
-            <div className="db-admin-table-wrap">
-              <table className="db-admin-table">
-                <thead><tr><th>#</th><th>Нікнейм</th><th>Email</th><th>Ролі</th><th>Реєстрація</th><th></th></tr></thead>
-                <tbody>
-                  {users.map(u => (
-                    <tr key={u.id} className={u.role?.includes('banned') ? 'row-banned' : ''}>
-                      <td style={{ color: '#bbb', fontSize: 12 }}>{u.id}</td>
-                      <td><strong>{u.username}</strong></td>
-                      <td style={{ fontSize: 13, color: '#888' }}>{u.email}</td>
-                      <td><RoleBadges role={u.role} /></td>
-                      <td style={{ fontSize: 13 }}>{formatDate(u.created_at)}</td>
-                      <td>
-                        <button className="db-btn db-btn-ghost db-btn-sm" onClick={() => setManageUser(u)}>Керувати</button>
-                      </td>
+            <div className="db-admin-users-section">
+              {/* Toolbar with search and filters */}
+              <div className="db-admin-users-toolbar">
+                <div className="db-admin-users-search">
+                  <span className="db-admin-search-icon">🔍</span>
+                  <input 
+                    type="text" 
+                    placeholder="Пошук за нікнеймом або email..."
+                    value={userSearch}
+                    onChange={e => setUserSearch(e.target.value)}
+                    className="db-admin-search-input"
+                  />
+                  {userSearch && (
+                    <button className="db-admin-search-clear" onClick={() => setUserSearch('')}>✕</button>
+                  )}
+                </div>
+                
+                <div className="db-admin-users-filters">
+                  <RoleFilterDropdown value={userRoleFilter} onChange={setUserRoleFilter} />
+                  
+                  {selectedUsers.length > 0 && (
+                    <div className="db-admin-bulk-actions">
+                      <span className="db-admin-selected-count">{selectedUsers.length} вибрано</span>
+                      <button className="db-btn db-btn-danger db-btn-sm" onClick={() => {/* bulk delete */}}>
+                        🗑 Видалити
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Stats bar */}
+              <div className="db-admin-users-stats">
+                <span>Всього: <strong>{users.length}</strong></span>
+                <span>Знайдено: <strong>{filteredUsers.length}</strong></span>
+                {selectedUsers.length > 0 && <span>Вибрано: <strong>{selectedUsers.length}</strong></span>}
+              </div>
+              
+              {/* Table */}
+              <div className="db-admin-table-wrap">
+                <table className="db-admin-table db-admin-users-table">
+                  <thead>
+                    <tr>
+                      <th className="db-admin-col-checkbox">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedUsers.length === filteredUsers.length && filteredUsers.length > 0}
+                          onChange={selectAllUsers}
+                        />
+                      </th>
+                      <th className="db-admin-col-avatar">Аватар</th>
+                      <th 
+                        className="db-admin-col-sortable" 
+                        onClick={() => handleSort('username')}
+                      >
+                        Нікнейм {userSortBy === 'username' && (userSortDesc ? '↓' : '↑')}
+                      </th>
+                      <th 
+                        className="db-admin-col-sortable" 
+                        onClick={() => handleSort('email')}
+                      >
+                        Email {userSortBy === 'email' && (userSortDesc ? '↓' : '↑')}
+                      </th>
+                      <th 
+                        className="db-admin-col-sortable" 
+                        onClick={() => handleSort('role')}
+                      >
+                        Ролі {userSortBy === 'role' && (userSortDesc ? '↓' : '↑')}
+                      </th>
+                      <th 
+                        className="db-admin-col-sortable" 
+                        onClick={() => handleSort('created_at')}
+                      >
+                        Реєстрація {userSortBy === 'created_at' && (userSortDesc ? '↓' : '↑')}
+                      </th>
+                      <th className="db-admin-col-status">Статус</th>
+                      <th></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {filteredUsers.length === 0 ? (
+                      <tr>
+                        <td colSpan="8" className="db-admin-users-empty">
+                          {userSearch || userRoleFilter !== 'all' 
+                            ? '🔍 Користувачів не знайдено' 
+                            : '👥 Немає користувачів'}
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredUsers.map(u => (
+                        <tr 
+                          key={u.id} 
+                          className={`${u.role?.includes('banned') ? 'row-banned' : ''} ${selectedUsers.includes(u.id) ? 'row-selected' : ''}`}
+                        >
+                          <td>
+                            <input 
+                              type="checkbox" 
+                              checked={selectedUsers.includes(u.id)}
+                              onChange={() => toggleUserSelection(u.id)}
+                            />
+                          </td>
+                          <td>
+                            <UserAvatar user={u} size={36} showStatus={true} />
+                          </td>
+                          <td>
+                            <div className="db-admin-user-info">
+                              <strong>{u.username}</strong>
+                              {u.github_username && <span className="db-admin-user-github">🐙 {u.github_username}</span>}
+                            </div>
+                          </td>
+                          <td style={{ fontSize: 13, color: '#666' }}>{u.email}</td>
+                          <td><RoleBadges role={u.role} /></td>
+                          <td style={{ fontSize: 13 }}>{formatDate(u.created_at)}</td>
+                          <td>
+                            <span className={`db-admin-user-status db-admin-user-status--${u.status || 'offline'}`}>
+                              {u.status === 'online' ? '🟢 Онлайн' : u.status === 'away' ? '🟡 Відійшов' : u.status === 'dnd' ? '🔴 Не турбувати' : '⚪ Офлайн'}
+                            </span>
+                          </td>
+                          <td>
+                            <button className="db-btn db-btn-ghost db-btn-sm" onClick={() => setManageUser(u)}>
+                              ⚙️ Керувати
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 

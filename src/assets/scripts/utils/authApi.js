@@ -41,6 +41,7 @@ export const DEV_MOCK_USER = {
 export const OAUTH_URLS = {
   google: `${DIRECT_BACKEND_BASE}${BASE}/auth/google`,
   discord: `${DIRECT_BACKEND_BASE}${BASE}/auth/discord`,
+  github: `${DIRECT_BACKEND_BASE}${BASE}/auth/github`,
 };
 
 /** Build auth headers */
@@ -392,7 +393,8 @@ export async function createPublicReview(payload) {
 
 export async function getAdminUsers() {
   if (!CHECK_BACKEND) return [];
-  return request(`${BASE}/admin/users`, { headers: authHeaders() });
+  const data = await request(`${BASE}/admin/users`, { headers: authHeaders() });
+  return Array.isArray(data) ? data : (data?.users || []);
 }
 
 export async function setUserRole(id, role) {
@@ -486,6 +488,29 @@ export async function toggleChatMute(userId) {
   return request(`${BASE}/admin/chat/mute/${userId}`, {
     method: 'POST',
     headers: authHeaders(),
+  });
+}
+
+/* ── Team chat membership ────────────────────────── */
+
+export async function getTeamChatMembers(teamId) {
+  if (!CHECK_BACKEND) return [];
+  return request(`${BASE}/teams/${teamId}/chat/members`, { headers: authHeaders() });
+}
+
+export async function addTeamChatMember(teamId, userId) {
+  return request(`${BASE}/teams/${teamId}/chat/members`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ user_id: userId }),
+  });
+}
+
+export async function linkTeamMember(teamId, memberId, userId) {
+  return request(`${BASE}/teams/${teamId}/members/${memberId}/link`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ user_id: userId }),
   });
 }
 
@@ -589,6 +614,13 @@ export async function markAllNotificationsRead() {
   });
 }
 
+export async function deleteAllNotifications() {
+  return request(`${BASE}/notifications`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+}
+
 /* ── Jury ─────────────────────────────────────── */
 
 export async function getJuryTournaments() {
@@ -604,6 +636,31 @@ export async function getJurySubmissions(roundId) {
 export async function evaluateSubmission(submissionId, data) {
   return request(`${BASE}/jury/submissions/${submissionId}/evaluate`, {
     method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+/* ── Submissions ──────────────────────────────────── */
+export async function getTournamentRounds(tournamentId) {
+  return request(`${BASE}/tournaments/${tournamentId}/rounds`, { headers: authHeaders() });
+}
+
+export async function getTeamSubmissions(teamId) {
+  return request(`${BASE}/submissions/teams/${teamId}`, { headers: authHeaders() });
+}
+
+export async function createSubmission(roundId, data) {
+  return request(`${BASE}/submissions/rounds/${roundId}`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateSubmission(submissionId, data) {
+  return request(`${BASE}/submissions/${submissionId}`, {
+    method: 'PATCH',
     headers: authHeaders(),
     body: JSON.stringify(data),
   });

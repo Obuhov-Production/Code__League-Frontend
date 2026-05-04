@@ -5,23 +5,7 @@ import {
   updateTournamentStatus, deleteTournament,
   getAdminTeams,
 } from '@utils/authApi';
-import { StatusBadge, CustomSelect, ConfirmModal, formatDate } from './db.shared.jsx';
-
-/* ── Options ───────────────────────────────────────── */
-const CATEGORY_OPTIONS = [
-  { value: 'hackathon', label: '⚡ Хакатон' },
-  { value: 'olympiad',  label: '🎓 Олімпіада' },
-  { value: 'marathon',  label: '🏃 Марафон' },
-  { value: 'sprint',    label: '⏱ Спринт' },
-  { value: 'challenge', label: '🎯 Челендж' },
-  { value: 'other',     label: '📦 Інше' },
-];
-
-const FORMAT_OPTIONS = [
-  { value: 'online',  label: '🌐 Онлайн' },
-  { value: 'offline', label: '📍 Офлайн' },
-  { value: 'hybrid',  label: '🔀 Гібрид' },
-];
+import { StatusBadge, ConfirmModal, formatDate, TournamentForm } from './db.shared.jsx';
 
 const TOUR_STATUS_OPTS = [
   { value: 'draft',        label: 'Draft',        color: '#888' },
@@ -85,187 +69,24 @@ function StatusPicker({ value, onChange, compact = false }) {
 
 /* ── Edit Tournament Modal ─────────────────────────── */
 function EditTournamentModal({ tournament, toast, onClose, onSuccess }) {
-  const today = new Date().toISOString().split('T')[0];
-  const [f, setF] = useState({
-    name:               tournament.name               || '',
-    description:        tournament.description        || '',
-    rules:              tournament.rules              || '',
-    start_date:         tournament.start_date         || today,
-    end_date:           tournament.end_date           || '',
-    registration_start: tournament.registration_start || today,
-    registration_end:   tournament.registration_end   || '',
-    teams_limit:        tournament.teams_limit        || '',
-    min_team_size:      tournament.min_team_size      || 2,
-    max_team_size:      tournament.max_team_size      || 5,
-  });
-  const [loading, setLoading] = useState(false);
-  const upd = (k, v) => setF(x => ({ ...x, [k]: v }));
-
-  const handleSubmit = async e => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await updateTournament(tournament.id, {
-        ...f,
-        teams_limit:   f.teams_limit ? Number(f.teams_limit) : null,
-        min_team_size: Number(f.min_team_size),
-        max_team_size: Number(f.max_team_size),
-      });
-      onSuccess();
-    } catch (err) { toast.error(err.message); }
-    finally { setLoading(false); }
-  };
-
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="db-et-modal" onClick={e => e.stopPropagation()}>
-        <div className="db-et-header">
-          <div>
-            <div className="db-et-title">{f.name || 'Редагування турніру'}</div>
-            <div className="db-et-subtitle">id #{tournament.id}</div>
-          </div>
-          <button className="db-mu-close" onClick={onClose}>✕</button>
-        </div>
-        <div className="db-et-body">
-          <form onSubmit={handleSubmit}>
-            <div className="db-form-row"><label>Назва *</label><input className="db-input" value={f.name} onChange={e => upd('name', e.target.value)} required /></div>
-            <div className="db-form-row"><label>Опис</label><textarea className="db-input" rows={2} value={f.description} onChange={e => upd('description', e.target.value)} /></div>
-            <div className="db-form-row"><label>Правила</label><textarea className="db-input" rows={2} value={f.rules} onChange={e => upd('rules', e.target.value)} /></div>
-            <div className="db-form-row-2">
-              <div className="db-form-row"><label>Старт</label><input className="db-input" type="date" value={f.start_date} onChange={e => upd('start_date', e.target.value)} /></div>
-              <div className="db-form-row"><label>Кінець</label><input className="db-input" type="date" value={f.end_date} onChange={e => upd('end_date', e.target.value)} /></div>
-            </div>
-            <div className="db-form-row-2">
-              <div className="db-form-row"><label>Реєстрація від</label><input className="db-input" type="date" value={f.registration_start} onChange={e => upd('registration_start', e.target.value)} /></div>
-              <div className="db-form-row"><label>Реєстрація до</label><input className="db-input" type="date" value={f.registration_end} onChange={e => upd('registration_end', e.target.value)} /></div>
-            </div>
-            <div className="db-form-row-3">
-              <div className="db-form-row"><label>Макс. команд</label><input className="db-input" type="number" min="1" value={f.teams_limit} onChange={e => upd('teams_limit', e.target.value)} placeholder="∞" /></div>
-              <div className="db-form-row"><label>Мін. осіб</label><input className="db-input" type="number" min="1" max="20" value={f.min_team_size} onChange={e => upd('min_team_size', e.target.value)} /></div>
-              <div className="db-form-row"><label>Макс. осіб</label><input className="db-input" type="number" min="1" max="20" value={f.max_team_size} onChange={e => upd('max_team_size', e.target.value)} /></div>
-            </div>
-            <div className="db-form-actions" style={{ marginTop: 16 }}>
-              <button type="button" className="db-btn db-btn-ghost" onClick={onClose}>Скасувати</button>
-              <button type="submit" className="db-btn db-btn-primary" disabled={loading}>{loading ? 'Збереження...' : '💾 Зберегти'}</button>
-            </div>
-          </form>
+      <div className="modal-box modal-box--light db-tournament-modal" onClick={e => e.stopPropagation()}>
+        <button className="db-tm-close" onClick={onClose}>✕</button>
+        <div className="db-modal-scroll-body">
+          <TournamentForm
+            mode="edit"
+            tournament={tournament}
+            onSubmit={async (payload) => {
+              await updateTournament(tournament.id, payload);
+              toast.success('Турнір оновлено!');
+              onSuccess();
+            }}
+            onCancel={onClose}
+          />
         </div>
       </div>
     </div>
-  );
-}
-
-/* ── Create Tournament Form ────────────────────────── */
-function CreateTournamentForm({ toast, onSuccess, onCancel }) {
-  const today = new Date().toISOString().split('T')[0];
-  const [f, setF] = useState({
-    name: '', description: '', rules: '', prize: '',
-    category: 'hackathon', format: 'online', status: 'draft',
-    start_date: today, end_date: '',
-    registration_start: today, registration_end: '',
-    teams_limit: '', rounds_count: 1, min_team_size: 2, max_team_size: 5,
-  });
-  const [loading, setLoading] = useState(false);
-  const upd = (k, v) => setF(x => ({ ...x, [k]: v }));
-
-  const handleSubmit = async e => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await createTournament({
-        ...f,
-        teams_limit:   f.teams_limit ? Number(f.teams_limit) : null,
-        rounds_count:  Number(f.rounds_count),
-        min_team_size: Number(f.min_team_size),
-        max_team_size: Number(f.max_team_size),
-      });
-      onSuccess();
-    } catch (err) { toast.error(err.message); }
-    finally { setLoading(false); }
-  };
-
-  return (
-    <form className="db-create-form" onSubmit={handleSubmit}>
-      <div className="db-create-form-header">
-        <div className="db-create-form-icon">🏆</div>
-        <div>
-          <h3>Новий турнір</h3>
-          <p>Заповніть інформацію для створення турніру</p>
-        </div>
-      </div>
-
-      <div className="db-cfs-section">
-        <div className="db-cfs-title"><span className="db-cfs-icon">📋</span> Основна інформація</div>
-        <div className="db-form-row">
-          <label>Назва *</label>
-          <input placeholder="Введіть назву турніру" value={f.name} onChange={e => upd('name', e.target.value)} required />
-        </div>
-        <div className="db-form-row-2">
-          <div className="db-form-row">
-            <label>Категорія</label>
-            <CustomSelect value={f.category} onChange={v => upd('category', v)} options={CATEGORY_OPTIONS} placeholder="Оберіть категорію" />
-          </div>
-          <div className="db-form-row">
-            <label>Формат</label>
-            <CustomSelect value={f.format} onChange={v => upd('format', v)} options={FORMAT_OPTIONS} placeholder="Оберіть формат" />
-          </div>
-        </div>
-        <div className="db-form-row">
-          <label>Опис</label>
-          <textarea rows={2} placeholder="Короткий опис турніру..." value={f.description} onChange={e => upd('description', e.target.value)} />
-        </div>
-        <div className="db-form-row">
-          <label>Правила участі</label>
-          <textarea rows={2} placeholder="Умови участі, критерії оцінювання..." value={f.rules} onChange={e => upd('rules', e.target.value)} />
-        </div>
-      </div>
-
-      <div className="db-cfs-section">
-        <div className="db-cfs-title"><span className="db-cfs-icon">📅</span> Дати</div>
-        <div className="db-form-row-2">
-          <div className="db-form-row"><label>Реєстрація від *</label><input type="date" value={f.registration_start} onChange={e => upd('registration_start', e.target.value)} required /></div>
-          <div className="db-form-row"><label>Реєстрація до *</label><input type="date" value={f.registration_end} onChange={e => upd('registration_end', e.target.value)} required /></div>
-        </div>
-        <div className="db-form-row-2">
-          <div className="db-form-row"><label>Старт *</label><input type="date" value={f.start_date} onChange={e => upd('start_date', e.target.value)} required /></div>
-          <div className="db-form-row"><label>Кінець *</label><input type="date" value={f.end_date} onChange={e => upd('end_date', e.target.value)} required /></div>
-        </div>
-      </div>
-
-      <div className="db-cfs-section">
-        <div className="db-cfs-title"><span className="db-cfs-icon">👥</span> Команди</div>
-        <div className="db-form-row-3">
-          <div className="db-form-row"><label>Макс. команд</label><input type="number" min="1" value={f.teams_limit} onChange={e => upd('teams_limit', e.target.value)} placeholder="∞" /></div>
-          <div className="db-form-row"><label>Мін. учасників</label><input type="number" min="1" max="20" value={f.min_team_size} onChange={e => upd('min_team_size', e.target.value)} /></div>
-          <div className="db-form-row"><label>Макс. учасників</label><input type="number" min="1" max="20" value={f.max_team_size} onChange={e => upd('max_team_size', e.target.value)} /></div>
-        </div>
-        <div className="db-form-row" style={{ maxWidth: 160 }}>
-          <label>Кількість раундів</label>
-          <input type="number" min="1" max="10" value={f.rounds_count} onChange={e => upd('rounds_count', e.target.value)} />
-        </div>
-      </div>
-
-      <div className="db-cfs-section">
-        <div className="db-cfs-title"><span className="db-cfs-icon">🏷</span> Статус та нагорода</div>
-        <div className="db-form-row-2">
-          <div className="db-form-row">
-            <label>Початковий статус</label>
-            <StatusPicker value={f.status} onChange={v => upd('status', v)} />
-          </div>
-          <div className="db-form-row">
-            <label>Нагорода / Призи</label>
-            <input placeholder="Опис призів переможцям..." value={f.prize} onChange={e => upd('prize', e.target.value)} />
-          </div>
-        </div>
-      </div>
-
-      <div className="db-form-actions">
-        <button type="button" className="db-btn db-btn-ghost" onClick={onCancel}>Скасувати</button>
-        <button type="submit" className="db-btn db-btn-primary" disabled={loading}>
-          {loading ? 'Збереження...' : '🏆 Створити турнір'}
-        </button>
-      </div>
-    </form>
   );
 }
 
@@ -350,9 +171,12 @@ export default function TabOrganizer({ toast }) {
           {orgTab === 'tournaments' && (
             <>
               {showCreate && (
-                <CreateTournamentForm
-                  toast={toast}
-                  onSuccess={() => { setShowCreate(false); loadTournaments(); toast.success('Турнір створено!'); }}
+                <TournamentForm
+                  mode="create"
+                  onSubmit={async (payload) => {
+                    await createTournament(payload);
+                    setShowCreate(false); loadTournaments(); toast.success('Турнір створено!');
+                  }}
                   onCancel={() => setShowCreate(false)}
                 />
               )}

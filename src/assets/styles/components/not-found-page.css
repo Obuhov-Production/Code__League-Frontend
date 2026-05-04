@@ -1,0 +1,230 @@
+.nf-page {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 18% 16%, rgba(172, 158, 248, 0.16), transparent 24%),
+    radial-gradient(circle at 82% 22%, rgba(242, 116, 5, 0.12), transparent 20%),
+    linear-gradient(180deg, #fbf7f0 0%, #f2e7d6 100%);
+}
+
+.nf-main {
+  overflow: hidden;
+}
+
+.nf-hero {
+  min-height: calc(100vh - 180px);
+  display: grid;
+  grid-template-columns: minmax(280px, 520px) minmax(320px, 1fr);
+  align-items: center;
+  gap: 56px;
+  padding-top: 72px;
+  padding-bottom: 72px;
+}
+
+.nf-copy {
+  position: relative;
+  z-index: 2;
+}
+
+.nf-kicker {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(25, 26, 35, 0.12);
+  background: rgba(255, 255, 255, 0.7);
+  color: #7b5c3f;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.nf-title {
+  margin-top: 18px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(42px, 5vw, 76px);
+  line-height: 0.95;
+  letter-spacing: -0.05em;
+  color: #191a23;
+}
+
+.nf-text {
+  margin-top: 18px;
+  max-width: 520px;
+  color: rgba(25, 26, 35, 0.72);
+  font-size: 17px;
+  line-height: 1.7;
+}
+
+.nf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 30px;
+}
+
+.nf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 174px;
+  padding: 14px 22px;
+  border-radius: 18px;
+  border: 2px solid #191a23;
+  font-weight: 600;
+  transition:
+    transform 0.22s ease,
+    box-shadow 0.22s ease,
+    background-color 0.22s ease,
+    color 0.22s ease;
+}
+
+.nf-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(25, 26, 35, 0.12);
+}
+
+.nf-btn-primary {
+  background: #191a23;
+  color: #fffaf2;
+}
+
+.nf-btn-secondary {
+  background: rgba(255, 255, 255, 0.58);
+  color: #191a23;
+}
+
+.nf-art {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 560px;
+}
+
+.nf-code-bg {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -52%);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: clamp(180px, 26vw, 340px);
+  line-height: 0.82;
+  font-weight: 700;
+  letter-spacing: -0.1em;
+  color: rgba(25, 26, 35, 0.2);
+  user-select: none;
+}
+
+.nf-card {
+  position: relative;
+  width: min(100%, 360px);
+  padding: 32px 28px;
+  border: 2px solid rgba(25, 26, 35, 0.1);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow:
+    0 24px 60px rgba(25, 26, 35, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  z-index: 1;
+}
+
+.nf-card-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: #191a23;
+  color: #fff;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.nf-card-line {
+  width: 100%;
+  height: 10px;
+  margin-top: 18px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(172, 158, 248, 0.95), rgba(242, 116, 5, 0.55));
+  opacity: 0.75;
+}
+
+.nf-card-line-short {
+  width: 64%;
+  opacity: 0.45;
+}
+
+.nf-card-glow {
+  position: absolute;
+  right: 22px;
+  top: 22px;
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(172, 158, 248, 0.3), transparent 68%);
+}
+
+@media (max-width: 1100px) {
+  .nf-hero {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding-top: 48px;
+    text-align: center;
+  }
+
+  .nf-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .nf-text {
+    max-width: 640px;
+  }
+
+  .nf-art {
+    min-height: 420px;
+  }
+}
+
+@media (max-width: 640px) {
+  .nf-hero {
+    min-height: auto;
+    padding-top: 32px;
+    padding-bottom: 48px;
+  }
+
+  .nf-title {
+    font-size: clamp(34px, 13vw, 52px);
+  }
+
+  .nf-text {
+    font-size: 15px;
+  }
+
+  .nf-actions {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .nf-btn {
+    width: min(100%, 280px);
+  }
+
+  .nf-art {
+    min-height: 320px;
+  }
+
+  .nf-code-bg {
+    font-size: clamp(120px, 34vw, 200px);
+  }
+
+  .nf-card {
+    width: min(100%, 300px);
+    padding: 24px 20px;
+    border-radius: 22px;
+  }
+}

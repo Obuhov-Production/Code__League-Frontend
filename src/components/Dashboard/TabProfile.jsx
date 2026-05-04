@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 
 import badge1Img from '@images/pin/bage1.png';
 import badge2Img from '@images/pin/bage2.png';
 
-import { getMyTeams, updateMe, uploadAvatar, uploadBanner, deleteBanner, API_BASE,
+import { getMyTeams, updateMe, uploadAvatar, uploadBanner, deleteBanner,
   submitOrganizerApplication, getMyOrganizerApplication, getMyBadges } from '@utils/authApi';
-import { BANNER_PRESETS, StatusBadge, UserAvatar, formatDate, hasRole, displayName } from './db.shared.jsx';
+import { BANNER_PRESETS, StatusBadge, UserAvatar, formatDate, hasRole, displayName, resolveAvatarUrl } from './db.shared.jsx';
 
 /* ── Badge definitions ────────────────────────── */
 export const ALL_BADGES = [
@@ -60,12 +60,15 @@ function BadgeModal({ badge, onClose }) {
 
 /* ── Organizer Application Modal ─────────────────── */
 function OrganizerApplyModal({ onClose, onSubmit }) {
-  const [form, setForm] = useState({ motivation: '', experience: '' });
+  const [form, setForm] = useState({ motivation: '', experience: '', contact_email: '', contact_telegram: '', contact_phone: '' });
   const [saving, setSaving] = useState(false);
+
+  const hasContact = form.contact_email.trim() || form.contact_telegram.trim() || form.contact_phone.trim();
 
   const handleSubmit = async e => {
     e.preventDefault();
     if (!form.motivation.trim()) return;
+    if (!hasContact) return;
     setSaving(true);
     try { await onSubmit(form); }
     finally { setSaving(false); }
@@ -73,47 +76,79 @@ function OrganizerApplyModal({ onClose, onSubmit }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box modal-box--light" onClick={e => e.stopPropagation()} style={{ maxWidth: 500, padding: 0, overflow: 'hidden' }}>
-        <div className="db-mu-header">
-          <div style={{ fontSize: 28 }}>🗂️</div>
-          <div>
-            <div className="db-mu-name">Заявка на організатора</div>
-            <div className="db-mu-email">Розкажіть про себе та свою мотивацію</div>
-          </div>
-          <button className="db-mu-close" onClick={onClose}>✕</button>
+      <div className="modal-box modal-box--light db-tournament-modal" onClick={e => e.stopPropagation()}>
+        <button className="db-tm-close" onClick={onClose}>✕</button>
+        <div className="db-modal-scroll-body">
+          <form className="db-edit-tournament-form" onSubmit={handleSubmit}>
+            <div className="db-edit-header">
+              <div className="db-app-header-row">
+                <span className="db-app-header-icon">🗂️</span>
+                <div>
+                  <h3 className="db-edit-title">Заявка на організатора</h3>
+                  <p className="db-app-header-sub">Розкажіть про себе, свою мотивацію та як з вами зв'язатися</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="db-edit-field">
+              <label className="db-edit-label">Мотивація <span className="db-required">*</span></label>
+              <textarea
+                className="db-input db-textarea"
+                rows={5}
+                value={form.motivation}
+                onChange={e => setForm(f => ({ ...f, motivation: e.target.value }))}
+                placeholder="Чому ви хочете стати організатором? Які заходи плануєте провести? Яка ваша ціль?"
+                maxLength={1000}
+                required
+              />
+              <div className="db-app-char-count">{form.motivation.length} / 1000</div>
+            </div>
+
+            <div className="db-edit-field">
+              <label className="db-edit-label">Досвід та навички</label>
+              <textarea
+                className="db-input db-textarea"
+                rows={3}
+                value={form.experience}
+                onChange={e => setForm(f => ({ ...f, experience: e.target.value }))}
+                placeholder="Попередній досвід у організації заходів, хакатонів, олімпіад..."
+                maxLength={500}
+              />
+            </div>
+
+            <div className="db-app-contacts-card">
+              <label className="db-edit-label">Контактні дані <span className="db-required">*</span></label>
+              <p className="db-app-contacts-hint">Вкажіть хоча б один спосіб зв'язку</p>
+              <div className="db-app-contact-fields">
+                <div className="db-app-contact-row">
+                  <span className="db-app-contact-icon">📧</span>
+                  <input className="db-input" type="email" value={form.contact_email}
+                    onChange={e => setForm(f => ({ ...f, contact_email: e.target.value }))}
+                    placeholder="email@example.com" />
+                </div>
+                <div className="db-app-contact-row">
+                  <span className="db-app-contact-icon">💬</span>
+                  <input className="db-input" value={form.contact_telegram}
+                    onChange={e => setForm(f => ({ ...f, contact_telegram: e.target.value }))}
+                    placeholder="@telegram_username" />
+                </div>
+                <div className="db-app-contact-row">
+                  <span className="db-app-contact-icon">📱</span>
+                  <input className="db-input" type="tel" value={form.contact_phone}
+                    onChange={e => setForm(f => ({ ...f, contact_phone: e.target.value }))}
+                    placeholder="+380 XX XXX XX XX" />
+                </div>
+              </div>
+            </div>
+
+            <div className="db-edit-actions">
+              <button type="button" className="db-btn db-btn-ghost" onClick={onClose}>Скасувати</button>
+              <button type="submit" className="db-btn db-btn-primary db-btn-submit" disabled={saving || !form.motivation.trim() || !hasContact}>
+                {saving ? '⏳ Надсилання...' : '📤 Подати заявку'}
+              </button>
+            </div>
+          </form>
         </div>
-        <form className="db-mu-body" onSubmit={handleSubmit}>
-          <div className="db-mu-section">
-            <label className="db-mu-label">Мотивація *</label>
-            <textarea
-              className="db-input"
-              rows={4}
-              value={form.motivation}
-              onChange={e => setForm(f => ({ ...f, motivation: e.target.value }))}
-              placeholder="Чому ви хочете стати організатором? Які заходи плануєте провести?"
-              maxLength={1000}
-              required
-            />
-            <div style={{ fontSize: 12, color: '#888', textAlign: 'right' }}>{form.motivation.length} / 1000</div>
-          </div>
-          <div className="db-mu-section">
-            <label className="db-mu-label">Досвід та навички</label>
-            <textarea
-              className="db-input"
-              rows={3}
-              value={form.experience}
-              onChange={e => setForm(f => ({ ...f, experience: e.target.value }))}
-              placeholder="Попередній досвід у організації заходів, хакатонів, олімпіад..."
-              maxLength={500}
-            />
-          </div>
-          <div className="db-form-actions" style={{ padding: '0 20px 20px' }}>
-            <button type="button" className="db-btn db-btn-ghost" onClick={onClose}>Скасувати</button>
-            <button type="submit" className="db-btn db-btn-primary" disabled={saving || !form.motivation.trim()}>
-              {saving ? '⏳ Надсилання...' : '📤 Подати заявку'}
-            </button>
-          </div>
-        </form>
       </div>
     </div>
   );
@@ -136,12 +171,15 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
   const avatarInputRef = useRef(null);
   const bannerInputRef = useRef(null);
 
-  // Determine which badges are earned based on DB-loaded badges
+  const pibConfirmed = !!(user?.first_name?.trim() && user?.last_name?.trim() && user?.middle_name?.trim());
+
   const earnedBadges = ALL_BADGES.map(b => ({
     ...b,
-    earned: b.id === 'team_member'
-      ? myTeams.length > 0 || myBadges.some(mb => mb.badge_id === b.id)
-      : myBadges.some(mb => mb.badge_id === b.id),
+    earned: b.id === 'identity_confirmed'
+      ? pibConfirmed || myBadges.some(mb => mb.badge_id === b.id)
+      : b.id === 'team_member'
+        ? myTeams.length > 0 || myBadges.some(mb => mb.badge_id === b.id)
+        : myBadges.some(mb => mb.badge_id === b.id),
   }));
 
   const pinnedBadgeDef = pinnedBadge ? ALL_BADGES.find(b => b.id === pinnedBadge) : null;
@@ -158,7 +196,8 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
   }, [user]);
 
   useEffect(() => {
-    if (user) {
+    // Не скидаємо форму під час редагування — інакше збереження ПІБ затирає введений опис
+    if (user && !editing) {
       const bc = user.banner_color || '#1e1b2e';
       setForm({ username: user.username || '', user_description: user.user_description || '', banner_color: bc });
       setHexInput(bc);
@@ -169,23 +208,24 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
       });
       setPinnedBadge(user.pinned_badge || null);
     }
-  }, [user]);
+  }, [user, editing]);
 
   const handleSavePib = async () => {
     setSavingPib(true);
     try {
+      const hadConfirmed = pibConfirmed;
       const updated = await updateMe({
         first_name: pibForm.first_name.trim(),
         last_name: pibForm.last_name.trim(),
         middle_name: pibForm.middle_name.trim(),
       });
       setUser(updated);
+      getMyBadges().then(setMyBadges).catch(() => {});
       const allFilled = pibForm.first_name.trim() && pibForm.last_name.trim() && pibForm.middle_name.trim();
-      if (allFilled && !myBadges.some(b => b.badge_id === 'identity_confirmed')) {
-        setMyBadges(prev => [...prev, { badge_id: 'identity_confirmed' }]);
+      if (allFilled && !hadConfirmed) {
         toast.success('🏅 Отримано нове досягнення: «Підтвердив особу»!');
       } else {
-        toast.success('ПІБ збережено!');
+        toast.success('Зміни збережено!');
       }
     } catch (err) { toast.error(err.message); }
     finally { setSavingPib(false); }
@@ -221,17 +261,18 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
     return Math.ceil(7 - (Date.now() - new Date(user.username_updated_at).getTime()) / 86400000);
   };
 
-  const bannerStyle = editing
-    ? (
-        bannerMode === 'image' && user.banner_url
-          ? { backgroundImage: `url(${API_BASE + user.banner_url})`, backgroundSize:'cover', backgroundPosition:'center' }
-          : { background: form.banner_color || '#1e1b2e' }
-      )
-    : (
-        user.banner_url
-          ? { backgroundImage: `url(${API_BASE + user.banner_url})`, backgroundSize:'cover', backgroundPosition:'center' }
-          : { background: user.banner_color || '#1e1b2e' }
-      );
+  const bannerHasPhoto = !!user.banner_url;
+  const bannerStyle = user.banner_url
+    ? { backgroundImage: `url(${resolveAvatarUrl(user.banner_url)})`, backgroundSize: 'cover', backgroundPosition: 'center top' }
+    : { background: `linear-gradient(135deg, ${form.banner_color || user.banner_color || '#1e1b2e'} 0%, #191A23 100%)` };
+
+  const dotPositions = useMemo(() =>
+    [...Array(22)].map(() => ({
+      left:  `${Math.random() * 100}%`,
+      top:   `${Math.random() * 100}%`,
+      delay: `${Math.random() * 4}s`,
+      size:  `${2 + Math.random() * 4}px`,
+    })), []);
 
   const handleDeleteBanner = async () => {
     try { await deleteBanner(); setUser(u => ({ ...u, banner_url: null })); toast.success('Банер видалено'); }
@@ -276,10 +317,32 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
       <input ref={bannerInputRef} type="file" accept="image/*" style={{ display:'none' }} onChange={handleBannerPick} />
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━ BANNER ━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <div className="db-profile-banner" style={bannerStyle}>
-        {/* ─── Banner editor panel ─── */}
+      <div className={`db-profile-banner${bannerHasPhoto ? ' has-photo' : ''}${editing ? ' is-editing' : ''}`} style={bannerStyle}>
+
+        {/* ── Animated effects (тільки для кольорового банера) ── */}
+        {!bannerHasPhoto && (
+          <div className="db-profile-banner-effects">
+            <div className="db-welcome-dots">
+              {dotPositions.map((dot, i) => (
+                <span key={i} className="db-welcome-dot" style={{
+                  left: dot.left, top: dot.top,
+                  width: dot.size, height: dot.size,
+                  animationDelay: dot.delay,
+                }} />
+              ))}
+            </div>
+            <div className="db-welcome-bg-effects">
+              <div className="db-welcome-glow" />
+              <div className="db-welcome-glow db-welcome-glow-2" />
+            </div>
+          </div>
+        )}
+
+        {/* ─── Banner editor — inside banner, absolute bottom-right on desktop ─── */}
         {editing && (
           <div className="db-bep">
+            <span className="db-bep-label">Банер</span>
+
             <div className="db-bep-tabs">
               <button className={`db-bep-tab${bannerMode === 'color' ? ' active' : ''}`}
                 onClick={() => setBannerMode('color')}>🎨 Колір</button>
@@ -296,7 +359,6 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
                       onClick={() => { setForm(f => ({ ...f, banner_color: c })); setHexInput(c); }} />
                   ))}
                 </div>
-                <div className="db-bep-sep" />
                 <div className="db-bep-custom">
                   <label className="db-bep-preview" style={{ background: form.banner_color }}>
                     <input type="color" value={form.banner_color}
@@ -364,6 +426,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
           </h2>
           <div className="db-profile-chips">
             <span className="db-role-badge">{hasRole(user, 'admin') ? '🛡️ Адмін' : hasRole(user, 'organizer') ? '🗂️ Організатор' : hasRole(user, 'jury') ? '⚖ Журі' : '👤 Учасник'}</span>
+            <span className="db-chip db-chip-elo">⭐ ELO: {user?.elo ?? user?.exp ?? 0}</span>
             <span className="db-chip">🏆 Команд: {myTeams.length}</span>
             <span className="db-chip">📅 Зареєстровано: {formatDate(user.created_at)}</span>
           </div>
@@ -383,6 +446,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
 
       {/* Mobile chips row (shown below banner on mobile, hidden on desktop) */}
       <div className="db-profile-mobile-chips">
+        <span className="db-chip db-chip-elo">⭐ ELO: {user?.elo ?? user?.exp ?? 0}</span>
         <span className="db-chip">🏆 Команд: {myTeams.length}</span>
         <span className="db-chip">📅 {formatDate(user.created_at)}</span>
       </div>
@@ -406,46 +470,68 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
           {editing ? (
             <>
               <div className="db-field-row">
-                <label>Нікнейм
-                  {!canChangeUsername() && <span className="db-field-hint"> (через {daysUntilChange()} дн.)</span>}
+                <label>
+                  Нікнейм
+                  {!canChangeUsername() && <span className="db-field-hint">🔒 через {daysUntilChange()} дн.</span>}
                 </label>
-                <input className="db-field-input" value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
-                  disabled={!canChangeUsername()} placeholder="Ваш нікнейм" />
+                <div className={!canChangeUsername() ? 'db-field-locked' : undefined}>
+                  <input className="db-field-input" value={form.username}
+                    onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
+                    disabled={!canChangeUsername()} placeholder="Ваш нікнейм" />
+                  {!canChangeUsername() && <span className="db-field-locked-badge">🔒 Заблоковано</span>}
+                </div>
               </div>
+
               <div className="db-field-row">
                 <label>Про себе</label>
                 <textarea className="db-field-input" rows={3} value={form.user_description}
-                  onChange={e => setForm(f => ({ ...f, user_description: e.target.value }))}
-                  placeholder="Розкажіть про себе..." />
+                  onChange={e => setForm(f => ({ ...f, user_description: e.target.value.slice(0, 256) }))}
+                  placeholder="Розкажіть про себе..."
+                  maxLength={256}
+                  style={{ minHeight: 80, maxHeight: 80 }} />
+                <div className="db-char-counter">
+                  <div className="db-char-bar-wrap">
+                    <div className="db-char-bar" style={{
+                      width: `${(form.user_description.length / 256) * 100}%`,
+                      background: form.user_description.length >= 240 ? '#f87171' : '#AC9EF8',
+                    }} />
+                  </div>
+                  <span className="db-char-count" style={{ color: form.user_description.length >= 240 ? '#f87171' : undefined }}>
+                    {form.user_description.length} / 256
+                  </span>
+                </div>
               </div>
-              {/* ── ПІБ inline (edit mode) ── */}
+
+              {/* ── ПІБ ── */}
               <div className="db-pib-section">
                 <div className="db-pib-header">
                   <span>ПІБ</span>
                   <span className="db-pib-hint">потрібно для заявок на турніри</span>
                 </div>
-                <div className="db-field-row">
-                  <label>Прізвище</label>
-                  <input className="db-field-input" value={pibForm.last_name}
-                    onChange={e => setPibForm(f => ({ ...f, last_name: e.target.value }))}
-                    placeholder="Іванов" />
+                <div className="db-pib-grid">
+                  <div className="db-field-row">
+                    <label>Прізвище</label>
+                    <input className="db-field-input" value={pibForm.last_name}
+                      onChange={e => setPibForm(f => ({ ...f, last_name: e.target.value }))}
+                      placeholder="Іванов" />
+                  </div>
+                  <div className="db-field-row">
+                    <label>Ім'я</label>
+                    <input className="db-field-input" value={pibForm.first_name}
+                      onChange={e => setPibForm(f => ({ ...f, first_name: e.target.value }))}
+                      placeholder="Іван" />
+                  </div>
+                  <div className="db-field-row">
+                    <label>По батькові</label>
+                    <input className="db-field-input" value={pibForm.middle_name}
+                      onChange={e => setPibForm(f => ({ ...f, middle_name: e.target.value }))}
+                      placeholder="Іванович" />
+                  </div>
                 </div>
-                <div className="db-field-row">
-                  <label>Ім'я</label>
-                  <input className="db-field-input" value={pibForm.first_name}
-                    onChange={e => setPibForm(f => ({ ...f, first_name: e.target.value }))}
-                    placeholder="Іван" />
-                </div>
-                <div className="db-field-row">
-                  <label>По батькові</label>
-                  <input className="db-field-input" value={pibForm.middle_name}
-                    onChange={e => setPibForm(f => ({ ...f, middle_name: e.target.value }))}
-                    placeholder="Іванович" />
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
-                  <button className="db-btn db-btn-primary" style={{ fontSize: 13, padding: '5px 16px' }}
+                <div className="db-pib-save">
+                  <button className="db-btn db-btn-primary db-btn-sm"
                     onClick={handleSavePib} disabled={savingPib}>
-                    {savingPib ? '⏳...' : '💾 Зберегти ПІБ'}
+                    {savingPib ? '⏳ Збереження...' : '💾 Зберегти ПІБ'}
                   </button>
                 </div>
               </div>
@@ -465,6 +551,9 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
             </div>
           )}
         </div>
+
+        {/* ── Right column — не залежить від висоти лівої картки ── */}
+        <div className="db-profile-cards-right">
 
         <div className="db-info-card db-info-card--teams">
           <h3><span className="db-card-icon">🏆</span> Мої команди</h3>
@@ -514,14 +603,14 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
             </div>
           )}
 
-          {/* Organizer application — only for plain users */}
-          {user.role === 'user' && (
+          {/* Organizer application — only for plain users without organizer/admin role */}
+          {!hasRole(user, 'organizer') && !hasRole(user, 'admin') && (
             <div className="db-profile-panel-access" style={{ marginTop: 12 }}>
               <h4 className="db-profile-panel-label">📄 Заявка на організатора</h4>
               {myApplication === undefined && (
                 <div style={{ fontSize: 13, color: '#888', padding: '6px 0' }}>Завантаження...</div>
               )}
-              {myApplication === null && (
+              {(myApplication === null || myApplication?.hasApplication === false) && (
                 <button className="db-panel-access-btn" style={{ borderColor: '#4ade80' }} onClick={() => setApplyModal(true)}>
                   <span className="db-pab-icon">🗂️</span>
                   <div className="db-pab-text">
@@ -531,7 +620,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
                   <span className="db-pab-arrow">→</span>
                 </button>
               )}
-              {myApplication?.status === 'pending' && (
+              {myApplication?.status === 'pending' && !myApplication?.hasApplication && (
                 <div className="db-admin-tip" style={{ margin: 0 }}>
                   ⏳ Заявка на розгляді — чекайте рішення адміністратора
                 </div>
@@ -584,6 +673,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
           </div>
         </div>
 
+        </div>{/* end db-profile-cards-right */}
       </div>
 
       {selectedBadge && <BadgeModal badge={selectedBadge} pinnedBadge={pinnedBadge} onPin={handlePinBadge} onClose={() => setSelectedBadge(null)} />}
