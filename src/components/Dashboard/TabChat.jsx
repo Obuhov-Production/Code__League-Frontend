@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 
-import IconChat from '@images/dashboard_components/icon_chat.svg?react';
+import IconChat    from '@images/dashboard_components/icon_chat.svg?react';
+import IconEmoji   from '@images/dashboard_components/icon_emoji.svg?react';
+import IconAttach  from '@images/dashboard_components/icon_attach.svg?react';
+import IconSticker from '@images/dashboard_components/icon_sticker.svg?react';
 
 import {
   getMyTeams, getCustomChatRooms, getChatHistory, getChatReactions,
@@ -498,7 +501,8 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
             onMouseEnter={handleBubbleEnter}
             onMouseLeave={handleBubbleLeave}>
               {isSticker ? (
-                <img src={stickerSrc} alt="sticker" className="db-chat-sticker" />
+                <img src={stickerSrc} alt="sticker" className="db-chat-sticker"
+                  loading="lazy" decoding="async" />
               ) : (
                 <>
                   {fileUrls.length > 0 && (
@@ -786,15 +790,36 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
               {pinnedMsgs.length === 0 ? (
                 <div className="db-chat-pinned-empty">Немає закріплених</div>
               ) : (
-                pinnedMsgs.map(p => (
-                  <div key={p.id} className="db-chat-pinned-item">
-                    <span className="db-chat-pinned-author">{p.username}:</span>
-                    <span className="db-chat-pinned-text">{(p.text || '').slice(0, 100)}{p.text?.length > 100 ? '…' : ''}</span>
-                    {isAdmin && (
-                      <button className="db-chat-pinned-unpin" onClick={() => unpinMsg(p.id)} title="Відкріпити">✕</button>
-                    )}
-                  </div>
-                ))
+                pinnedMsgs.map(p => {
+                  const isSticker = p.text && p.text.startsWith(STICKER_PREFIX);
+                  const stickerSrc = isSticker ? p.text.slice(STICKER_PREFIX.length) : null;
+                  const fileUrls = parseFileUrls(p.file_url);
+                  const hasFiles = fileUrls.length > 0;
+                  return (
+                    <div key={p.id} className="db-chat-pinned-item">
+                      <span className="db-chat-pinned-author">{p.username}:</span>
+                      {isSticker ? (
+                        <span className="db-chat-pinned-preview">
+                          <img src={resolveAvatarUrl(stickerSrc)} alt="стікер" loading="lazy" decoding="async" />
+                          <span className="db-chat-pinned-text">Стікер</span>
+                        </span>
+                      ) : hasFiles && !p.text ? (
+                        <span className="db-chat-pinned-preview">
+                          <img src={resolveAvatarUrl(fileUrls[0])} alt="зображення" loading="lazy" decoding="async" />
+                          <span className="db-chat-pinned-text">Зображення{fileUrls.length > 1 ? ` ×${fileUrls.length}` : ''}</span>
+                        </span>
+                      ) : (
+                        <span className="db-chat-pinned-text">
+                          {hasFiles && '🖼 '}
+                          {(p.text || '').slice(0, 100)}{p.text?.length > 100 ? '…' : ''}
+                        </span>
+                      )}
+                      {isAdmin && (
+                        <button className="db-chat-pinned-unpin" onClick={() => unpinMsg(p.id)} title="Відкріпити">✕</button>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
@@ -847,9 +872,15 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
             <div className="db-emoji-picker db-emoji-picker--tabbed">
               <div className="db-emoji-picker-tabs">
                 <button className={`db-emoji-picker-tab${emojiTab === 'emoji' ? ' active' : ''}`}
-                  onClick={() => setEmojiTab('emoji')}>😊 Емодзі</button>
+                  onClick={() => setEmojiTab('emoji')}>
+                  <IconEmoji className="db-emoji-picker-tab-icon" />
+                  <span>Емодзі</span>
+                </button>
                 <button className={`db-emoji-picker-tab${emojiTab === 'stickers' ? ' active' : ''}`}
-                  onClick={() => setEmojiTab('stickers')}>🎭 Стікери</button>
+                  onClick={() => setEmojiTab('stickers')}>
+                  <IconSticker className="db-emoji-picker-tab-icon" />
+                  <span>Стікери</span>
+                </button>
               </div>
               {emojiTab === 'emoji' ? (
                 <div className="db-emoji-picker-grid">
@@ -859,7 +890,8 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
                 <div className="db-sticker-grid">
                   {STICKERS.map((src, i) => (
                     <button key={i} className="db-sticker-btn" onClick={() => sendSticker(src)}>
-                      <img src={src} alt={`sticker-${i + 1}`} />
+                      <img src={src} alt={`sticker-${i + 1}`}
+                        loading="lazy" decoding="async" />
                     </button>
                   ))}
                 </div>
@@ -867,8 +899,17 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
             </div>
           )}
           <form className="db-chat-input-row" onSubmit={send}>
-            <button type="button" className="db-emoji-toggle" onClick={() => setShowEmoji(p => !p)} title="Емодзі">😊</button>
-            <button type="button" className="db-emoji-toggle" onClick={() => fileRef.current?.click()} title="Прикріпити зображення">📎</button>
+            <div className="db-chat-input-tools">
+              <button type="button"
+                className={`db-emoji-toggle${showEmoji ? ' active' : ''}`}
+                onClick={() => setShowEmoji(p => !p)} title="Емодзі та стікери">
+                <IconEmoji />
+              </button>
+              <button type="button" className="db-emoji-toggle"
+                onClick={() => fileRef.current?.click()} title="Прикріпити зображення">
+                <IconAttach />
+              </button>
+            </div>
             <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleFileChange} />
             {isMuted ? (
               <div className="db-chat-muted-input">

@@ -33,6 +33,24 @@ import TabAdmin       from './TabAdmin.jsx';
 import TabJury        from './TabJury.jsx';
 import TabOrganizer  from './TabOrganizer.jsx';
 
+/* Map legacy icon-name strings (e.g. "check-circle") to emoji.
+   New backend code emits emoji directly, but old DB rows still hold the names. */
+const NOTIF_ICON_MAP = {
+  'check-circle': '✅',
+  'x-circle':     '❌',
+  'check':        '✅',
+  'cross':        '❌',
+  'warning':      '⚠️',
+  'info':         'ℹ️',
+  'bell':         '🔔',
+  'trophy':       '🏆',
+  'star':         '⭐',
+};
+function notifIcon(raw) {
+  if (!raw) return '🔔';
+  return NOTIF_ICON_MAP[raw] || raw;
+}
+
 function relativeTime(dateStr) {
   if (!dateStr) return '';
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -310,13 +328,13 @@ export default function Dashboard() {
                       {filteredNotifications.map(n => (
                         <div key={n.id} className={`db-notif-item${n.is_read ? ' read' : ''}${newNotifIds.has(n.id) ? ' new-item' : ''}`}
                           onClick={() => handleNotifClick(n)}>
-                          <span className="db-notif-icon">{n.icon || '🔔'}</span>
+                          <span className="db-notif-icon">{notifIcon(n.icon)}</span>
                           <div className="db-notif-body">
                             <span className="db-notif-text">{n.message}</span>
                             {n.created_at && <span className="db-notif-time">{relativeTime(n.created_at)}</span>}
                           </div>
                           <button className="db-notif-del" title="Видалити" onClick={e => handleNotifDelete(e, n.id)}>✕</button>
-1                        </div>
+                        </div>
                       ))}
                     </div>
                   )}

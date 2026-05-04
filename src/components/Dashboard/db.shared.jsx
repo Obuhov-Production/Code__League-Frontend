@@ -375,10 +375,8 @@ export function MiniProfileModal({ user, onClose, onGoProfile, onLogout }) {
     })), []);
 
   const bannerStyle = user.banner_url
-    ? { backgroundImage: `url(${resolveAvatarUrl(user.banner_url)})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-    : { background: user.banner_color
-        ? `linear-gradient(135deg, ${user.banner_color} 0%, ${user.banner_color}99 60%, #1a1333 100%)`
-        : 'linear-gradient(135deg, #1a1333 0%, #2d1f6e 50%, #1e1b2e 100%)' };
+    ? { backgroundImage: `url(${resolveAvatarUrl(user.banner_url)})`, backgroundSize: 'cover', backgroundPosition: 'center top' }
+    : { background: `linear-gradient(135deg, ${user.banner_color || '#1e1b2e'} 0%, #191A23 100%)` };
 
   const roleConf = ROLE_CONFIG[user.role] || { label: 'Учасник', color: '#AC9EF8', bg: 'rgba(172,158,248,.13)' };
   const name = displayName(user);
@@ -490,8 +488,8 @@ export function MiniProfileModal({ user, onClose, onGoProfile, onLogout }) {
 
 function UserProfileViewModal({ user, onClose }) {
   const bannerStyle = user.banner_url
-    ? { backgroundImage: `url(${API_BASE + user.banner_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-    : { background: user.banner_color || '#1e1b2e' };
+    ? { backgroundImage: `url(${API_BASE + user.banner_url})`, backgroundSize: 'cover', backgroundPosition: 'center top' }
+    : { background: `linear-gradient(135deg, ${user.banner_color || '#1e1b2e'} 0%, #191A23 100%)` };
   return (
     <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1100 }}>
       <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: 400, padding: 0, overflow: 'hidden' }}>
@@ -587,8 +585,8 @@ export function UserProfileModal({ profile, meId, onClose, onGoOwnProfile }) {
   }, [onClose]);
 
   const bannerStyle = profile.banner_url
-    ? { backgroundImage: `url(${API_BASE + profile.banner_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-    : { background: profile.banner_color || 'linear-gradient(135deg, #2d1b6e 0%, #191A23 100%)' };
+    ? { backgroundImage: `url(${API_BASE + profile.banner_url})`, backgroundSize: 'cover', backgroundPosition: 'center top' }
+    : { background: `linear-gradient(135deg, ${profile.banner_color || '#1e1b2e'} 0%, #191A23 100%)` };
   const isAdmin = profile.role === 'admin';
 
   return (

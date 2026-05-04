@@ -30,29 +30,34 @@ export const ALL_BADGES = [
 ];
 
 /* ── Badge Modal ──────────────────────────────── */
-function BadgeModal({ badge, onClose }) {
+function BadgeModal({ badge, pinnedBadge, onPin, onClose }) {
+  const isPinned = pinnedBadge === badge.id;
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box modal-box--light" onClick={e => e.stopPropagation()}
-        style={{ maxWidth: 340, textAlign: 'center', padding: '32px 28px', overflow: 'hidden' }}>
+      <div className="modal-box modal-box--light db-badge-modal" onClick={e => e.stopPropagation()}>
         <button className="modal-close" onClick={onClose}>✕</button>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+        <div className="db-badge-modal-img-wrap">
+          {badge.earned && <span className="db-badge-modal-glow" style={{ background: `radial-gradient(circle, ${badge.color}55 0%, transparent 70%)` }} />}
           <img src={badge.image} alt={badge.name}
-            style={{ width: 96, height: 96, objectFit: 'contain', filter: badge.earned ? 'none' : 'grayscale(1) opacity(0.4)' }} />
-          <div>
-            <h3 style={{ margin: '0 0 6px', fontSize: 18 }}>{badge.name}</h3>
-            <span style={{ fontSize: 12, display: 'inline-block', padding: '2px 10px', borderRadius: 20, background: badge.color + '22', color: badge.color, marginBottom: 10 }}>
-              {badge.earned ? '✓ Отримано' : '🔒 Не отримано'}
-            </span>
-            <p style={{ fontSize: 14, color: '#ccc', lineHeight: 1.5, margin: '0 0 10px' }}>{badge.description}</p>
-            {!badge.secret && (
-              <p style={{ fontSize: 12, color: '#888', margin: 0 }}>📋 {badge.condition}</p>
-            )}
-            {badge.secret && (
-              <p style={{ fontSize: 12, color: '#888', margin: 0 }}>🔐 Секретне досягнення</p>
-            )}
-          </div>
+            style={{ filter: badge.earned ? 'none' : 'grayscale(1) opacity(0.4)' }} />
         </div>
+        <h3 className="db-badge-modal-name">{badge.name}</h3>
+        <span className="db-badge-modal-status"
+          style={{ background: badge.color + '22', color: badge.color }}>
+          {badge.earned ? '✓ Отримано' : '🔒 Не отримано'}
+        </span>
+        <p className="db-badge-modal-desc">{badge.description}</p>
+        {!badge.secret
+          ? <p className="db-badge-modal-cond">📋 {badge.condition}</p>
+          : <p className="db-badge-modal-cond">🔐 Секретне досягнення</p>
+        }
+        {badge.earned && onPin && (
+          <button
+            className="db-badge-modal-pin-btn"
+            onClick={() => { onPin(badge.id); onClose(); }}>
+            {isPinned ? '📌 Відкріпити з профілю' : '📌 Закріпити в профілі'}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -465,6 +470,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
 
       {/* ━━━━━━━━━━━━━━━━━ PROFILE CARDS ━━━━━━━━━━━━━━━━━ */}
       <div className="db-profile-cards">
+        <div className="db-profile-cards-left">
         <div className="db-info-card db-info-card--personal">
           <h3><span className="db-card-icon">👤</span> Особиста інформація</h3>
           {editing ? (
@@ -551,6 +557,42 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
             </div>
           )}
         </div>
+
+        {/* ── Badges card — sits in left column right under Personal ─── */}
+        <div className="db-info-card db-info-card--badges">
+          <div className="db-badges-header">
+            <h3><span className="db-card-icon">🏅</span> Досягнення</h3>
+            <span className="db-badges-progress">
+              {earnedBadges.filter(b => b.earned).length} / {earnedBadges.length}
+            </span>
+          </div>
+          <div className="db-badges-grid">
+            {earnedBadges.map(b => (
+              <button key={b.id}
+                className={`db-badge-row${b.earned ? ' earned' : ' locked'}${pinnedBadge === b.id ? ' pinned' : ''}`}
+                onClick={() => setSelectedBadge(b)}>
+                <div className="db-badge-row-icon">
+                  <img src={b.image} alt={b.name}
+                    style={{ filter: b.earned ? 'none' : 'grayscale(1) opacity(0.3)' }} />
+                  {b.earned && <span className="db-badge-row-glow" style={{ background: b.color + '28' }} />}
+                </div>
+                <div className="db-badge-row-info">
+                  <span className="db-badge-row-name">{b.name}</span>
+                  <span className="db-badge-row-desc">{b.description}</span>
+                </div>
+                <div className="db-badge-row-right">
+                  {b.earned
+                    ? pinnedBadge === b.id
+                      ? <span className="db-badge-row-tag pinned">📌</span>
+                      : <span className="db-badge-row-tag earned">✓</span>
+                    : <span className="db-badge-row-tag locked">🔒</span>
+                  }
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+        </div>{/* end db-profile-cards-left */}
 
         {/* ── Right column — не залежить від висоти лівої картки ── */}
         <div className="db-profile-cards-right">
@@ -641,36 +683,6 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
           )}
 
           <button className="db-btn db-btn-danger db-btn-full" style={{ marginTop: 16 }} onClick={onLogout}>Вийти з акаунту</button>
-        </div>
-
-        {/* ── Badges card ─────────────────────────── */}
-        <div className="db-info-card db-info-card--badges">
-          <h3><span className="db-card-icon">🏅</span> Досягнення</h3>
-          <div className="db-badges-list">
-            {earnedBadges.map(b => (
-              <button key={b.id}
-                className={`db-badge-row${b.earned ? ' earned' : ' locked'}${pinnedBadge === b.id ? ' pinned' : ''}`}
-                onClick={() => setSelectedBadge(b)}>
-                <div className="db-badge-row-icon">
-                  <img src={b.image} alt={b.name}
-                    style={{ filter: b.earned ? 'none' : 'grayscale(1) opacity(0.3)' }} />
-                  {b.earned && <span className="db-badge-row-glow" style={{ background: b.color + '28' }} />}
-                </div>
-                <div className="db-badge-row-info">
-                  <span className="db-badge-row-name">{b.name}</span>
-                  <span className="db-badge-row-desc">{b.description}</span>
-                </div>
-                <div className="db-badge-row-right">
-                  {b.earned
-                    ? pinnedBadge === b.id
-                      ? <span className="db-badge-row-tag pinned">📌 Закріплено</span>
-                      : <span className="db-badge-row-tag earned">✓ Є</span>
-                    : <span className="db-badge-row-tag locked">🔒</span>
-                  }
-                </div>
-              </button>
-            ))}
-          </div>
         </div>
 
         </div>{/* end db-profile-cards-right */}

@@ -912,6 +912,7 @@
 /* Avatar with Status (for chat and profile) */
 .db-avatar-with-status {
   position: relative;
+  border-radius: 50%;
   display: inline-block;
 }
 
@@ -967,8 +968,8 @@
   transition: transform .15s;
 }
 
-/* Status tooltip on hover */
-.db-avatar-with-status:hover::after {
+/* Status tooltip on hover — only when data-status attribute is actually set */
+.db-avatar-with-status[data-status]:hover::after {
   content: attr(data-status);
   position: absolute;
   bottom: -24px;
@@ -981,6 +982,7 @@
   border-radius: 4px;
   white-space: nowrap;
   z-index: 100;
+  pointer-events: none;
 }
 
 /* ═══════════════════════════════════════════════════
@@ -2770,11 +2772,22 @@
 /* Input area */
 .db-chat-input-row {
   display: flex;
-  gap: 8px;
-  padding: 12px 16px;
+  gap: 10px;
+  padding: 12px 16px 14px;
   background: #fff;
   border-top: none;
   align-items: flex-end;
+}
+.db-chat-input-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  background: #f5f3ff;
+  border: 1px solid #ebe9fd;
+  border-radius: 12px;
+  height: 44px;
+  flex-shrink: 0;
 }
 .db-chat-input {
   flex: 1;
@@ -2832,79 +2845,64 @@
 .db-profile-banner > *:not(.db-profile-banner-effects):not(.db-bep) { position: relative; z-index: 2; }
 
 /* ── Banner Editor Panel (db-bep) ─────────────────────────────── */
-/* Desktop: absolute bottom-right corner, inside the banner frame  */
-/* Mobile:  full-width overlay at the banner bottom                */
+/* Desktop: horizontal toolbar tucked at the banner bottom-right.   */
+/*          All controls inline, no overlap with avatar shelf.      */
+/* Mobile:  floating bottom-sheet card.                             */
 .db-bep {
   position: absolute;
-  right: 0;
-  top: 41%;
-  transform: translateY(-50%);
-  height: 70%;
+  right: 18px;
+  bottom: 8px;
   z-index: 10;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px 20px 12px 18px;
-  width: 260px;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  max-width: calc(100% - 32px);
   box-sizing: border-box;
-  background: rgba(25, 26, 35, 0.96);
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
-  border-radius: 14px 0 0 14px;
-  border-right: none;
-  border-top:    1.5px solid rgba(172, 158, 248, .45);
-  border-left:   1.5px solid rgba(172, 158, 248, .3);
-  border-bottom: 1.5px solid rgba(172, 158, 248, .2);
+  background: rgba(20, 21, 30, .82);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border-radius: 14px;
+  border: 1px solid rgba(172, 158, 248, .22);
   box-shadow:
-    -8px 0 32px rgba(0, 0, 0, .5),
-    -2px 0 12px rgba(142, 123, 253, .2),
-    inset 1px 0 0 rgba(172, 158, 248, .06);
+    0 8px 28px rgba(0, 0, 0, .35),
+    0 2px 8px rgba(142, 123, 253, .18),
+    inset 0 1px 0 rgba(172, 158, 248, .08);
 
-  animation: bepIn .55s cubic-bezier(.22, 1, .36, 1) both;
+  animation: bepIn .35s cubic-bezier(.22, 1, .36, 1) both;
+  transform-origin: bottom right;
   overflow: visible;
 }
 
-/* Vertical accent line on the left edge */
-.db-bep::before {
-  content: '';
-  position: absolute;
-  top: 12%; left: 0; bottom: 12%;
-  width: 2px;
-  background: linear-gradient(180deg,
-    transparent 0%,
-    #AC9EF8 30%,
-    #8e7bfd 70%,
-    transparent 100%
-  );
-  border-radius: 2px;
-}
-
-/* Subtle glow behind left edge */
-.db-bep::after {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: radial-gradient(ellipse at 0% 50%, rgba(172, 158, 248, .07) 0%, transparent 60%);
-  pointer-events: none;
-}
+/* No vertical accent / glow rails in horizontal layout */
+.db-bep::before,
+.db-bep::after { content: none; }
 
 @keyframes bepIn {
-  0%   { opacity: 0;   transform: translateY(-50%) translateX(105%); }
-  55%  { opacity: 1;   transform: translateY(-50%) translateX(-5px); }
-  75%  { transform: translateY(-50%) translateX(2px); }
-  100% { transform: translateY(-50%) translateX(0); }
+  0%   { opacity: 0; transform: translateY(8px) scale(.96); }
+  100% { opacity: 1; transform: translateY(0)   scale(1);   }
 }
 @keyframes bepInMobile {
-  0%   { opacity: 0; transform: translateY(18px) scale(.97); }
-  60%  { opacity: 1; }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
+  0%   { opacity: 0; transform: translateY(14px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+/* Stagger inner controls so they fade in after the panel slides in */
+.db-bep > * {
+  animation: bepInner .35s cubic-bezier(.22, 1, .36, 1) both;
+  animation-delay: .15s;
+}
+.db-bep > *:nth-child(2) { animation-delay: .2s; }
+.db-bep > *:nth-child(3) { animation-delay: .25s; }
+.db-bep > *:nth-child(4) { animation-delay: .3s; }
+@keyframes bepInner {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Section label */
+/* Section label — hidden on desktop horizontal layout */
 .db-bep-label {
-  display: flex;
+  display: none;
   align-items: center;
   gap: 5px;
   font-size: 9.5px;
@@ -2914,7 +2912,6 @@
   letter-spacing: 1.1px;
   white-space: nowrap;
   flex-shrink: 0;
-  position: relative; z-index: 1;
 }
 .db-bep-label::before {
   content: '✏';
@@ -2923,24 +2920,23 @@
   opacity: .85;
 }
 
-/* Mode tab group */
+/* Mode tab group — compact pill */
 .db-bep-tabs {
   display: flex;
   gap: 2px;
   flex-shrink: 0;
-  background: rgba(172, 158, 248, .07);
-  border: 1px solid rgba(172, 158, 248, .12);
-  border-radius: 20px;
-  padding: 3px;
-  width: 100%;
+  background: rgba(172, 158, 248, .08);
+  border: 1px solid rgba(172, 158, 248, .14);
+  border-radius: 18px;
+  padding: 2px;
+  width: auto;
 }
 .db-bep-tab {
-  flex: 1;
-  padding: 5px 10px;
-  border-radius: 17px;
+  padding: 5px 12px;
+  border-radius: 15px;
   border: none;
   background: transparent;
-  color: rgba(172, 158, 248, .55);
+  color: rgba(172, 158, 248, .65);
   font-size: 11.5px; font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -2955,15 +2951,29 @@
   box-shadow: 0 1px 6px rgba(142, 123, 253, .25);
 }
 
-/* Color preset dots */
-.db-bep-color  { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; width: 100%; }
-.db-bep-swatches { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+/* Color section — single horizontal row with swatches + custom picker */
+.db-bep-color  {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+.db-bep-swatches {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  flex-wrap: nowrap;
+  padding-right: 10px;
+  border-right: 1px solid rgba(172, 158, 248, .12);
+}
 .db-bep-dot {
-  width: 22px; height: 22px; border-radius: 50%;
-  border: 2px solid rgba(255,255,255,.12);
+  width: 20px; height: 20px; border-radius: 6px;
+  border: 1.5px solid rgba(255,255,255,.14);
   cursor: pointer; flex-shrink: 0;
   transition: border-color .12s, transform .14s, box-shadow .12s;
-  box-shadow: 0 1px 4px rgba(0,0,0,.3);
+  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+  padding: 0;
 }
 .db-bep-dot:hover {
   border-color: rgba(255,255,255,.5);
@@ -2984,13 +2994,13 @@
 }
 
 /* Custom: color swatch + hex field */
-.db-bep-custom { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.db-bep-custom { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
 /* Color swatch (label wraps hidden input) */
 .db-bep-preview {
   display: block;
-  width: 30px; height: 30px; border-radius: 8px;
-  border: 2px solid rgba(255,255,255,.2);
+  width: 26px; height: 26px; border-radius: 7px;
+  border: 1.5px solid rgba(255,255,255,.2);
   cursor: pointer; flex-shrink: 0; position: relative;
   transition: border-color .12s, transform .12s, box-shadow .12s;
   box-shadow: 0 2px 6px rgba(0,0,0,.35);
@@ -3035,8 +3045,14 @@
 }
 .db-bep-hex > input::placeholder { color: rgba(172, 158, 248, .22); text-transform: none; letter-spacing: 0; }
 
-/* Photo mode */
-.db-bep-photo { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; width: 100%; }
+/* Photo mode — horizontal row */
+.db-bep-photo {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
 .db-bep-upload {
   display: inline-flex; align-items: center; gap: 7px;
   padding: 6px 16px;
@@ -3203,7 +3219,8 @@
   gap: 18px;
   align-items: start;
 }
-/* Right column — independent flex container, does not interact with personal card rows */
+/* Both columns are independent flex stacks so each card sizes to its own content */
+.db-profile-cards-left,
 .db-profile-cards-right {
   display: flex;
   flex-direction: column;
@@ -3238,9 +3255,8 @@
 }
 .db-info-card:hover {
   box-shadow:
-    0 8px 32px rgba(90,60,200,.13),
-    0 2px 8px rgba(0,0,0,.07);
-  transform: translateY(-2px);
+    0 6px 24px rgba(90,60,200,.11),
+    0 2px 6px rgba(0,0,0,.05);
 }
 /* Coloured header band — bleeds to top/sides via negative margin trick */
 .db-info-card--personal::before,
@@ -4216,17 +4232,24 @@
   flex-wrap: wrap;
   animation: slideUp .12s ease;
 }
-/* Tabbed emoji picker */
+/* Tabbed emoji picker — absolute popover anchored to the chat composer */
 .db-emoji-picker--tabbed {
+  position: absolute;
+  left: 16px;
+  bottom: calc(100% - 6px);
+  width: 360px;
+  max-width: calc(100% - 32px);
+  z-index: 30;
   display: flex; flex-direction: column; gap: 0;
   padding: 0;
   background: #fff;
   border: 1px solid #ebe9fd;
   border-radius: 14px;
-  box-shadow: 0 6px 24px rgba(0,0,0,.1);
-  margin-bottom: 4px;
+  box-shadow: 0 12px 32px rgba(90,60,200,.15), 0 4px 12px rgba(0,0,0,.08);
+  margin: 0;
   overflow: hidden;
-  animation: slideUp .12s ease;
+  animation: slideUp .14s cubic-bezier(.22,1,.36,1);
+  transform-origin: bottom left;
 }
 .db-emoji-picker-tabs {
   display: flex;
@@ -4240,9 +4263,16 @@
 }
 .db-emoji-picker-tab.active { color: #7c5ff5; border-bottom: 2px solid #7c5ff5; }
 .db-emoji-picker-grid {
-  display: flex; flex-wrap: wrap; gap: 4px; padding: 10px 12px;
-  max-height: 150px; overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  padding: 10px;
+  max-height: 240px;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
+.db-emoji-picker-grid::-webkit-scrollbar { width: 6px; }
+.db-emoji-picker-grid::-webkit-scrollbar-thumb { background: #ddd6fe; border-radius: 3px; }
 .db-sticker-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
   gap: 6px; padding: 10px 12px;
@@ -4262,19 +4292,59 @@
 .sticker-bubble { background: transparent !important; border: none !important; padding: 0 !important; box-shadow: none !important; }
 @keyframes slideUp { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform: translateY(0); } }
 .db-emoji-btn {
-  font-size: 20px; background: #f5f5fa; border: 1px solid #ebebf0;
-  border-radius: 8px; padding: 6px; width: 38px; height: 38px;
+  font-size: 22px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 0;
+  width: 100%; aspect-ratio: 1;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
-  transition: transform .12s, background .12s;
+  transition: transform .12s, background .12s, border-color .12s;
 }
-.db-emoji-btn:hover { transform: scale(1.25); background: #ebe9fd; }
+.db-emoji-btn:hover {
+  transform: scale(1.18);
+  background: #ebe9fd;
+  border-color: #c4b5fd;
+}
 .db-emoji-toggle {
-  font-size: 18px; background: #f5f5fa; border: 1px solid #e0e0ea;
-  border-radius: 8px; padding: 0 10px; cursor: pointer; flex-shrink: 0;
-  transition: background .12s;
+  width: 36px; height: 36px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 9px;
+  color: #8a7ec0;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background .15s, color .15s, transform .12s;
 }
-.db-emoji-toggle:hover { background: #ebe9fd; }
+.db-emoji-toggle > svg {
+  width: 20px; height: 20px;
+  display: block;
+}
+.db-emoji-toggle:hover {
+  background: #fff;
+  color: #7c5ff5;
+  box-shadow: 0 1px 4px rgba(124,95,245,.12);
+}
+.db-emoji-toggle:active { transform: scale(.92); }
+.db-emoji-toggle.active {
+  background: #fff;
+  color: #7c5ff5;
+  box-shadow: 0 1px 4px rgba(124,95,245,.18);
+}
+/* Polished tab buttons inside emoji picker */
+.db-emoji-picker-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.db-emoji-picker-tab-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
 /* override old border-top on form since it's now in .db-chat-bottom */
 .db-chat-input-row { border-top: none; }
 
@@ -5877,7 +5947,18 @@
   flex-shrink: 0;
 }
 .db-chat-pinned-icon { font-size: 16px; flex-shrink: 0; margin-top: 2px; }
-.db-chat-pinned-content { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.db-chat-pinned-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 84px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.db-chat-pinned-content::-webkit-scrollbar { width: 4px; }
+.db-chat-pinned-content::-webkit-scrollbar-thumb { background: rgba(172,158,248,.3); border-radius: 2px; }
 .db-chat-pinned-item {
   display: flex;
   align-items: center;
@@ -5886,7 +5967,28 @@
   line-height: 1.4;
 }
 .db-chat-pinned-author { font-weight: 700; color: #7c5ff5; }
-.db-chat-pinned-text { color: #555; flex: 1; }
+.db-chat-pinned-text {
+  color: #555;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.db-chat-pinned-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.db-chat-pinned-preview img {
+  width: 24px; height: 24px;
+  object-fit: contain;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: rgba(172,158,248,.06);
+}
 .db-chat-pinned-unpin {
   background: none;
   border: none;
@@ -6972,9 +7074,50 @@
 /* ═══════════════════════════════════════════════════
    PROFILE  —  badges
 ═══════════════════════════════════════════════════ */
-.db-info-card--badges h3 { margin-bottom: 16px; }
-.db-info-card--badges { grid-column: auto; }
-/* ────────────────── BADGES LIST ────────────────── */
+.db-info-card--badges h3 { margin: 0; padding: 0; border-bottom: none; }
+.db-info-card--badges::before {
+  content: '';
+  display: block;
+  height: 4px;
+  margin: -22px -22px 8px;
+  flex-shrink: 0;
+  background: linear-gradient(90deg, #fbbf24, #f59e0b 50%, #ec4899);
+}
+.db-badges-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(172,158,248,.12);
+}
+.db-badges-progress {
+  font-size: 12px;
+  font-weight: 700;
+  color: #b45309;
+  background: linear-gradient(135deg, rgba(245,158,11,.14) 0%, rgba(245,158,11,.06) 100%);
+  border: 1px solid rgba(245,158,11,.3);
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.db-info-card--badges .db-card-icon { background: rgba(245,158,11,.14); }
+
+/* ────────────────── BADGES GRID ────────────────── */
+.db-badges-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.db-badges-grid > .db-badge-row {
+  flex: 0 1 300px;
+  min-width: 240px;
+  max-width: 360px;
+}
+@media (max-width: 540px) {
+  .db-badges-grid > .db-badge-row { flex-basis: 100%; max-width: none; }
+}
 .db-badges-list { display: flex; flex-direction: column; gap: 8px; }
 .db-badge-row {
   display: flex; align-items: center; gap: 14px;
@@ -6999,15 +7142,29 @@
 }
 .db-badge-row-info { flex: 1; min-width: 0; }
 .db-badge-row-name { display: block; font-size: 14px; font-weight: 700; color: #191A23; }
-.db-badge-row-desc { display: block; font-size: 12px; color: #888; margin-top: 2px; line-height: 1.4; }
+.db-badge-row-desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12px; color: #888; margin-top: 2px; line-height: 1.4;
+}
 .db-badge-row-right { flex-shrink: 0; }
 .db-badge-row-tag {
   display: inline-flex; align-items: center;
   font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px;
 }
+.db-badge-row-tag {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  justify-content: center;
+  padding: 0;
+  font-size: 13px;
+}
 .db-badge-row-tag.earned { background: #f0fdf4; color: #16a34a; }
-.db-badge-row-tag.locked { background: #f5f5f5; color: #aaa; font-size: 14px; padding: 2px 8px; }
-.db-badge-row-tag.pinned { background: #f3f0ff; color: #7c5ff5; }
+.db-badge-row-tag.locked { background: #f5f5f5; color: #aaa; }
+.db-badge-row-tag.pinned { background: #f3f0ff; color: #7c5ff5; box-shadow: 0 0 0 2px rgba(124,95,245,.2); }
 /* Badge Modal */
 .db-badge-modal {
   max-width: 320px; padding: 32px 24px 24px;
@@ -7029,12 +7186,20 @@
 .db-badge-modal-desc { font-size: 13px; color: #666; line-height: 1.5; margin: 4px 0 0; }
 .db-badge-modal-cond { font-size: 12px; color: #aaa; margin: 0; }
 .db-badge-modal-pin-btn {
-  margin-top: 8px; width: 100%; padding: 10px;
-  border: 1.5px solid #c4b5fd; border-radius: 10px;
-  background: #faf8ff; color: #7c5ff5; font-size: 13px; font-weight: 600;
-  cursor: pointer; transition: background .12s, border-color .12s;
+  margin-top: 14px; width: 100%; padding: 11px;
+  border: 1.5px solid #c4b5fd; border-radius: 12px;
+  background: linear-gradient(135deg, #faf8ff 0%, #f3f0ff 100%);
+  color: #7c5ff5; font-size: 13px; font-weight: 700;
+  cursor: pointer; transition: background .15s, border-color .15s, transform .1s, box-shadow .15s;
+  box-shadow: 0 2px 8px rgba(124,95,245,.1);
 }
-.db-badge-modal-pin-btn:hover { background: #f3f0ff; border-color: #7c5ff5; }
+.db-badge-modal-pin-btn:hover {
+  background: linear-gradient(135deg, #f3f0ff 0%, #ebe4ff 100%);
+  border-color: #7c5ff5;
+  box-shadow: 0 4px 14px rgba(124,95,245,.22);
+  transform: translateY(-1px);
+}
+.db-badge-modal-pin-btn:active { transform: translateY(0); }
 /* Chat pinned badge */
 .db-chat-badge-pin {
   width: 16px; height: 16px; object-fit: contain;
@@ -7634,36 +7799,56 @@
 
   /* Banner editor — compact card at banner bottom on mobile */
   .db-bep {
-    left: 0;
-    right: 0;
+    left: 8px;
+    right: 8px;
     top: auto;
-    bottom: 0;
+    bottom: 8px;
     transform: none;
-    width: 100%;
-    max-width: 100%;
-    border-radius: 10px 10px 0 0;
-    border-top: 1.5px solid #8e7bfd;
-    border-left: none;
-    border-right: none;
-    border-bottom: none;
+    width: auto;
+    max-width: none;
+    border-radius: 12px;
+    border: 1px solid rgba(172, 158, 248, .35);
     flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-    padding: 8px 12px 10px;
-    background: linear-gradient(180deg, rgba(20, 12, 46, .97) 0%, rgba(10, 6, 28, .99) 100%);
-    animation: bepInMobile 0.36s cubic-bezier(0.22, 1, 0.36, 1) 0.18s both;
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px 12px 12px;
+    background: linear-gradient(180deg, rgba(20, 12, 46, .94) 0%, rgba(10, 6, 28, .98) 100%);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    box-shadow: 0 8px 24px rgba(0,0,0,.45), 0 0 0 1px rgba(172, 158, 248, .08);
+    animation: bepInMobile 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
   /* no pseudo-elements on mobile */
   .db-bep::before, .db-bep::after { display: none; }
   .db-bep-label {
-    font-size: 13px;
-    color: rgba(172,158,248,.85);
+    display: flex;
+    font-size: 11px;
+    color: rgba(172,158,248,.7);
     margin-bottom: 0;
     font-weight: 700;
-    letter-spacing: .3px;
+    letter-spacing: 1px;
+  }
+  /* Mobile: revert to vertical stacking */
+  .db-bep-color, .db-bep-photo {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+  }
+  .db-bep-swatches {
+    border-right: none;
+    padding-right: 0;
+    flex-wrap: wrap;
+  }
+  .db-bep-custom {
+    width: 100%;
+    justify-content: flex-start;
   }
   .db-bep-tabs {
-    align-self: flex-start;
+    width: 100%;
+  }
+  .db-bep-tab {
+    flex: 1;
   }
   .db-bep-tab {
     padding: 4px 10px;
@@ -7676,15 +7861,17 @@
     gap: 6px 5px;
   }
   .db-bep-swatches {
-    gap: 6px;
+    gap: 4px;
     flex-wrap: wrap;
   }
   .db-bep-dot {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
     border-radius: 4px;
+    border-width: 1px;
   }
   .db-bep-dot.sel {
+    transform: scale(1.18);
     box-shadow: 0 0 0 2px #8e7bfd, 0 0 6px rgba(142,123,253,.45);
   }
   .db-bep-sep {
@@ -7789,23 +7976,29 @@
     display: none;
   }
 
-  /* Show hamburger toggle */
+  /* Show hamburger toggle — high contrast so it's not lost above pinned bar */
   .db-chat-rooms-toggle {
     display: flex;
-    width: 36px;
-    height: 36px;
+    width: 38px;
+    height: 38px;
     border-radius: 10px;
-    background: rgba(142,123,253,.15);
-    border: 1px solid rgba(172,158,248,.2);
-    color: #AC9EF8;
-    font-size: 17px;
+    background: linear-gradient(135deg, #7c5ff5 0%, #AC9EF8 100%);
+    border: none;
+    color: #fff;
+    font-size: 18px;
+    box-shadow: 0 3px 10px rgba(124,95,245,.35);
   }
+  .db-chat-rooms-toggle:hover { filter: brightness(1.05); }
 
-  /* Header: add left-padding for the toggle button */
+  /* Header: solid bg + high z-index so it always sits above the pinned bar */
   .db-chat-header {
-    padding: 10px 14px 10px 54px;
-    min-height: 48px;
+    padding: 10px 14px 10px 58px;
+    min-height: 50px;
     font-size: 13px;
+    background: #fff;
+    position: relative;
+    z-index: 3;
+    border-bottom: 1px solid #ebebf0;
   }
 
   /* Message area */
@@ -7820,8 +8013,14 @@
 
   /* Input area */
   .db-chat-input-row {
-    padding: 8px 10px;
-    gap: 5px;
+    padding: 8px 10px 10px;
+    gap: 6px;
+  }
+  .db-chat-input-tools {
+    height: 40px;
+    padding: 3px;
+    gap: 2px;
+    border-radius: 10px;
   }
 
   /* font-size 16px prevents iOS auto-zoom on focus */
@@ -7845,23 +8044,51 @@
 
   /* Compact emoji/attach toggle buttons */
   .db-emoji-toggle {
-    padding: 0 7px;
-    min-width: 36px;
-    height: 40px;
-    font-size: 17px;
+    width: 32px;
+    height: 32px;
     border-radius: 8px;
   }
+  .db-emoji-toggle > svg {
+    width: 18px;
+    height: 18px;
+  }
 
-  /* Emoji picker: limit height on mobile */
+  /* Emoji picker on mobile: full-width above input, contained */
   .db-emoji-picker--tabbed {
-    max-height: 260px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-width: none;
+    max-height: 280px;
+    bottom: calc(100% + 4px);
+    border-radius: 12px;
+    box-shadow: 0 12px 28px rgba(0,0,0,.18), 0 0 0 1px rgba(172,158,248,.18);
   }
   .db-emoji-picker-grid {
-    max-height: 120px;
+    grid-template-columns: repeat(7, 1fr);
+    max-height: 200px;
+    padding: 8px;
+    gap: 2px;
   }
   .db-sticker-grid {
-    max-height: 160px;
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+    max-height: 220px;
+    padding: 8px;
   }
+  .db-sticker-btn img { width: 52px; height: 52px; }
+
+  /* Pinned bar — compact on mobile */
+  .db-chat-pinned-bar {
+    padding: 6px 12px 6px 10px;
+    gap: 8px;
+  }
+  .db-chat-pinned-content {
+    max-height: 60px;
+  }
+  .db-chat-pinned-item {
+    font-size: 11.5px;
+  }
+  .db-chat-pinned-preview img { width: 20px; height: 20px; }
 
   /* Hide react emoji portal on touch devices */
   .db-chat-react-portal {
