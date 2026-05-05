@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import AuthSwapLink from '@components/auth/modal/AuthSwapLink';
 import logoImg from '@images/logos/logo.png';
 import logoIcon from '@images/logos/logo-48.png';
 import matrixFrame from '@images/decorations/matrix_biger.png';
-import { getTournaments, registerUser, saveSession, saveUser, consumeOAuthTokenFromUrl, OAUTH_URLS, CHECK_BACKEND } from '@utils/authApi';
+import { getTournaments, registerUser, saveSession, saveUser, consumeOAuthTokenFromUrl, savePendingVerification, OAUTH_URLS, CHECK_BACKEND } from '@utils/authApi';
 import { useToast } from '@utils/toast.jsx';
 
 function RegisterPage() {
@@ -42,6 +43,15 @@ function RegisterPage() {
       if (oauth.user) saveUser(oauth.user);
       toast.success('Успішний вхід через OAuth');
       navigate('/dashboard', { replace: true });
+      return;
+    }
+    if (oauth.status === 'pending_verification') {
+      savePendingVerification({
+        pendingToken: oauth.pendingToken,
+        email: oauth.email,
+        expiresInSec: oauth.expiresInSec,
+      });
+      navigate('/verify-email', { replace: true });
       return;
     }
     if (oauth.status === 'error') {
@@ -114,7 +124,20 @@ function RegisterPage() {
     setLoading(true);
     try {
       const data = await registerUser({ email, password });
+
+      if (data?.requiresVerification) {
+        savePendingVerification({
+          pendingToken: data.pendingToken,
+          email: data.email,
+          expiresInSec: data.expiresInSec,
+        });
+        toast.success('Код підтвердження надіслано на пошту');
+        navigate('/verify-email');
+        return;
+      }
+
       saveSession(data.token);
+      if (data.user) saveUser(data.user);
       toast.success('Акаунт створено! Вітаю на платформі');
       navigate('/dashboard');
     } catch (err) {
@@ -253,7 +276,7 @@ function RegisterPage() {
               </div>
               <p className="auth-note" style={{ marginTop: '8px' }}>
                 Have profile?{' '}
-                <Link to="/login">Login now</Link>
+                <AuthSwapLink to="/login">Login now</AuthSwapLink>
               </p>
               <button
                 type="submit"

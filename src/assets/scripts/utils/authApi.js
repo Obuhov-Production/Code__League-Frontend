@@ -112,6 +112,50 @@ export async function registerUser({ email, password }) {
   });
 }
 
+/* ── Email verification ─────────────────────────── */
+
+/**
+ * Підтвердження 6-значного коду. На успіх повертає реальні JWT-токени.
+ */
+export async function verifyEmailCode({ pendingToken, code }) {
+  return request(`${BASE}/auth/email/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pendingToken, code }),
+  });
+}
+
+/**
+ * Запит нового коду (resend). Повертає новий pendingToken і expiresInSec.
+ */
+export async function resendEmailCode({ pendingToken }) {
+  return request(`${BASE}/auth/email/resend`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pendingToken }),
+  });
+}
+
+/**
+ * Зберегти/прочитати pending-стан верифікації пошти.
+ * Тримаємо в sessionStorage — не переживає закриття вкладки.
+ */
+const PENDING_KEY = 'cl_pending_verification';
+export function savePendingVerification(data) {
+  sessionStorage.setItem(PENDING_KEY, JSON.stringify(data));
+}
+export function loadPendingVerification() {
+  try {
+    const raw = sessionStorage.getItem(PENDING_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+export function clearPendingVerification() {
+  sessionStorage.removeItem(PENDING_KEY);
+}
+
 export async function getMe() {
   return request(`${BASE}/users/me`, { headers: authHeaders() });
 }
@@ -138,8 +182,22 @@ export function consumeOAuthTokenFromUrl() {
   const params = new URLSearchParams(window.location.search);
   const token  = params.get('token');
   const error  = params.get('error');
+  const pending = params.get('pending');
 
   const cleanUrl = () => window.history.replaceState({}, '', window.location.pathname);
+
+  // OAuth → акаунт ще НЕ верифікований, треба ввести код
+  if (pending) {
+    const email     = params.get('email') || '';
+    const expiresIn = parseInt(params.get('expiresIn') || '600', 10);
+    cleanUrl();
+    return {
+      status: 'pending_verification',
+      pendingToken: pending,
+      email,
+      expiresInSec: expiresIn,
+    };
+  }
 
   if (token) {
     saveSession(token);

@@ -1,60 +1,65 @@
 /**
- * Smooth Scroll Engine v2 by Abetik:)
- * - Плавний скрол мишкою та touchpad (lerp-based) for pc and laptop
- * - Touch підтримка (mobile swipe) Тож скрол плавний
+ * Smooth Scroll Engine v3 by Abetik:)
+ * - Плавний lerp-скрол для миші/тачпаду на ПК
+ * - На мобільних/тачскрінах — НАТИВНИЙ скрол (швидше, плавніше, без jank)
+ * - Якорі з easeInOutCubic + offset під .header
  * - Keyboard navigation (Space, PageDown, Home/End, стрілки)
- * - Плавне переміщення по якорях
+ * - prefers-reduced-motion → миттєвий скрол
+ * - Lazy init після першого paint (не блокує LCP)
+ * - Кешований maxScroll через ResizeObserver (нуль forced reflow)
+ * - Кешований isScrollable через WeakMap (нуль getComputedStyle на hot path)
+ * - Pause лerp при tab hidden (економія CPU)
  * - destroy() для повного відключення
- * - Захист від подвійної ініціалізації
- * - prefers-reduced-motion Короче Хелпер для плавного скролу з підтримкою різних методів введення та врахуванням налаштувань користувача щодо анімації. Ідеально підходить для сайтів, де хочеться покращити UX при навігації, не вдаючись до важких бібліотек. Просто виклич initSmoothScroll() і все готово!
  */
 
 // ============ Constants ============
 
-const LERP        = 0.10   // Плавність (0.05 = дуже плавно, 0.15 = швидше буде)
-const WHEEL_MULT  = 1.0   // Множник швидкості колеса (спешал фор ю)
-const KEY_STEP    = 120    // px — крок при натисканні стрілок ( Доволі плавно і не много)
-const PAGE_MULT   = 0.85   // частка viewport для PageUp/PageDown ( Темка под клави 80%+ с нам падом ну якщо вобще хтось так скролить)
+const LERP        = 0.12
+const WHEEL_MULT  = 1.0
+const KEY_STEP    = 120
+const PAGE_MULT   = 0.85
 
 // ============ State ============
-/* якщо будеш шось мінять суда не треба лізти */
 
-let currentScroll = 0
-let targetScroll  = 0
-let rafId         = null
-let isLerping     = false
+let currentScroll  = 0
+let targetScroll   = 0
+let rafId          = null
+let isLerping      = false
 let isAnchorScroll = false
-let initialized   = false
+let initialized    = false
+let isTouchDevice  = false
+let maxScroll      = 0   // кешований ліміт — оновлюється тільки на resize/mutation
+let docHeight      = 0
 
-// Touch state
-let touchStartX    = 0
-let touchStartY    = 0
-let touchLastY     = 0
-let touchVelY      = 0
-let touchTimestamp = 0
-let touchActive    = false   // чи це вертикальний свайп (не горизонтальний)
-let touchLocked    = false   // напрямок заблоковано після перших px руху
-
-// Velocity history для більш точного moment (останні {n} семплів)
-const VEL_SAMPLES  = 5
-const velHistory   = []  // [{ v, t }]
-
-// Callbacks нужна тема бо на ютубі так казали
+// Callbacks
 const listeners = { scrollEnd: [] }
+
+// Кеш scrollable-предків (WeakMap → автоочищується при видаленні елементу з DOM)
+const scrollableCache = new WeakMap()
 
 // ============ Utils ============
 
-function lerp(start, end, factor) {
-  return start + (end - start) * factor
+function lerp(a, b, t) {
+  return a + (b - a) * t
 }
 
 function clampScroll(val) {
-  const maxScroll = document.documentElement.scrollHeight - window.innerHeight
-  return Math.max(0, Math.min(val, maxScroll))
+  return val < 0 ? 0 : val > maxScroll ? maxScroll : val
 }
 
 function prefersReducedMotion() {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
+function detectTouchDevice() {
+  // Ловимо саме pointer-туч девайси, а не просто наявність touch API
+  // (бо ноути з тач-екранами теж мають touch, але юзають мишу)
+  return window.matchMedia('(hover: none) and (pointer: coarse)').matches
+}
+
+function recalcMaxScroll() {
+  docHeight = document.documentElement.scrollHeight
+  maxScroll = Math.max(0, docHeight - window.innerHeight)
 }
 
 // ============ Lerp Loop ============
@@ -84,20 +89,21 @@ function lerpLoop() {
 }
 
 function startLerp() {
-  if (isAnchorScroll) return // Пріорітет для якорів
+  if (isAnchorScroll) return
+  if (document.hidden) {
+    // Не крутимо rAF якщо вкладка прихована
+    currentScroll = targetScroll
+    window.scrollTo(0, currentScroll)
+    return
+  }
   if (!isLerping) {
     isLerping = true
     rafId = requestAnimationFrame(lerpLoop)
   }
 }
 
-// ============ Scroll Target Helpers ============
-
 function addDelta(delta) {
-  // Синхронізуємо currentScroll перед зміною — щоб не "стрибати"
-  if (!isLerping) {
-    currentScroll = window.scrollY
-  }
+  if (!isLerping) currentScroll = window.scrollY
   targetScroll = clampScroll(targetScroll + delta)
   startLerp()
 }
@@ -105,138 +111,43 @@ function addDelta(delta) {
 // ============ Mouse Wheel ============
 
 /**
- * Перевіряє чи елемент (або один з його предків до window) є скролабельним контейнером
- * з реальним переповненням по вертикалі. Якщо так — smooth scroll не перехоплює подію.
+ * Перевіряємо чи елемент знаходиться всередині прокручуваного контейнера.
+ * Кешуємо результат `isScrollableNode` через WeakMap, щоб не викликати
+ * getComputedStyle на кожен wheel.
  */
+function isScrollableNode(node) {
+  if (scrollableCache.has(node)) return scrollableCache.get(node)
+  const style = window.getComputedStyle(node)
+  const overflowY = style.overflowY
+  const result = overflowY === 'auto' || overflowY === 'scroll'
+  scrollableCache.set(node, result)
+  return result
+}
+
 function isInsideScrollable(el, deltaY) {
   let node = el
-  while (node && node !== document.documentElement) {
-    const style = window.getComputedStyle(node)
-    const overflowY = style.overflowY
-    const canScroll = overflowY === 'auto' || overflowY === 'scroll'
-    if (canScroll) {
+  // Обмежуємо глибину обходу — реально жоден scrollable не лежить глибше 12 рівнів
+  let depth = 0
+  while (node && node !== document.documentElement && depth < 12) {
+    if (isScrollableNode(node)) {
       const atTop    = node.scrollTop <= 0
       const atBottom = node.scrollTop + node.clientHeight >= node.scrollHeight - 1
-      // є куди скролити в потрібному напрямку
       if (!(deltaY < 0 && atTop) && !(deltaY > 0 && atBottom)) {
         return true
       }
     }
     node = node.parentElement
+    depth++
   }
   return false
 }
 
 function onWheel(e) {
-  if (isInsideScrollable(e.target, e.deltaY)) return  // дозволяємо нативний скрол
+  // Ctrl+wheel = zoom — не чіпаємо
+  if (e.ctrlKey) return
+  if (isInsideScrollable(e.target, e.deltaY)) return
   e.preventDefault()
   addDelta(e.deltaY * WHEEL_MULT)
-}
-
-// ============ Touch ============
-// Константи touch
-const TOUCH_LOCK_THRESHOLD   = 8    // px — після яких вирішуємо вертикальний чи горизонтальний
-const TOUCH_MOMENTUM_MULT    = 18   // множник momentum при відпусканні
-const TOUCH_FRICTION         = 0.92 // затухання momentum (за кадр)
-const TOUCH_MIN_MOMENTUM     = 0.5  // px — зупиняємо якщо менше
-
-function resetTouchState() {
-  touchActive    = false
-  touchLocked    = false
-  touchVelY      = 0
-  velHistory.length = 0
-}
-
-function getWeightedVelocity() {
-  // Зважена середня швидкість по останніх семплах (свіжі важать більше)
-  if (!velHistory.length) return 0
-  let totalV = 0, totalW = 0
-  velHistory.forEach(({ v }, i) => {
-    const w = i + 1  // зростаючі ваги (останній семпл — найважчий)
-    totalV += v * w
-    totalW += w
-  })
-  return totalV / totalW
-}
-
-function onTouchStart(e) {
-  // Ігноруємо multi-touch (pinch-zoom тощо)
-  if (e.touches.length > 1) return
-
-  touchStartX    = e.touches[0].clientX
-  touchStartY    = e.touches[0].clientY
-  touchLastY     = touchStartY
-  touchTimestamp = Date.now()
-  resetTouchState()
-
-  stopLerp()
-  currentScroll = window.scrollY
-  targetScroll  = window.scrollY
-}
-
-function onTouchMove(e) {
-  if (isAnchorScroll) return
-  if (e.touches.length > 1) return
-
-  const x   = e.touches[0].clientX
-  const y   = e.touches[0].clientY
-  const now = Date.now()
-  const dt  = Math.max(now - touchTimestamp, 1)
-
-  // Визначаємо напрямок після перших px руху
-  if (!touchLocked) {
-    const dx = Math.abs(x - touchStartX)
-    const dy = Math.abs(y - touchStartY)
-    if (dx < TOUCH_LOCK_THRESHOLD && dy < TOUCH_LOCK_THRESHOLD) return
-
-    touchLocked = true
-    touchActive = dy >= dx  // вертикальний рух переважає
-  }
-
-  // Горизонтальний свайп — не чіпаємо (слайдери, каруселі)
-  if (!touchActive) return
-
-  // Рахуємо швидкість і зберігаємо в history
-  const velocity = (touchLastY - y) / dt * 16
-  velHistory.push({ v: velocity, t: now })
-  if (velHistory.length > VEL_SAMPLES) velHistory.shift()
-
-  // Переміщуємо скрол прямо (без lerp — щоб палець слідував за скролом 1:1)
-  const delta  = touchLastY - y
-  const newPos = clampScroll(window.scrollY + delta)
-  window.scrollTo(0, newPos)
-  currentScroll = newPos
-  targetScroll  = newPos
-
-  touchLastY     = y
-  touchTimestamp = now
-}
-
-function onTouchEnd(e) {
-  if (!touchActive || isAnchorScroll) {
-    resetTouchState()
-    return
-  }
-
-  // Запускаємо momentum на основі зваженої швидкості
-  const vel      = getWeightedVelocity()
-  const momentum = vel * TOUCH_MOMENTUM_MULT
-
-  currentScroll = window.scrollY
-  targetScroll  = clampScroll(currentScroll + momentum)
-
-  resetTouchState()
-
-  // Якщо momentum малий — не запускаємо lerp взагалі
-  if (Math.abs(momentum) < TOUCH_MIN_MOMENTUM) return
-  startLerp()
-}
-
-function onTouchCancel() {
-  // Скасування (напр. вспливаюче вікно перехопило touch) — зупиняємо без momentum
-  resetTouchState()
-  currentScroll = window.scrollY
-  targetScroll  = window.scrollY
 }
 
 // ============ Keyboard ============
@@ -244,31 +155,28 @@ function onTouchCancel() {
 function onKeyDown(e) {
   if (isAnchorScroll) return
 
-  // Ігноруємо якщо фокус у полі вводу
   const tag = document.activeElement?.tagName
-  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+  if (document.activeElement?.isContentEditable) return
 
   const page = window.innerHeight * PAGE_MULT
 
-  const keyMap = {
-    'ArrowDown':  KEY_STEP,
-    'ArrowUp':   -KEY_STEP,
-    'PageDown':   page,
-    'PageUp':    -page,
-    ' ':          page,   // Space
-    'End':        Infinity,
-    'Home':      -Infinity,
+  let delta
+  switch (e.key) {
+    case 'ArrowDown': delta = KEY_STEP;  break
+    case 'ArrowUp':   delta = -KEY_STEP; break
+    case 'PageDown':  delta = page;      break
+    case 'PageUp':    delta = -page;     break
+    case ' ':         delta = e.shiftKey ? -page : page; break
+    case 'End':       delta = Infinity;  break
+    case 'Home':      delta = -Infinity; break
+    default: return
   }
 
-  if (!(e.key in keyMap)) return
   e.preventDefault()
 
-  const delta = keyMap[e.key]
   if (!isFinite(delta)) {
-    // Home / End
-    targetScroll = delta > 0
-      ? document.documentElement.scrollHeight - window.innerHeight
-      : 0
+    targetScroll = delta > 0 ? maxScroll : 0
     if (!isLerping) currentScroll = window.scrollY
     startLerp()
   } else {
@@ -276,21 +184,20 @@ function onKeyDown(e) {
   }
 }
 
-// ============ Scrollbar Sync ============
-// Якщо юзер тягне скролбар або скролить не через wheel
+// ============ Native Scroll Sync ============
+// Якщо юзер тягне скролбар або скрол ініційовано іншим скриптом — синхронізуємось
 
 let syncTicking = false
 
 function onNativeScroll() {
   if (isLerping || isAnchorScroll) return
-  if (!syncTicking) {
-    syncTicking = true
-    requestAnimationFrame(() => {
-      currentScroll = window.scrollY
-      targetScroll  = window.scrollY
-      syncTicking   = false
-    })
-  }
+  if (syncTicking) return
+  syncTicking = true
+  requestAnimationFrame(() => {
+    currentScroll = window.scrollY
+    targetScroll  = window.scrollY
+    syncTicking   = false
+  })
 }
 
 // ============ Anchor Navigation ============
@@ -298,7 +205,22 @@ function onNativeScroll() {
 function scrollToElement(el, duration = 900) {
   const header       = document.querySelector('.header')
   const headerOffset = header ? header.offsetHeight + 16 : 0
-  const elementTop   = el.getBoundingClientRect().top + window.scrollY - headerOffset
+  const elementTop   = clampScroll(
+    el.getBoundingClientRect().top + window.scrollY - headerOffset
+  )
+
+  // Reduced-motion або мобільний → нативний smooth
+  if (prefersReducedMotion()) {
+    window.scrollTo(0, elementTop)
+    currentScroll  = elementTop
+    targetScroll   = elementTop
+    return
+  }
+
+  if (isTouchDevice) {
+    window.scrollTo({ top: elementTop, behavior: 'smooth' })
+    return
+  }
 
   stopLerp()
   isAnchorScroll = true
@@ -331,26 +253,26 @@ function scrollToElement(el, duration = 900) {
     }
   }
 
-  // Якщо reduced-motion — скролимо миттєво
-  if (prefersReducedMotion()) {
-    window.scrollTo(0, elementTop)
-    currentScroll  = elementTop
-    targetScroll   = elementTop
-    isAnchorScroll = false
-    return
-  }
-
   requestAnimationFrame(step)
 }
 
 function onAnchorClick(e) {
+  // Ігноруємо modifier-clicks (відкриття в новій вкладці тощо)
+  if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return
+  if (e.button !== undefined && e.button !== 0) return
+
   const link = e.target.closest('a[href^="#"]')
   if (!link) return
 
   const targetId = link.getAttribute('href')
   if (!targetId || targetId === '#') return
 
-  const targetEl = document.querySelector(targetId)
+  let targetEl
+  try {
+    targetEl = document.querySelector(targetId)
+  } catch {
+    return // невалідний селектор
+  }
   if (!targetEl) return
 
   e.preventDefault()
@@ -358,37 +280,45 @@ function onAnchorClick(e) {
   history.pushState(null, '', targetId)
 }
 
-// ============ Resize ============
+// ============ Resize / Mutation Observers ============
 
+let resizeRaf = null
 function onResize() {
-  // Перераховуємо ліміт скролу після зміни розміру
-  targetScroll  = clampScroll(targetScroll)
-  currentScroll = window.scrollY
+  if (resizeRaf) return
+  resizeRaf = requestAnimationFrame(() => {
+    recalcMaxScroll()
+    targetScroll  = clampScroll(targetScroll)
+    currentScroll = window.scrollY
+    resizeRaf = null
+  })
+}
+
+function onVisibilityChange() {
+  if (document.hidden) {
+    stopLerp()
+    currentScroll = window.scrollY
+    targetScroll  = window.scrollY
+  }
 }
 
 // ============ Public API ============
 
-/**
- * Програмний скрол до позиції
- * @param {number} y - цільова позиція
- * @param {boolean} [instant=false] - миттєво без анімації
- */
 function scrollTo(y, instant = false) {
   targetScroll = clampScroll(y)
   if (instant || prefersReducedMotion()) {
     currentScroll = targetScroll
     window.scrollTo(0, targetScroll)
-  } else {
-    if (!isLerping) currentScroll = window.scrollY
-    startLerp()
+    return
   }
+  if (isTouchDevice) {
+    window.scrollTo({ top: targetScroll, behavior: 'smooth' })
+    currentScroll = targetScroll
+    return
+  }
+  if (!isLerping) currentScroll = window.scrollY
+  startLerp()
 }
 
-/**
- * Програмний скрол до елементу
- * @param {Element|string} target - елемент або CSS-селектор
- * @param {number} [duration=900]
- */
 function scrollToTarget(target, duration = 900) {
   const el = typeof target === 'string'
     ? document.querySelector(target)
@@ -396,11 +326,6 @@ function scrollToTarget(target, duration = 900) {
   if (el) scrollToElement(el, duration)
 }
 
-/**
- * Підписка на подію кінця скролу
- * @param {Function} fn
- * @returns {Function} unsubscribe
- */
 function onScrollEnd(fn) {
   listeners.scrollEnd.push(fn)
   return () => {
@@ -408,74 +333,93 @@ function onScrollEnd(fn) {
   }
 }
 
-/**
- * Поточна позиція (може бути між currentScroll і targetScroll)
- */
 function getScrollY() {
-  return currentScroll
+  return isLerping ? currentScroll : window.scrollY
 }
 
 // ============ Init / Destroy ============
 
-const _handlers = {}  // Зберігаємо референції для removeEventListener
+let resizeObserver = null
+
+function attachListeners() {
+  // Якірна навігація — завжди (працює і з reduced-motion і з мобільним)
+  document.addEventListener('click', onAnchorClick)
+  window.addEventListener('resize', onResize, { passive: true })
+
+  if (prefersReducedMotion()) return
+
+  if (isTouchDevice) {
+    // На мобільних — НІЧОГО кастомного для скролу. Нативний momentum виграє.
+    return
+  }
+
+  // ПК — повний пакет
+  window.addEventListener('wheel',   onWheel,        { passive: false })
+  window.addEventListener('keydown', onKeyDown)
+  window.addEventListener('scroll',  onNativeScroll, { passive: true })
+  document.addEventListener('visibilitychange', onVisibilityChange)
+
+  // ResizeObserver на body — ловимо зміни висоти (картинки догрузились, accordion відкрився тощо)
+  if ('ResizeObserver' in window) {
+    resizeObserver = new ResizeObserver(() => {
+      recalcMaxScroll()
+      targetScroll = clampScroll(targetScroll)
+    })
+    resizeObserver.observe(document.body)
+  }
+}
 
 /**
  * Ініціалізація. Безпечно викликати повторно — не додасть подвійних обробників.
+ * Сам init відкладається до першого простою браузера, щоб не блокувати LCP.
  */
 function initSmoothScroll() {
   if (initialized) return
   initialized = true
 
-  // Синхронізуємо початкову позицію
+  isTouchDevice = detectTouchDevice()
+  recalcMaxScroll()
   currentScroll = window.scrollY
   targetScroll  = window.scrollY
 
-  // Reduced-motion: не чіпаємо нічого, тільки якірну навігацію
-  if (prefersReducedMotion()) {
-    _handlers.anchorClick = onAnchorClick
-    document.addEventListener('click', onAnchorClick)
-    return
+  const setup = () => attachListeners()
+
+  // Чекаємо поки браузер не завантажить первинну верстку — інакше
+  // підвіска перших обробників і ResizeObserver гальмує перший paint
+  if (document.readyState === 'complete') {
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(setup, { timeout: 500 })
+    } else {
+      setTimeout(setup, 0)
+    }
+  } else {
+    window.addEventListener('load', () => {
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(setup, { timeout: 500 })
+      } else {
+        setTimeout(setup, 0)
+      }
+    }, { once: true })
   }
-
-  _handlers.wheel        = onWheel
-  _handlers.touchStart   = onTouchStart
-  _handlers.touchMove    = onTouchMove
-  _handlers.touchEnd     = onTouchEnd
-  _handlers.touchCancel  = onTouchCancel
-  _handlers.keyDown      = onKeyDown
-  _handlers.scroll       = onNativeScroll
-  _handlers.resize       = onResize
-  _handlers.anchorClick  = onAnchorClick
-
-  window.addEventListener('wheel',        onWheel,       { passive: false })
-  window.addEventListener('touchstart',   onTouchStart,  { passive: true })
-  window.addEventListener('touchmove',    onTouchMove,   { passive: true })
-  window.addEventListener('touchend',     onTouchEnd)
-  window.addEventListener('touchcancel',  onTouchCancel)
-  window.addEventListener('keydown',      onKeyDown)
-  window.addEventListener('scroll',       onNativeScroll)
-  window.addEventListener('resize',       onResize)
-  document.addEventListener('click',      onAnchorClick)
 }
 
-/**
- * Повне відключення — прибирає всі обробники та зупиняє анімацію.
- */
 function destroySmoothScroll() {
   if (!initialized) return
   initialized = false
 
   stopLerp()
 
-  window.removeEventListener('wheel',        _handlers.wheel,       { passive: false })
-  window.removeEventListener('touchstart',   _handlers.touchStart)
-  window.removeEventListener('touchmove',    _handlers.touchMove)
-  window.removeEventListener('touchend',     _handlers.touchEnd)
-  window.removeEventListener('touchcancel',  _handlers.touchCancel)
-  window.removeEventListener('keydown',      _handlers.keyDown)
-  window.removeEventListener('scroll',       _handlers.scroll)
-  window.removeEventListener('resize',       _handlers.resize)
-  document.removeEventListener('click',      _handlers.anchorClick)
+  window.removeEventListener('wheel',   onWheel,        { passive: false })
+  window.removeEventListener('keydown', onKeyDown)
+  window.removeEventListener('scroll',  onNativeScroll)
+  window.removeEventListener('resize',  onResize)
+  document.removeEventListener('click', onAnchorClick)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
 
   listeners.scrollEnd = []
 }

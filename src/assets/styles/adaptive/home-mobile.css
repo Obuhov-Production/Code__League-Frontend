@@ -347,16 +347,36 @@
   }
 
   .reviews_wrapper {
-    --card-width: calc(100vw - 64px);
-    --card-gap: 16px;
-    border-radius: 28px;
-    padding: 32px 0 28px;
+    /* Картка = ширина viewport-а через container query → ідеальне центрування */
+    --card-width: 100cqw;
+    --card-gap: 0px;
+    border-radius: 24px;
+    /* Менша рамка зверху на телефоні + горизонтальний padding тут (а не на viewport) */
+    padding: 18px 20px 24px;
   }
 
   .reviews_viewport {
-    padding: 0 24px;
-    /* allow horizontal scroll gesture feel */
+    padding: 0;
+    overflow: hidden;
+    container-type: inline-size;
     -webkit-overflow-scrolling: touch;
+  }
+
+  .reviews_card {
+    align-items: center;
+    box-sizing: border-box;
+  }
+
+  .reviews_card-bubble,
+  .reviews_card-author {
+    width: 100%;
+    max-width: 360px;
+    box-sizing: border-box;
+    margin: 0 auto;
+  }
+
+  .reviews_card-author {
+    padding-left: 0;
   }
 
   .reviews_card-bubble {
@@ -595,7 +615,15 @@
   }
 
   .reviews_wrapper {
-    --card-width: calc(100vw - 48px);
+    --card-width: 100cqw;
+    --card-gap: 0px;
+    border-radius: 22px;
+    padding: 14px 16px 22px;
+  }
+
+  .reviews_card-bubble,
+  .reviews_card-author {
+    max-width: 100%;
   }
 }
 

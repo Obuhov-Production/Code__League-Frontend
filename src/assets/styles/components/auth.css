@@ -3,6 +3,27 @@
   display: flex;
   flex-direction: column;
   background-color: #edeef0;
+  /* Fallback fade-in для браузерів без View Transitions API.
+     Тільки opacity — щоб не конфліктувати з view-transition snapshot-ом */
+  animation: authPageFade 0.28s ease;
+}
+
+@keyframes authPageFade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-page { animation: none; }
+}
+
+/* View Transitions: рівний крос-фейд між /login ↔ /register.
+   Не задаємо власних transition-name на дочірніх елементах — це викликає
+   подвійну анімацію (snapshot + свій fade). Лишаємо дефолтний root crossfade */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.28s;
+  animation-timing-function: ease;
 }
 
 .auth-body {

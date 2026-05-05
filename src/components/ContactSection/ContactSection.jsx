@@ -2,6 +2,32 @@ import { useState, useRef, useLayoutEffect } from 'react'
 import illustrationSvg from '@images/contact/Illustration.svg'
 import { useToast } from '@utils/toast.jsx'
 
+// Лімітувальний індикатор з progress-bar (стиль як на TabProfile)
+function CharCounter({ value, max }) {
+  const len = value?.length ?? 0
+  const pct = Math.min(100, (len / max) * 100)
+  const warn = len >= max * 0.9
+  return (
+    <div className="contact_char-counter">
+      <div className="contact_char-bar-wrap">
+        <div
+          className="contact_char-bar"
+          style={{
+            width: `${pct}%`,
+            background: warn ? '#f87171' : 'var(--main_color)',
+          }}
+        />
+      </div>
+      <span className="contact_char-count" style={warn ? { color: '#f87171' } : undefined}>
+        {len} / {max}
+      </span>
+    </div>
+  )
+}
+
+const MESSAGE_MAX = 256
+const DETAILS_MAX = 512
+
 function ProblemForm({ formData, handleChange }) {
   return (
     <>
@@ -43,7 +69,9 @@ function ProblemForm({ formData, handleChange }) {
           onChange={handleChange}
           required
           rows="5"
+          maxLength={MESSAGE_MAX}
         />
+        <CharCounter value={formData.message} max={MESSAGE_MAX} />
       </div>
     </>
   )
@@ -118,7 +146,9 @@ function QuoteForm({ formData, handleChange }) {
           onChange={handleChange}
           required
           rows="4"
+          maxLength={DETAILS_MAX}
         />
+        <CharCounter value={formData.details} max={DETAILS_MAX} />
       </div>
     </>
   )

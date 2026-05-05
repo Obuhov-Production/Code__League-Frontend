@@ -1,10 +1,11 @@
 /* короче погнали писать код кст пишу на клаві без укр розкладки (тут тіки з англ) це всьо ваше Temu віновате */
 import { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import AuthSwapLink from '@components/auth/modal/AuthSwapLink';
 import logoImg from '@images/logos/logo.png';
 import logoIcon from '@images/logos/logo-48.png';
 import matrixFrame from '@images/decorations/matrix_biger.png';
-import { getTournaments, loginUser, saveSession, saveUser, consumeOAuthTokenFromUrl, OAUTH_URLS, CHECK_BACKEND } from '@utils/authApi';
+import { getTournaments, loginUser, saveSession, saveUser, consumeOAuthTokenFromUrl, savePendingVerification, OAUTH_URLS, CHECK_BACKEND } from '@utils/authApi';
 import { useToast } from '@utils/toast.jsx';
 
 function LoginPage() {
@@ -41,6 +42,16 @@ function LoginPage() {
       if (oauth.user) saveUser(oauth.user);
       toast.success('Успішний вхід через провайдера!');
       navigate('/dashboard', { replace: true });
+      return;
+    }
+
+    if (oauth.status === 'pending_verification') {
+      savePendingVerification({
+        pendingToken: oauth.pendingToken,
+        email: oauth.email,
+        expiresInSec: oauth.expiresInSec,
+      });
+      navigate('/verify-email', { replace: true });
       return;
     }
 
@@ -106,6 +117,18 @@ function LoginPage() {
     setLoading(true);
     try {
       const data = await loginUser({ email, password });
+
+      if (data?.requiresVerification) {
+        savePendingVerification({
+          pendingToken: data.pendingToken,
+          email: data.email,
+          expiresInSec: data.expiresInSec,
+        });
+        toast.success('Підтвердіть пошту — ми надіслали код');
+        navigate('/verify-email');
+        return;
+      }
+
       saveSession(data.token);
       if (data.user) saveUser(data.user);
       toast.success('Вітаємо знову у системі!');
@@ -224,7 +247,7 @@ function LoginPage() {
               <br></br>
               <p className="auth-note" style={{ marginTop: '8px' }}>
                 Don`t have a profile?{' '}
-                <Link to="/register">Register now</Link>
+                <AuthSwapLink to="/register">Register now</AuthSwapLink>
               </p>
               <button
                 type="submit"

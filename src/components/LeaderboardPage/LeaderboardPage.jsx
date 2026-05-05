@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import Header from '@components/Header'
 import Footer from '@components/Footer'
@@ -43,6 +43,116 @@ const STATUS_LABEL = {
   running:      { label: 'Активний',   color: '#22c55e' },
   registration: { label: 'Реєстрація', color: '#3b82f6' },
   draft:        { label: 'Чернетка',   color: '#f59e0b' },
+}
+
+// ── Custom dropdown (mobile) ──────────────────────────────────────────────
+function TournamentDropdown({ tournaments, selected, onSelect }) {
+  const [open, setOpen] = useState(false)
+  const [activeIdx, setActiveIdx] = useState(-1)
+  const rootRef = useRef(null)
+  const listRef = useRef(null)
+
+  const current = tournaments.find(t => t.id === selected)
+  const currentStatus = current ? STATUS_LABEL[current.status] : null
+
+  useEffect(() => {
+    if (!open) return
+    const onDocClick = (e) => {
+      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false)
+    }
+    const onEsc = (e) => {
+      if (e.key === 'Escape') { setOpen(false); rootRef.current?.querySelector('button')?.focus() }
+    }
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onEsc)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onEsc)
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (open) {
+      const idx = tournaments.findIndex(t => t.id === selected)
+      setActiveIdx(idx >= 0 ? idx : 0)
+    }
+  }, [open, tournaments, selected])
+
+  const onKeyDown = (e) => {
+    if (!open && (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault()
+      setOpen(true)
+      return
+    }
+    if (!open) return
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActiveIdx(i => Math.min(tournaments.length - 1, i + 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActiveIdx(i => Math.max(0, i - 1))
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      const t = tournaments[activeIdx]
+      if (t) { onSelect(t.id); setOpen(false) }
+    }
+  }
+
+  return (
+    <div className={`lb-dd${open ? ' open' : ''}`} ref={rootRef} onKeyDown={onKeyDown}>
+      <button
+        type="button"
+        className="lb-dd-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen(o => !o)}
+      >
+        <span className="lb-dd-trigger-text">
+          <span className="lb-dd-label">Турнір</span>
+          <span className="lb-dd-current">
+            {current ? current.name : 'Оберіть турнір'}
+            {currentStatus && (
+              <span className="lb-dd-badge" style={{ color: currentStatus.color }}>
+                {currentStatus.label}
+              </span>
+            )}
+          </span>
+        </span>
+        <svg className="lb-dd-chevron" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+          <path d="M3 5l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+
+      <ul
+        className="lb-dd-list"
+        role="listbox"
+        ref={listRef}
+        tabIndex={-1}
+        aria-hidden={!open}
+      >
+        {tournaments.map((t, i) => {
+          const st = STATUS_LABEL[t.status]
+          const isSel = t.id === selected
+          const isActive = i === activeIdx
+          return (
+            <li
+              key={t.id}
+              role="option"
+              aria-selected={isSel}
+              className={`lb-dd-option${isSel ? ' selected' : ''}${isActive ? ' active' : ''}`}
+              onClick={() => { onSelect(t.id); setOpen(false) }}
+              onMouseEnter={() => setActiveIdx(i)}
+            >
+              <span className="lb-dd-option-name">{t.name}</span>
+              {st && (
+                <span className="lb-dd-badge" style={{ color: st.color }}>{st.label}</span>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
 }
 
 export default function LeaderboardPage() {
@@ -110,27 +220,36 @@ export default function LeaderboardPage() {
 
         {error && <div className="lb-error">{error}</div>}
 
-        {/* ── Tournament tabs ── */}
+        {/* ── Tournament tabs (desktop) ── */}
         {loading ? (
           <div className="lb-tabs">
             {[1, 2].map(i => <div key={i} className="lb-tab-skeleton" />)}
           </div>
         ) : (
-          <div className="lb-tabs">
-            {tournaments.map(t => {
-              const st = STATUS_LABEL[t.status]
-              return (
-                <button
-                  key={t.id}
-                  className={`lb-tab${selected === t.id ? ' active' : ''}`}
-                  onClick={() => setSelected(t.id)}
-                >
-                  {t.name}
-                  {st && <span className="lb-tab-badge" style={{ color: st.color }}>{st.label}</span>}
-                </button>
-              )
-            })}
-          </div>
+          <>
+            <div className="lb-tabs">
+              {tournaments.map(t => {
+                const st = STATUS_LABEL[t.status]
+                return (
+                  <button
+                    key={t.id}
+                    className={`lb-tab${selected === t.id ? ' active' : ''}`}
+                    onClick={() => setSelected(t.id)}
+                  >
+                    {t.name}
+                    {st && <span className="lb-tab-badge" style={{ color: st.color }}>{st.label}</span>}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* ── Tournament dropdown (mobile) ── */}
+            <TournamentDropdown
+              tournaments={tournaments}
+              selected={selected}
+              onSelect={setSelected}
+            />
+          </>
         )}
 
         {/* ── Table ── */}

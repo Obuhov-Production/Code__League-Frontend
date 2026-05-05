@@ -238,22 +238,33 @@
 
 @media (max-width: 768px) {
   .reviews_wrapper {
-    /* Фіксована ширина — картка повністю видна без обрізки */
-    --card-width: min(320px, calc(100vw - 48px));
-    --card-gap: 20px;
-    border-radius: 28px;
-    padding: 32px 0 28px;
+    /* Картка = ширина viewport-а через container query (100cqw) */
+    --card-width: 100cqw;
+    --card-gap: 0px;
+    border-radius: 24px;
+    /* Менший верхній padding — рамка зверху мінімальна */
+    padding: 18px 20px 24px;
   }
 
   .reviews_viewport {
-    /* overflow: hidden, щоб сусідні картки не просвічували */
-    padding: 0 24px;
+    padding: 0;
     overflow: hidden;
+    /* Контейнер для cqw-обчислень картки */
+    container-type: inline-size;
   }
 
-  /* Карточка — весь вміст помічається, хвіст між bubble і автором */
+  /* Карточка — займає весь viewport, контент центрований і обмежений max-width */
   .reviews_card {
     gap: 28px;
+    align-items: center;
+    box-sizing: border-box;
+  }
+
+  .reviews_card-bubble,
+  .reviews_card-author {
+    width: 100%;
+    max-width: 360px;
+    box-sizing: border-box;
   }
 
   .reviews_card-bubble {
@@ -274,11 +285,16 @@
     bottom: -20px;
   }
 
-  /* Автор */
+  /* Автор — симетрично, без зміщення вліво */
   .reviews_card-author {
     padding-top: 4px;
-    padding-left: 4px;
+    padding-left: 0;
     gap: 3px;
+    margin: 0 auto;
+  }
+
+  .reviews_card-bubble {
+    margin: 0 auto;
   }
 
   .reviews_card-name {
@@ -330,12 +346,18 @@
 
 @media (max-width: 480px) {
   .reviews_wrapper {
-    --card-width: min(300px, calc(100vw - 40px));
-    --card-gap: 16px;
-    border-radius: 24px;
+    --card-width: 100cqw;
+    --card-gap: 0px;
+    border-radius: 22px;
+    padding: 14px 16px 22px;
   }
 
   .reviews_viewport {
-    padding: 0 20px;
+    padding: 0;
+  }
+
+  .reviews_card-bubble,
+  .reviews_card-author {
+    max-width: 100%;
   }
 }

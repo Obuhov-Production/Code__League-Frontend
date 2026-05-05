@@ -122,6 +122,10 @@
         font-size: 24px;
     }
 
+    .cta-section_actions {
+        justify-content: center;
+    }
+
     .cta-decor {
         display: none;
     }

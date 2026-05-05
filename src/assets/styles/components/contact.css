@@ -154,8 +154,43 @@
 }
 
 .contact_textarea {
-  resize: vertical;
-  min-height: 120px;
+  resize: none;
+  min-height: 140px;
+  max-height: 240px;
+  overflow-y: auto;
+  line-height: 1.55;
+}
+
+/* --- Char counter with progress bar --- */
+.contact_char-counter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  font-family: 'Poppins', sans-serif;
+}
+
+.contact_char-bar-wrap {
+  flex: 1;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.contact_char-bar {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.25s ease, background-color 0.2s ease;
+}
+
+.contact_char-count {
+  font-size: 12px;
+  font-weight: 500;
+  color: #777;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.2s ease;
 }
 
 /* --- Submit button --- */

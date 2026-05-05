@@ -23,6 +23,7 @@
 @import url("components/contact.css");
 @import url("components/footer.css");
 @import url("components/not-found-page.css");
+@import url("components/verify-email.css");
 
 /* === Animations === */
 @import url("animation/animations.css");
