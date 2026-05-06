@@ -68,15 +68,20 @@ function TeamRegForm({ tournament, toast, onSuccess, onCancel, user }) {
     if (!teamName.trim()) { toast.error('Введіть назву команди'); return; }
     for (let i = 0; i < members.length; i++) {
       const m = members[i];
-      if (m.linkedUser && m.linkedUser.missingEmail && !m.linkedUser.email?.trim()) {
-        toast.error(`Учасник ${i + 1}: вкажіть email`); return;
+      if (!m.linkedUser) {
+        toast.error(`Учасник ${i + 1}: оберіть користувача з платформи`); return;
       }
+    }
+    // Reject duplicate users in the same team
+    const ids = members.map(m => m.linkedUser?.userId).filter(Boolean);
+    if (new Set(ids).size !== ids.length) {
+      toast.error('Один користувач не може бути доданий двічі'); return;
     }
     setLoading(true);
     const cleanMembers = members.map(m => ({
-      full_name: m.linkedUser ? (m.linkedUser.full_name?.trim() || m.linkedUser.username) : m.full_name.trim(),
-      email:     m.linkedUser ? m.linkedUser.email?.trim() : m.email.trim(),
-      user_id:   m.linkedUser?.userId ?? null,
+      full_name: m.linkedUser.username,
+      email:     m.linkedUser.email?.trim() || null,
+      user_id:   m.linkedUser.userId,
     }));
     try { 
       const teamPayload = {
@@ -163,49 +168,52 @@ function TeamRegForm({ tournament, toast, onSuccess, onCancel, user }) {
                 )}
               </>
             ) : (
-              <>
-                <div className="db-member-row">
+              <div className="db-member-platform-search db-member-platform-search--always">
+                <div className="db-member-row" style={{ alignItems: 'flex-start' }}>
                   <span className="db-member-num">{i + 1}</span>
-                  <input className="db-input" value={m.full_name} onChange={e => updateMember(i, { full_name: e.target.value })} placeholder="ПІБ" required />
-                  <input className="db-input" type="email" value={m.email} onChange={e => updateMember(i, { email: e.target.value })} placeholder="Email" required />
-                  {members.length > min && <button type="button" className="db-member-remove" onClick={() => setMembers(ms => ms.filter((_,idx) => idx !== i))}>✕</button>}
+                  <div className="db-platform-search-wrap" style={{ flex: 1 }}>
+                    <input
+                      className="db-input"
+                      placeholder="Пошук користувача за нікнеймом або email..."
+                      value={m.platformQuery}
+                      onChange={e => handlePlatformSearch(i, e.target.value)}
+                      autoComplete="off"
+                    />
+                    {m.searching && <span className="db-platform-searching">Пошук...</span>}
+                  </div>
+                  {members.length > min && (
+                    <button type="button" className="db-member-remove"
+                            onClick={() => setMembers(ms => ms.filter((_, idx) => idx !== i))}>✕</button>
+                  )}
                 </div>
-                <label className="db-member-platform-check">
-                  <input type="checkbox" checked={m.onPlatform} onChange={e => updateMember(i, { onPlatform: e.target.checked, platformQuery: '', platformUser: null })} />
-                  <span>Зареєстрований на платформі</span>
-                </label>
-                {m.onPlatform && (
-                  <div className="db-member-platform-search">
-                    <div className="db-platform-search-wrap">
-                      <input className="db-input" placeholder="Пошук за нікнеймом або email..." value={m.platformQuery}
-                        onChange={e => handlePlatformSearch(i, e.target.value)} />
-                      {m.searching && <span className="db-platform-searching">Пошук...</span>}
-                    </div>
-                    {(m.platformResults?.length > 0) && (
-                      <div className="db-platform-results-dropdown">
-                        {m.platformResults.map((u, ui) => (
-                          <div key={u.id || ui} className="db-platform-result-item" onClick={() => addPlatformUser(i, u)}>
-                            <div className="db-member-found-avatar">
-                              {u.user_avatar_url
-                                ? <img src={resolveAvatarUrl(u.user_avatar_url)} alt="" onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextElementSibling.style.removeProperty('display'); }} />
-                                : null}
-                              <span style={u.user_avatar_url ? { display: 'none' } : undefined}>{u.username.slice(0,2).toUpperCase()}</span>
-                            </div>
-                            <div className="db-platform-result-info">
-                              <span className="db-member-found-name">{u.username}</span>
-                              <span className="db-member-found-sub">{u.email || 'email не вказано'}</span>
-                            </div>
-                            <span className="db-member-found-add">+ Додати</span>
+                {(m.platformResults?.length > 0) && (
+                  <div className="db-platform-results-dropdown">
+                    {m.platformResults
+                      .filter(u => !members.some(mm => mm.linkedUser?.userId === u.id))
+                      .map((u, ui) => (
+                        <div key={u.id || ui} className="db-platform-result-item" onClick={() => addPlatformUser(i, u)}>
+                          <div className="db-member-found-avatar">
+                            {u.user_avatar_url
+                              ? <img src={resolveAvatarUrl(u.user_avatar_url)} alt="" onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextElementSibling.style.removeProperty('display'); }} />
+                              : null}
+                            <span style={u.user_avatar_url ? { display: 'none' } : undefined}>{u.username.slice(0,2).toUpperCase()}</span>
                           </div>
-                        ))}
-                      </div>
-                    )}
-                    {m.platformResults?.length === 0 && !m.searching && m.platformQuery.length >= 2 && (
-                      <span className="db-search-hint">Користувача не знайдено</span>
-                    )}
+                          <div className="db-platform-result-info">
+                            <span className="db-member-found-name">{u.username}</span>
+                            <span className="db-member-found-sub">{u.email || 'email не вказано'}</span>
+                          </div>
+                          <span className="db-member-found-add">+ Додати</span>
+                        </div>
+                    ))}
                   </div>
                 )}
-              </>
+                {m.platformResults?.length === 0 && !m.searching && m.platformQuery.length >= 2 && (
+                  <span className="db-search-hint">Користувача не знайдено</span>
+                )}
+                {(!m.platformQuery || m.platformQuery.length < 2) && (
+                  <span className="db-search-hint">Введіть мінімум 2 символи для пошуку</span>
+                )}
+              </div>
             )}
           </div>
         ))}

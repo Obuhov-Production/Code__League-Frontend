@@ -1,0 +1,10 @@
+export default function IconLogout(props) {
+  return (
+    <svg width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" {...props}>
+      <polygon points="3,4 12,4 12,20 3,20" fill="#7c5ff5" />
+      <polygon points="3,4 12,4 12,12 3,12" fill="#a98bff" />
+      <polygon points="14,8 20,12 14,16" fill="#ef4444" />
+      <polygon points="10,11 18,11 18,13 10,13" fill="#ef4444" />
+    </svg>
+  );
+}

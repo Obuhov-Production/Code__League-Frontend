@@ -20,6 +20,7 @@ import LoginPage from '@components/auth/modal/login'
 import RegisterPage from '@components/auth/modal/register'
 import VerifyEmailPage from '@components/auth/modal/verify-email'
 import Dashboard from '@components/Dashboard'
+import PublicProfilePage from '@components/Dashboard/PublicProfilePage.jsx'
 import LeaderboardPage from '@components/LeaderboardPage'
 import BannedPage from '@components/BannedPage/BannedPage.jsx'
 
@@ -63,6 +64,7 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/dashboard/profile/:username" element={<PublicProfilePage />} />
           <Route path="/banned" element={<BannedPage />} />
           <Route path="/reviews" element={<RewiewsPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />

@@ -9,8 +9,158 @@ import {
   getChatRoomSettings, setChatRoomSettings, postChatAnnouncement,
   getAdminOrganizerApplications, reviewOrganizerApplication,
   getAdminUserBadges, adminGrantBadge, adminRevokeBadge,
+  getSubmissionDailyStats,
 } from '@utils/authApi';
-import { StatusBadge, RoleBadges, CustomSelect, ConfirmModal, formatDate, STATUS_LABEL, UserAvatar, UserProfileModal, ALL_BADGES, TournamentForm } from './db.shared.jsx';
+import { StatusBadge, RoleBadges, CustomSelect, ConfirmModal, formatDate, STATUS_LABEL, UserAvatar, UserProfileModal, ALL_BADGES, TournamentForm, PresenceBadge } from './db.shared.jsx';
+
+/* ── Submission Activity Chart ─────────────────────────── */
+function SubmissionActivityChart() {
+  const [days, setDays] = useState(7);
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [hover, setHover] = useState(null); // { i, x, y, d }
+  const bodyRef = useRef(null);
+  const [width, setWidth] = useState(800);
+
+  useEffect(() => {
+    if (!bodyRef.current) return;
+    const obs = new ResizeObserver(([entry]) => {
+      const w = Math.max(320, Math.floor(entry.contentRect.width));
+      setWidth(w);
+    });
+    obs.observe(bodyRef.current);
+    return () => obs.disconnect();
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    getSubmissionDailyStats(days)
+      .then(d => { if (alive) setData(Array.isArray(d) ? d : []); })
+      .catch(() => { if (alive) setData([]); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [days]);
+
+  /* Use container width directly so circles stay round (no preserveAspectRatio="none"). */
+  const W = width;
+  const H = 200;
+  const PAD_X = 24;
+  const PAD_TOP = 24;
+  const PAD_BOT = 32;
+  const max = Math.max(1, ...data.map(d => d.count));
+  const xAt = i => data.length <= 1 ? W / 2 : PAD_X + (i * (W - PAD_X * 2)) / (data.length - 1);
+  const yAt = v => H - PAD_BOT - ((v / max) * (H - PAD_TOP - PAD_BOT));
+
+  const points = data.map((d, i) => ({ x: xAt(i), y: yAt(d.count), d, i }));
+  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
+  const areaPath = points.length
+    ? `${linePath} L${points[points.length - 1].x},${H - PAD_BOT} L${points[0].x},${H - PAD_BOT} Z`
+    : '';
+
+  const total = data.reduce((s, d) => s + d.count, 0);
+  const fmtDate = (iso) => {
+    if (!iso) return '';
+    const dt = new Date(iso);
+    return dt.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' });
+  };
+  const labelEvery = data.length > 14 ? Math.ceil(data.length / 7) : 1;
+
+  return (
+    <div className="db-admin-chart-card">
+      <div className="db-admin-chart-header">
+        <div>
+          <h3 className="db-admin-chart-title">Submission Activity</h3>
+          <p className="db-admin-chart-subtitle">
+            Всього за період: <b>{total}</b> · Пік: <b>{max === 1 && total === 0 ? 0 : max}</b>/день
+          </p>
+        </div>
+        <select className="db-admin-chart-select" value={days} onChange={e => setDays(parseInt(e.target.value, 10))}>
+          <option value={7}>Останні 7 днів</option>
+          <option value={14}>Останні 14 днів</option>
+          <option value={30}>Останні 30 днів</option>
+          <option value={90}>Останні 90 днів</option>
+        </select>
+      </div>
+      <div className="db-admin-chart-body" ref={bodyRef} style={{ position: 'relative', height: H }}>
+        {loading && <div className="db-admin-chart-loading">Завантаження…</div>}
+        {!loading && data.length === 0 && <div className="db-admin-chart-loading">Немає даних</div>}
+        {!loading && data.length > 0 && total === 0 && (
+          <div className="db-admin-chart-empty">
+            <strong>Поки немає сабмішнів</strong>
+            <span>Графік оновиться, коли команди почнуть подавати рішення</span>
+          </div>
+        )}
+        {!loading && data.length > 0 && (
+          <>
+            <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="db-admin-chart-svg"
+                 onMouseLeave={() => setHover(null)} style={{ display: 'block' }}>
+              <defs>
+                <linearGradient id="chartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#AC9EF8" stopOpacity="0.4" />
+                  <stop offset="100%" stopColor="#AC9EF8" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+
+              {/* horizontal grid + Y-axis labels */}
+              {[0, 0.25, 0.5, 0.75, 1].map(f => {
+                const y = H - PAD_BOT - f * (H - PAD_TOP - PAD_BOT);
+                const v = Math.round(max * f);
+                return (
+                  <g key={f}>
+                    <line x1={PAD_X} x2={W - PAD_X} y1={y} y2={y}
+                          stroke="#e5e7eb" strokeDasharray="3 4" strokeWidth="1" />
+                    <text x={PAD_X - 6} y={y + 3} textAnchor="end"
+                          fontSize="10" fill="#9ca3af">{v}</text>
+                  </g>
+                );
+              })}
+
+              {total > 0 && <path d={areaPath} fill="url(#chartGradient)" />}
+              {total > 0 && (
+                <path d={linePath} fill="none" stroke="#AC9EF8" strokeWidth="2.5"
+                      strokeLinejoin="round" strokeLinecap="round" />
+              )}
+
+              {points.map((p, i) => (
+                <g key={i}>
+                  <circle cx={p.x} cy={p.y}
+                          r={hover?.i === i ? 6 : (p.d.count > 0 ? 4 : 3)}
+                          fill={p.d.count > 0 ? '#AC9EF8' : '#d1d5db'}
+                          stroke="#fff"
+                          strokeWidth={hover?.i === i ? 3 : 2} />
+                  <rect x={p.x - 18} y={0} width={36} height={H} fill="transparent"
+                        onMouseEnter={() => setHover({ i, x: p.x, y: p.y, d: p.d })} />
+                </g>
+              ))}
+
+              {hover && (
+                <line x1={hover.x} x2={hover.x} y1={PAD_TOP} y2={H - PAD_BOT}
+                      stroke="#7c5ff5" strokeDasharray="3 3" strokeWidth="1" opacity="0.5" />
+              )}
+
+              {points.map((p, i) => (
+                (i % labelEvery === 0 || i === points.length - 1) && (
+                  <text key={`lbl-${i}`} x={p.x} y={H - 8} textAnchor="middle"
+                        fontSize="10" fill="#9ca3af">{fmtDate(p.d.date)}</text>
+                )
+              ))}
+            </svg>
+
+            {hover && (
+              <div className="db-admin-chart-tooltip" style={{ left: hover.x, top: hover.y }}>
+                <div className="db-admin-chart-tooltip-date">{fmtDate(hover.d.date)}</div>
+                <div className="db-admin-chart-tooltip-row"><span>Всього:</span><b>{hover.d.count}</b></div>
+                <div className="db-admin-chart-tooltip-row"><span>Подано:</span><b style={{color:'#22c55e'}}>{hover.d.submitted}</b></div>
+                <div className="db-admin-chart-tooltip-row"><span>Чернетки:</span><b style={{color:'#9ca3af'}}>{hover.d.drafts}</b></div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const TOUR_STATUS_OPTS = [
   { value: 'draft',        label: 'Draft',        color: '#888' },
@@ -863,46 +1013,7 @@ export default function TabAdmin({ toast }) {
               
               {/* Submission Activity Chart */}
               <div className="db-admin-charts-row">
-                <div className="db-admin-chart-card">
-                  <div className="db-admin-chart-header">
-                    <div>
-                      <h3 className="db-admin-chart-title">Submission Activity</h3>
-                      <p className="db-admin-chart-subtitle">Daily submission volume across all active tournaments</p>
-                    </div>
-                    <select className="db-admin-chart-select">
-                      <option>Last 7 Days</option>
-                      <option>Last 30 Days</option>
-                    </select>
-                  </div>
-                  <div className="db-admin-chart-body">
-                    <svg viewBox="0 0 400 150" className="db-admin-chart-svg">
-                      <defs>
-                        <linearGradient id="chartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                          <stop offset="0%" stopColor="#AC9EF8" stopOpacity="0.3" />
-                          <stop offset="100%" stopColor="#AC9EF8" stopOpacity="0" />
-                        </linearGradient>
-                      </defs>
-                      {/* График линии */}
-                      <path 
-                        d="M0,120 Q50,100 100,80 T200,60 T300,40 T400,20" 
-                        fill="none" 
-                        stroke="#AC9EF8" 
-                        strokeWidth="2"
-                      />
-                      {/* Заливка под графиком */}
-                      <path 
-                        d="M0,120 Q50,100 100,80 T200,60 T300,40 T400,20 L400,150 L0,150 Z" 
-                        fill="url(#chartGradient)"
-                      />
-                      {/* Точки */}
-                      <circle cx="0" cy="120" r="4" fill="#AC9EF8" />
-                      <circle cx="100" cy="80" r="4" fill="#AC9EF8" />
-                      <circle cx="200" cy="60" r="4" fill="#AC9EF8" />
-                      <circle cx="300" cy="40" r="4" fill="#AC9EF8" />
-                      <circle cx="400" cy="20" r="4" fill="#AC9EF8" />
-                    </svg>
-                  </div>
-                </div>
+                <SubmissionActivityChart />
                 
                 {/* Upcoming Deadlines */}
                 <div className="db-admin-deadlines-card">
@@ -1235,9 +1346,7 @@ export default function TabAdmin({ toast }) {
                           <td><RoleBadges role={u.role} /></td>
                           <td style={{ fontSize: 13 }}>{formatDate(u.created_at)}</td>
                           <td>
-                            <span className={`db-admin-user-status db-admin-user-status--${u.status || 'offline'}`}>
-                              {u.status === 'online' ? '🟢 Онлайн' : u.status === 'away' ? '🟡 Відійшов' : u.status === 'dnd' ? '🔴 Не турбувати' : '⚪ Офлайн'}
-                            </span>
+                            <PresenceBadge user={u} />
                           </td>
                           <td>
                             <button className="db-btn db-btn-ghost db-btn-sm" onClick={() => setManageUser(u)}>

@@ -41,6 +41,7 @@ function LoginPage() {
     if (oauth.status === 'success') {
       if (oauth.user) saveUser(oauth.user);
       toast.success('Успішний вхід через провайдера!');
+      localStorage.setItem('db_tab', 'overview');
       navigate('/dashboard', { replace: true });
       return;
     }
@@ -110,6 +111,7 @@ function LoginPage() {
     // Dev-режим: VITE_CHECK_BACKEND=false → пропускаємо запит до бекенду для авторизации
     if (!CHECK_BACKEND) {
       toast.success('Dev-mode: вхід без бекенду!');
+      localStorage.setItem('db_tab', 'overview');
       navigate('/dashboard');
       return;
     }
@@ -132,6 +134,7 @@ function LoginPage() {
       saveSession(data.token);
       if (data.user) saveUser(data.user);
       toast.success('Вітаємо знову у системі!');
+      localStorage.setItem('db_tab', 'overview');
       navigate('/dashboard');
     } catch (err) {
       toast.error(err.message);

@@ -42,6 +42,7 @@ function RegisterPage() {
     if (oauth.status === 'success') {
       if (oauth.user) saveUser(oauth.user);
       toast.success('Успішний вхід через OAuth');
+      localStorage.setItem('db_tab', 'overview');
       navigate('/dashboard', { replace: true });
       return;
     }
@@ -117,6 +118,7 @@ function RegisterPage() {
     // Dev-режим: VITE_CHECK_BACKEND=false → пропускаємо запит до бекенду
     if (!CHECK_BACKEND) {
       toast.success('Dev-режим: реєстрація без бекенду');
+      localStorage.setItem('db_tab', 'overview');
       navigate('/dashboard');
       return;
     }
@@ -139,6 +141,7 @@ function RegisterPage() {
       saveSession(data.token);
       if (data.user) saveUser(data.user);
       toast.success('Акаунт створено! Вітаю на платформі');
+      localStorage.setItem('db_tab', 'overview');
       navigate('/dashboard');
     } catch (err) {
       toast.error(err.message);
@@ -293,7 +296,7 @@ function RegisterPage() {
               className="auth-preview auth-preview--compact"
               style={{ backgroundImage: `url(${matrixFrame})`, backgroundPosition: 'center center', backgroundSize: 'cover', minHeight: 340, maxHeight: 340 }}
             >
-              <div className="auth-preview-top">Secure Portal</div>
+              <div className="auth-preview-top">Secure Connection</div>
               <div className="auth-preview-card auth-preview-card--compact">
                 <span className="auth-preview-tag">TOURNAMENT</span>
                 <h3>{previewData?.name || 'Live tournament preview'}</h3>

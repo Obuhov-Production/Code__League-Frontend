@@ -95,7 +95,14 @@ function EditTournamentModal({ tournament, toast, onClose, onSuccess }) {
    Доступ: create/edit/delete tournaments, view teams & results.
    Без управління користувачами та чатом (лише для Admin).
 ══════════════════════════════════════════════════ */
-export default function TabOrganizer({ toast }) {
+export default function TabOrganizer({ toast, user }) {
+  const isAdmin = (user?.role || '').toLowerCase().split(',').map(r => r.trim()).includes('admin');
+  const canEditTournament = (t) => {
+    if (isAdmin) return true;
+    const ownerId = t.created_by_id ?? t.created_by?.id ?? null;
+    return !!user?.id && ownerId === user.id;
+  };
+
   const [orgTab,       setOrgTab]       = useState('tournaments');
   const [tournaments,  setTournaments]  = useState([]);
   const [teams,        setTeams]        = useState([]);
@@ -202,15 +209,26 @@ export default function TabOrganizer({ toast }) {
                           {formatDate(t.registration_start)} – {formatDate(t.registration_end)}
                         </td>
                         <td>
-                          <StatusPicker compact value={t.status} onChange={status => handleStatus(t.id, status)} />
+                          {canEditTournament(t)
+                            ? <StatusPicker compact value={t.status} onChange={status => handleStatus(t.id, status)} />
+                            : <span style={{ fontSize: 12, color: '#aaa' }}>—</span>}
                         </td>
                         <td style={{ display: 'flex', gap: 6 }}>
-                          <button className="db-btn db-btn-ghost db-btn-sm" onClick={() => setEditTournament(t)}>
-                            ✏ Редагувати
-                          </button>
-                          <button className="db-btn db-btn-danger db-btn-sm" onClick={() => handleDelete(t.id, t.name)}>
-                            Видалити
-                          </button>
+                          {canEditTournament(t) ? (
+                            <>
+                              <button className="db-btn db-btn-ghost db-btn-sm" onClick={() => setEditTournament(t)}>
+                                ✏ Редагувати
+                              </button>
+                              <button className="db-btn db-btn-danger db-btn-sm" onClick={() => handleDelete(t.id, t.name)}>
+                                Видалити
+                              </button>
+                            </>
+                          ) : (
+                            <span style={{ fontSize: 12, color: '#aaa', alignSelf: 'center' }}
+                                  title={`Створив: ${t.creator_name || '—'}`}>
+                              🔒 Чужий турнір
+                            </span>
+                          )}
                         </td>
                       </tr>
                     ))}

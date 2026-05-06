@@ -45,6 +45,39 @@ import badge2Img from '@images/pin/bage2.png';
 export const STICKERS = [emote1, emote2, emote3, emote4, emote5, emote6, emote7, emote8, emote9, emote10, emote11, emote12, emote13, emote14, emote15, emote16, emote17, emote18, emote19, emote20, emote21, emote22, emote23, emote24, emote25, emote26, emote27, emote28, emote29, emote30];
 export const STICKER_PREFIX = '__sticker__:';
 
+/* ──────────── User presence (online/away/dnd/offline) ──────────── */
+export const PRESENCE = {
+  online:  { label: 'Онлайн',        color: '#16a34a', bg: 'rgba(34,197,94,.13)',   dot: '#22c55e' },
+  away:    { label: 'Відійшов',     color: '#d97706', bg: 'rgba(245,158,11,.13)',  dot: '#f59e0b' },
+  dnd:     { label: 'Не турбувати', color: '#b91c1c', bg: 'rgba(239,68,68,.13)',   dot: '#ef4444' },
+  offline: { label: 'Офлайн',        color: '#6b7280', bg: 'rgba(107,114,128,.13)', dot: '#9ca3af' },
+};
+
+/** Frontend safety net: if backend says "online" but last_seen is stale (e.g. user
+ *  closed the tab and our beacon didn't reach), treat them as offline. */
+const PRESENCE_STALE_MS = 2 * 60 * 1000;
+export function presenceOf(user) {
+  if (!user) return 'offline';
+  const raw = (user.status || 'offline').toLowerCase();
+  if (!PRESENCE[raw]) return 'offline';
+  if (raw === 'offline') return 'offline';
+  const last = user.last_seen_at ? new Date(user.last_seen_at).getTime() : 0;
+  if (last && Date.now() - last > PRESENCE_STALE_MS) return 'offline';
+  return raw;
+}
+
+export function PresenceBadge({ user, withDot = true, className = '' }) {
+  const key = presenceOf(user);
+  const p = PRESENCE[key];
+  return (
+    <span className={`db-presence-badge db-presence-badge--${key} ${className}`}
+          style={{ color: p.color, background: p.bg }}>
+      {withDot && <span className="db-presence-dot" style={{ background: p.dot }} />}
+      {p.label}
+    </span>
+  );
+}
+
 /* constants */
 export const STATUS_LABEL = {
   draft:        { label: 'Draft',   color: '#888',    bg: '#f0f0f0' },
@@ -149,7 +182,19 @@ export const TAB_TIPS = {
 
 export function formatDate(d) {
   if (!d) return '—';
-  return new Date(d).toLocaleDateString('uk-UA', { day: 'numeric', month: 'short', year: 'numeric' });
+  const date = new Date(d);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+export function formatDateTime(d) {
+  if (!d) return '—';
+  const date = new Date(d);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('uk-UA', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
 }
 
 export function daysLeft(dateStr) {
@@ -236,7 +281,7 @@ export function UserAvatar({ user, size = 36, onClick, className = '', showStatu
   useEffect(() => { setImgError(false); }, [url]);
   const initials = user?.username ? user.username.slice(0,2).toUpperCase() : (user?.email?.[0]?.toUpperCase() ?? '?');
   const style = { width: size, height: size, borderRadius: '50%', cursor: onClick ? 'pointer' : 'default', flexShrink: 0 };
-  const status = user?.status || 'offline';
+  const status = presenceOf(user);
   
   const avatarContent = url && !imgError ? (
     <img 
@@ -617,10 +662,16 @@ export function UserProfileModal({ profile, meId, onClose, onGoOwnProfile }) {
           )}
           <div className="db-upm-divider" />
           <div className="db-upm-actions">
-            {profile.user_id === meId
-              ? <button className="db-upm-btn primary" onClick={onGoOwnProfile}>✏ Редагувати профіль</button>
-              : <button className="db-upm-btn ghost" onClick={onClose}>Закрити</button>
-            }
+            {profile.user_id === meId ? (
+              <button className="db-upm-btn primary" onClick={onGoOwnProfile}>✏ Редагувати профіль</button>
+            ) : (
+              <>
+                <a className="db-upm-btn primary" href={`/dashboard/profile/${profile.username}`}>
+                  Повний профіль →
+                </a>
+                <button className="db-upm-btn ghost" onClick={onClose}>Закрити</button>
+              </>
+            )}
           </div>
         </div>
       </div>

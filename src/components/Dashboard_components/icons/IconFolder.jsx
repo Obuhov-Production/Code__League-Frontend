@@ -1,0 +1,10 @@
+export default function IconFolder(props) {
+  return (
+    <svg width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" {...props}>
+      <polygon points="3,6 10,6 12,8 21,8 21,20 3,20" fill="#7c5ff5" />
+      <polygon points="3,6 10,6 12,8 3,8" fill="#a98bff" />
+      <polygon points="3,20 21,20 21,10 3,10" fill="#5b3fd6" />
+      <polygon points="3,10 21,10 12,14" fill="#9b80ff" />
+    </svg>
+  );
+}

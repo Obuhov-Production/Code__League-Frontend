@@ -362,6 +362,13 @@ export async function searchUsers(query) {
   return data;
 }
 
+export async function getUserProfileByUsername(username) {
+  const res = await fetch(`${BASE}/users/by-username/${encodeURIComponent(username)}`, { headers: authHeaders() });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || data.message || 'Користувача не знайдено');
+  return data;
+}
+
 export async function getUserProfile(id) {
   const res = await fetch(`${BASE}/users/${id}`);
   const data = await res.json();
@@ -376,6 +383,56 @@ export async function deleteBanner() {
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Delete failed');
+  return data;
+}
+
+export async function getSubmissionDailyStats(days = 7) {
+  const res = await fetch(`${BASE}/submissions/stats/daily?days=${days}`, { headers: authHeaders() });
+  const data = await res.json().catch(() => []);
+  if (!res.ok) throw new Error(data.error || data.message || 'Не вдалося завантажити статистику');
+  return Array.isArray(data) ? data : [];
+}
+
+export async function setMyStatus(status, opts = {}) {
+  const init = {
+    method: 'PATCH',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  };
+  if (opts.keepalive) init.keepalive = true;
+  const res = await fetch(`${BASE}/users/me/status`, init);
+  if (!res.ok) throw new Error('status update failed');
+  return res.json().catch(() => ({}));
+}
+
+export async function requestPasswordChange() {
+  const res = await fetch(`${BASE}/users/me/password/request`, {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || data.message || 'Не вдалося надіслати код');
+  return data;
+}
+
+export async function confirmPasswordChange({ code, newPassword, currentPassword }) {
+  const res = await fetch(`${BASE}/users/me/password/confirm`, {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, newPassword, currentPassword }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || data.message || 'Не вдалося змінити пароль');
+  return data;
+}
+
+export async function deleteMyAccount() {
+  const res = await fetch(`${BASE}/users/me`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || data.message || 'Не вдалося видалити акаунт');
   return data;
 }
 

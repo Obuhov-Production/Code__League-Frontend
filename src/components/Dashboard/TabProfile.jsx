@@ -3,9 +3,56 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import badge1Img from '@images/pin/bage1.png';
 import badge2Img from '@images/pin/bage2.png';
 
-import { getMyTeams, updateMe, uploadAvatar, uploadBanner, deleteBanner,
-  submitOrganizerApplication, getMyOrganizerApplication, getMyBadges } from '@utils/authApi';
-import { BANNER_PRESETS, StatusBadge, UserAvatar, formatDate, hasRole, displayName, resolveAvatarUrl } from './db.shared.jsx';
+import { getMe, getMyTeams, updateMe, uploadAvatar, uploadBanner, deleteBanner,
+  submitOrganizerApplication, getMyOrganizerApplication, getMyBadges,
+  deleteMyAccount, clearSession,
+  requestPasswordChange, confirmPasswordChange } from '@utils/authApi';
+import { BANNER_PRESETS, StatusBadge, UserAvatar, formatDate, formatDateTime, hasRole, displayName, resolveAvatarUrl, PresenceBadge } from './db.shared.jsx';
+import IconUser     from '../Dashboard_components/icons/IconUser.jsx';
+import IconMedal    from '../Dashboard_components/icons/IconMedal.jsx';
+import IconTrophy   from '../Dashboard_components/icons/IconTrophy.jsx';
+import IconLock     from '../Dashboard_components/icons/IconLock.jsx';
+import IconScale    from '../Dashboard_components/icons/IconScale.jsx';
+import IconFolder   from '../Dashboard_components/icons/IconFolder.jsx';
+import IconAdmin    from '../Dashboard_components/icons/IconAdmin.jsx';
+import IconRefresh  from '../Dashboard_components/icons/IconRefresh.jsx';
+import IconStar     from '../Dashboard_components/icons/IconStar.jsx';
+import IconCalendar from '../Dashboard_components/icons/IconCalendar.jsx';
+import IconTrash    from '../Dashboard_components/icons/IconTrash.jsx';
+import IconMail     from '../Dashboard_components/icons/IconMail.jsx';
+import IconCheck    from '../Dashboard_components/icons/IconCheck.jsx';
+import IconWarning  from '../Dashboard_components/icons/IconWarning.jsx';
+import IconPin      from '../Dashboard_components/icons/IconPin.jsx';
+import IconEye      from '../Dashboard_components/icons/IconEye.jsx';
+import IconEyeOff   from '../Dashboard_components/icons/IconEyeOff.jsx';
+import IconLogout   from '../Dashboard_components/icons/IconLogout.jsx';
+import IconClock    from '../Dashboard_components/icons/IconClock.jsx';
+
+/** Return every role the user has, in priority order, with label + icon. */
+function userRoleChips(user) {
+  const chips = [];
+  if (hasRole(user, 'admin'))     chips.push({ key: 'admin',     label: 'Адмін',        emoji: '🛡️' });
+  if (hasRole(user, 'organizer')) chips.push({ key: 'organizer', label: 'Організатор', emoji: '🗂️' });
+  if (hasRole(user, 'jury'))      chips.push({ key: 'jury',      label: 'Журі',         emoji: '⚖' });
+  if (chips.length === 0)         chips.push({ key: 'user',      label: 'Учасник',     emoji: '👤' });
+  return chips;
+}
+
+/* Ukrainian "last seen" formatter — frontend version (backend last_seen_text is English). */
+function lastSeenUk(dateStr) {
+  if (!dateStr) return 'ніколи';
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return '—';
+  const diffSec = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
+  if (diffSec < 60) return 'щойно';
+  const min = Math.floor(diffSec / 60);
+  if (min < 60) return `${min} хв тому`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h} год тому`;
+  const days = Math.floor(h / 24);
+  if (days < 7) return `${days} дн тому`;
+  return formatDateTime(dateStr);
+}
 
 /* ── Badge definitions ────────────────────────── */
 export const ALL_BADGES = [
@@ -59,6 +106,287 @@ function BadgeModal({ badge, pinnedBadge, onPin, onClose }) {
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ── Self-Destruct Account Confirm Modal ─────────── */
+function DeleteAccountModal({ user, onClose, onConfirm }) {
+  const [confirmText, setConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const required = user?.username || user?.email || 'DELETE';
+  const canDelete = confirmText.trim() === required && !deleting;
+
+  const handleClick = async () => {
+    if (!canDelete) return;
+    setDeleting(true);
+    try { await onConfirm(); }
+    finally { setDeleting(false); }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box modal-box--light db-delete-account-modal" onClick={e => e.stopPropagation()}>
+        <button className="modal-close" onClick={onClose} disabled={deleting}>✕</button>
+
+        <div className="db-da-icon-wrap">
+          <div className="db-da-icon-circle">
+            <IconTrash style={{ width: 28, height: 28 }} />
+          </div>
+        </div>
+        <h3 className="db-da-title">Видалення акаунту</h3>
+        <p className="db-da-sub">
+          Цю дію <b>неможливо скасувати</b>. Будуть видалені:
+        </p>
+        <ul className="db-da-list">
+          <li>Профіль, аватар та банер</li>
+          <li>Усі бейджі та досягнення</li>
+          <li>Повідомлення в чатах і реакції</li>
+          <li>Заявки організатора та оцінки журі</li>
+        </ul>
+
+        <div className="db-da-confirm-field">
+          <label className="db-da-confirm-label">
+            Для підтвердження введіть <b>{required}</b>:
+          </label>
+          <input
+            className="db-input"
+            value={confirmText}
+            onChange={e => setConfirmText(e.target.value)}
+            placeholder={required}
+            autoComplete="off"
+            disabled={deleting}
+          />
+        </div>
+
+        <div className="db-edit-actions">
+          <button type="button" className="db-btn db-btn-ghost" onClick={onClose} disabled={deleting}>
+            Скасувати
+          </button>
+          <button
+            type="button"
+            className="db-btn db-btn-danger"
+            onClick={handleClick}
+            disabled={!canDelete}
+          >
+            {deleting ? '⏳ Видалення...' : (<><IconTrash style={{ width: 16, height: 16, verticalAlign: -3, marginRight: 6 }} /> Видалити назавжди</>)}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Change Password Modal (3-step: request → code → new password) ── */
+function ChangePasswordModal({ user, toast, onClose, setUser }) {
+  const [step, setStep] = useState('idle'); // idle → code → password → done
+  const [sending, setSending] = useState(false);
+  const [code, setCode] = useState('');
+  const [maskedEmail, setMaskedEmail] = useState('');
+  const [expiresAt, setExpiresAt] = useState(0);
+  const [now, setNow] = useState(Date.now());
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPwd, setShowPwd] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const remaining = Math.max(0, Math.ceil((expiresAt - now) / 1000));
+  const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
+  const ss = String(remaining % 60).padStart(2, '0');
+
+  const handleSendCode = async () => {
+    setSending(true);
+    try {
+      const res = await requestPasswordChange();
+      setMaskedEmail(res.email || user?.email || '');
+      setExpiresAt(Date.now() + (res.expiresInSec || 600) * 1000);
+      setStep('code');
+      toast.success('Код надіслано на пошту');
+    } catch (err) {
+      toast.error(err.message);
+    } finally { setSending(false); }
+  };
+
+  const handleVerifyCode = (e) => {
+    e?.preventDefault();
+    if (!/^\d{6}$/.test(code.trim())) {
+      toast.error('Введіть 6-значний код');
+      return;
+    }
+    setStep('password');
+  };
+
+  const handleSubmitNewPassword = async (e) => {
+    e?.preventDefault();
+    if (newPassword.length < 8) { toast.error('Пароль має містити щонайменше 8 символів'); return; }
+    if (newPassword !== confirmPassword) { toast.error('Паролі не співпадають'); return; }
+    setSubmitting(true);
+    try {
+      await confirmPasswordChange({ code: code.trim(), newPassword });
+      try {
+        const fresh = await getMe();
+        if (setUser) setUser(fresh);
+      } catch { /* ignore — UI will update on next reload */ }
+      setStep('done');
+      toast.success('Пароль успішно змінено');
+    } catch (err) {
+      toast.error(err.message);
+      if (/код/i.test(err.message) && /(невір|простроч|спроб)/i.test(err.message)) {
+        setStep('code');
+      }
+    } finally { setSubmitting(false); }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box modal-box--light db-pwd-modal" onClick={e => e.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>✕</button>
+
+        <div className="db-pwd-icon-wrap">
+          <div className="db-pwd-icon-circle">
+            <IconLock style={{ width: 26, height: 26 }} />
+          </div>
+        </div>
+        <h3 className="db-pwd-title">Зміна пароля</h3>
+
+        {step === 'idle' && (
+          <>
+            <p className="db-pwd-sub">
+              Ми надішлемо одноразовий 6-значний код на вашу пошту <b>{user?.email}</b>.
+              Введіть його, щоб підтвердити зміну пароля.
+            </p>
+            <div className="db-edit-actions">
+              <button type="button" className="db-btn db-btn-ghost" onClick={onClose}>Скасувати</button>
+              <button type="button" className="db-btn db-btn-primary db-btn-with-icon" onClick={handleSendCode} disabled={sending}>
+                {sending ? 'Надсилання...' : (<><IconMail /> Надіслати код</>)}
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 'code' && (
+          <form onSubmit={handleVerifyCode}>
+            <p className="db-pwd-sub">
+              Код надіслано на <b>{maskedEmail || user?.email}</b>.
+              Він діє ще <span className="db-pwd-timer">{mm}:{ss}</span>.
+            </p>
+            <div className="db-pwd-code-wrap">
+              <input
+                className="db-input db-pwd-code-input"
+                value={code}
+                onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="● ● ● ● ● ●"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                autoFocus
+              />
+            </div>
+            <div className="db-pwd-resend-row">
+              <button type="button" className="db-pwd-link" onClick={handleSendCode} disabled={sending}>
+                Надіслати ще раз
+              </button>
+            </div>
+            <div className="db-edit-actions">
+              <button type="button" className="db-btn db-btn-ghost" onClick={onClose}>Скасувати</button>
+              <button type="submit" className="db-btn db-btn-primary" disabled={code.length !== 6}>
+                Далі →
+              </button>
+            </div>
+          </form>
+        )}
+
+        {step === 'password' && (
+          <form onSubmit={handleSubmitNewPassword}>
+            <p className="db-pwd-sub">Введіть новий пароль (мінімум 8 символів).</p>
+            <div className="db-pwd-field">
+              <label className="db-edit-label">Новий пароль</label>
+              <div className="db-pwd-input-row">
+                <input
+                  className="db-input"
+                  type={showPwd ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  autoComplete="new-password"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="db-pwd-field">
+              <label className="db-edit-label">Підтвердження пароля</label>
+              <div className="db-pwd-input-row">
+                <input
+                  className="db-input"
+                  type={showPwd ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  className="db-pwd-eye"
+                  onClick={() => setShowPwd(s => !s)}
+                  aria-label={showPwd ? 'Сховати' : 'Показати'}
+                  title={showPwd ? 'Сховати' : 'Показати'}
+                >
+                  {showPwd ? <IconEyeOff /> : <IconEye />}
+                </button>
+              </div>
+            </div>
+            <PasswordStrength value={newPassword} />
+            <div className="db-edit-actions">
+              <button type="button" className="db-btn db-btn-ghost" onClick={() => setStep('code')} disabled={submitting}>
+                ← Назад
+              </button>
+              <button type="submit" className="db-btn db-btn-primary"
+                disabled={submitting || newPassword.length < 8 || newPassword !== confirmPassword}>
+                {submitting ? '⏳ Збереження...' : '✓ Змінити пароль'}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {step === 'done' && (
+          <>
+            <div className="db-pwd-success">
+              <div className="db-pwd-success-circle">✓</div>
+              <p>Пароль успішно змінено!</p>
+            </div>
+            <div className="db-edit-actions" style={{ justifyContent: 'center' }}>
+              <button type="button" className="db-btn db-btn-primary" onClick={onClose}>Готово</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PasswordStrength({ value }) {
+  const score = (() => {
+    let s = 0;
+    if (value.length >= 8)  s++;
+    if (value.length >= 12) s++;
+    if (/[A-Z]/.test(value) && /[a-z]/.test(value)) s++;
+    if (/\d/.test(value))   s++;
+    if (/[^A-Za-z0-9]/.test(value)) s++;
+    return Math.min(s, 4);
+  })();
+  const labels = ['—', 'Слабкий', 'Нормальний', 'Хороший', 'Сильний'];
+  const colors = ['#e5e7eb', '#ef4444', '#f59e0b', '#22c55e', '#16a34a'];
+  return (
+    <div className="db-pwd-strength">
+      <div className="db-pwd-strength-bar">
+        {[0, 1, 2, 3].map(i => (
+          <span key={i} style={{ background: i < score ? colors[score] : '#e5e7eb' }} />
+        ))}
+      </div>
+      <span className="db-pwd-strength-label" style={{ color: colors[score] }}>{labels[score]}</span>
     </div>
   );
 }
@@ -173,6 +501,8 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
   const [applyModal, setApplyModal] = useState(false);
   const [myApplication, setMyApplication] = useState(undefined);
   const [selectedBadge, setSelectedBadge] = useState(null);
+  const [deleteAccountModal, setDeleteAccountModal] = useState(false);
+  const [pwdModal, setPwdModal] = useState(false);
   const avatarInputRef = useRef(null);
   const bannerInputRef = useRef(null);
 
@@ -244,6 +574,18 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
       setPinnedBadge(newPin);
       toast.success(newPin ? '📌 Бейдж закріплено!' : 'Бейдж відкріплено');
     } catch (err) { toast.error(err.message); }
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      await deleteMyAccount();
+      toast.success('Акаунт видалено');
+      try { clearSession(); } catch {}
+      if (onLogout) onLogout();
+      else window.location.href = '/';
+    } catch (err) {
+      toast.error(err.message || 'Не вдалося видалити акаунт');
+    }
   };
 
   const handleApply = async (data) => {
@@ -407,8 +749,12 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
               {displayName(user)}
               {pinnedBadgeDef && <img src={pinnedBadgeDef.image} alt={pinnedBadgeDef.name} title={pinnedBadgeDef.name} style={{ width: 20, height: 20, objectFit: 'contain' }} />}
             </h2>
-            <span className="db-role-badge db-role-badge--banner">
-              {hasRole(user, 'admin') ? '🛡️ Адмін' : hasRole(user, 'organizer') ? '🗂️ Організатор' : hasRole(user, 'jury') ? '⚖ Журі' : '👤 Учасник'}
+            <span className="db-role-chips db-role-chips--banner">
+              {userRoleChips(user).map(c => (
+                <span key={c.key} className={`db-role-badge db-role-badge--banner role-${c.key}`}>
+                  {c.emoji} {c.label}
+                </span>
+              ))}
             </span>
           </div>
         </div>
@@ -430,10 +776,14 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
             {displayName(user) !== (user.username || user.email) && <span style={{ fontSize: 13, color: '#aaa', fontWeight: 400 }}>@{user.username}</span>}
           </h2>
           <div className="db-profile-chips">
-            <span className="db-role-badge">{hasRole(user, 'admin') ? '🛡️ Адмін' : hasRole(user, 'organizer') ? '🗂️ Організатор' : hasRole(user, 'jury') ? '⚖ Журі' : '👤 Учасник'}</span>
-            <span className="db-chip db-chip-elo">⭐ ELO: {user?.elo ?? user?.exp ?? 0}</span>
-            <span className="db-chip">🏆 Команд: {myTeams.length}</span>
-            <span className="db-chip">📅 Зареєстровано: {formatDate(user.created_at)}</span>
+            <span className="db-role-chips">
+              {userRoleChips(user).map(c => (
+                <span key={c.key} className={`db-role-badge role-${c.key}`}>{c.emoji} {c.label}</span>
+              ))}
+            </span>
+            <span className="db-chip db-chip-elo"><IconStar className="db-chip-svg" /> ELO: {user?.elo ?? user?.exp ?? 0}</span>
+            <span className="db-chip"><IconTrophy className="db-chip-svg" /> Команд: {myTeams.length}</span>
+            <span className="db-chip"><IconCalendar className="db-chip-svg" /> Зареєстровано: {formatDate(user.created_at)}</span>
           </div>
         </div>
         {/* Desktop action buttons */}
@@ -451,9 +801,9 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
 
       {/* Mobile chips row (shown below banner on mobile, hidden on desktop) */}
       <div className="db-profile-mobile-chips">
-        <span className="db-chip db-chip-elo">⭐ ELO: {user?.elo ?? user?.exp ?? 0}</span>
-        <span className="db-chip">🏆 Команд: {myTeams.length}</span>
-        <span className="db-chip">📅 {formatDate(user.created_at)}</span>
+        <span className="db-chip db-chip-elo"><IconStar className="db-chip-svg" /> ELO: {user?.elo ?? user?.exp ?? 0}</span>
+        <span className="db-chip"><IconTrophy className="db-chip-svg" /> Команд: {myTeams.length}</span>
+        <span className="db-chip"><IconCalendar className="db-chip-svg" /> {formatDate(user.created_at)}</span>
       </div>
 
       {/* ━━━━━━ STICKY ACTION BUTTONS (mobile only) ━━━━━━ */}
@@ -472,7 +822,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
       <div className="db-profile-cards">
         <div className="db-profile-cards-left">
         <div className="db-info-card db-info-card--personal">
-          <h3><span className="db-card-icon">👤</span> Особиста інформація</h3>
+          <h3><span className="db-card-icon db-card-icon--svg"><IconUser /></span> Особиста інформація</h3>
           {editing ? (
             <>
               <div className="db-field-row">
@@ -553,7 +903,24 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
                 </span>
               </div>
               <div className="db-field-row"><label>Про себе</label><span>{user.user_description || '—'}</span></div>
-              <div className="db-field-row"><label>Реєстрація</label><span>{formatDate(user.created_at)}</span></div>
+              <div className="db-field-row"><label>ID акаунту</label><span style={{ fontFamily: 'monospace' }}>#{user.id}</span></div>
+              <div className="db-field-row"><label>Роль</label><span style={{ textTransform: 'capitalize' }}>{user.role || 'user'}</span></div>
+              <div className="db-field-row">
+                <label>ELO рейтинг</label>
+                <span className="db-inline-icon"><IconStar /> {user.elo ?? user.exp ?? 0}</span>
+              </div>
+              <div className="db-field-row">
+                <label>Команд</label>
+                <span className="db-inline-icon"><IconTrophy /> {myTeams.length}</span>
+              </div>
+              <div className="db-field-row">
+                <label>Бейджів отримано</label>
+                <span className="db-inline-icon"><IconMedal /> {earnedBadges.filter(b => b.earned).length} / {earnedBadges.length}</span>
+              </div>
+              <div className="db-field-row">
+                <label>Реєстрація</label>
+                <span className="db-inline-icon"><IconCalendar /> {formatDate(user.created_at)}</span>
+              </div>
             </div>
           )}
         </div>
@@ -561,7 +928,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
         {/* ── Badges card — sits in left column right under Personal ─── */}
         <div className="db-info-card db-info-card--badges">
           <div className="db-badges-header">
-            <h3><span className="db-card-icon">🏅</span> Досягнення</h3>
+            <h3><span className="db-card-icon db-card-icon--svg"><IconMedal /></span> Досягнення</h3>
             <span className="db-badges-progress">
               {earnedBadges.filter(b => b.earned).length} / {earnedBadges.length}
             </span>
@@ -583,9 +950,9 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
                 <div className="db-badge-row-right">
                   {b.earned
                     ? pinnedBadge === b.id
-                      ? <span className="db-badge-row-tag pinned">📌</span>
-                      : <span className="db-badge-row-tag earned">✓</span>
-                    : <span className="db-badge-row-tag locked">🔒</span>
+                      ? <span className="db-badge-row-tag pinned"><IconPin /></span>
+                      : <span className="db-badge-row-tag earned"><IconCheck /></span>
+                    : <span className="db-badge-row-tag locked"><IconLock /></span>
                   }
                 </div>
               </button>
@@ -598,7 +965,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
         <div className="db-profile-cards-right">
 
         <div className="db-info-card db-info-card--teams">
-          <h3><span className="db-card-icon">🏆</span> Мої команди</h3>
+          <h3><span className="db-card-icon db-card-icon--svg"><IconTrophy /></span> Мої команди</h3>
           {myTeams.length === 0 ? <p style={{ color:'#aaa', fontSize:14 }}>Ще немає команд</p>
             : (
               <div className="db-field-list">
@@ -613,9 +980,40 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
         </div>
 
         <div className="db-info-card db-info-card--security">
-          <h3><span className="db-card-icon">🔒</span> Безпека</h3>          <div className="db-field-list">
-            <div className="db-field-row"><label>Статус</label><span style={{ color:'#16a34a', fontWeight:600 }}>● Активний</span></div>
-            <div className="db-field-row"><label>Пароль</label><span>••••••••</span></div>
+          <h3><span className="db-card-icon db-card-icon--svg"><IconLock /></span> Безпека</h3>          <div className="db-field-list">
+            <div className="db-field-row"><label>Статус</label><span><PresenceBadge user={user} /></span></div>
+            <div className="db-field-row">
+              <label>Email підтверджено</label>
+              <span className="db-inline-icon" style={{ color: user.is_email_verified ? '#16a34a' : '#f59e0b', fontWeight: 600 }}>
+                {user.is_email_verified ? <><IconCheck /> Так</> : <><IconWarning /> Ні</>}
+              </span>
+            </div>
+            <div className="db-field-row">
+              <label>Метод входу</label>
+              <span style={{ textTransform: 'capitalize' }}>{user.auth_provider || 'email'}</span>
+            </div>
+            {user.github_username && (
+              <div className="db-field-row"><label>GitHub</label><span>@{user.github_username}</span></div>
+            )}
+            <div className="db-field-row">
+              <label>Останній вхід</label>
+              <span className="db-inline-icon"><IconClock /> {lastSeenUk(user.last_seen_at)}</span>
+            </div>
+            <div className="db-field-row db-pwd-row">
+              <label>Пароль</label>
+              <span className="db-pwd-row-right">
+                <span className="db-pwd-mask">••••••••</span>
+                <button type="button" className="db-btn db-btn-sm db-btn-primary" onClick={() => setPwdModal(true)}>
+                  Оновити
+                </button>
+              </span>
+            </div>
+            {user.password_changed_at && (
+              <div className="db-field-row">
+                <label>Пароль оновлено</label>
+                <span className="db-inline-icon"><IconCalendar /> {formatDateTime(user.password_changed_at)}</span>
+              </div>
+            )}
           </div>
 
           {/* Panel access buttons (always visible - useful on mobile, convenient on desktop) */}
@@ -624,7 +1022,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
               <h4 className="db-profile-panel-label">Панелі управління</h4>
               {(hasRole(user, 'admin') || hasRole(user, 'jury')) && (
                 <button className="db-panel-access-btn db-panel-access-btn--jury" onClick={() => setTab('jury')}>
-                  <span className="db-pab-icon">⚖️</span>
+                  <span className="db-pab-icon db-pab-icon--svg"><IconScale /></span>
                   <div className="db-pab-text">
                     <strong>Журі Панель</strong>
                     <span>Оцінювання і результати</span>
@@ -634,7 +1032,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
               )}
               {(hasRole(user, 'admin') || hasRole(user, 'organizer')) && (
                 <button className="db-panel-access-btn" style={{ borderColor: '#7c5ff5' }} onClick={() => setTab(hasRole(user, 'admin') ? 'admin' : 'organizer')}>
-                  <span className="db-pab-icon">{hasRole(user, 'admin') ? '🛡️' : '🗂️'}</span>
+                  <span className="db-pab-icon db-pab-icon--svg">{hasRole(user, 'admin') ? <IconAdmin /> : <IconFolder />}</span>
                   <div className="db-pab-text">
                     <strong>{hasRole(user, 'admin') ? 'Адмін Панель' : 'Панель Організатора'}</strong>
                     <span>{hasRole(user, 'admin') ? 'Повне управління системою' : 'Турніри та команди'}</span>
@@ -654,7 +1052,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
               )}
               {(myApplication === null || myApplication?.hasApplication === false) && (
                 <button className="db-panel-access-btn" style={{ borderColor: '#4ade80' }} onClick={() => setApplyModal(true)}>
-                  <span className="db-pab-icon">🗂️</span>
+                  <span className="db-pab-icon db-pab-icon--svg"><IconFolder /></span>
                   <div className="db-pab-text">
                     <strong>Стати організатором</strong>
                     <span>Подайте заявку — адмін розгляне і надасть доступ</span>
@@ -673,7 +1071,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
                     ❌ Заявку відхилено
                   </div>
                   <button className="db-panel-access-btn" style={{ borderColor: '#4ade80' }} onClick={() => setApplyModal(true)}>
-                    <span className="db-pab-icon">🔄</span>
+                    <span className="db-pab-icon db-pab-icon--svg"><IconRefresh /></span>
                     <div className="db-pab-text"><strong>Подати нову заявку</strong><span>Можна заповнити знову</span></div>
                     <span className="db-pab-arrow">→</span>
                   </button>
@@ -682,7 +1080,29 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
             </div>
           )}
 
-          <button className="db-btn db-btn-danger db-btn-full" style={{ marginTop: 16 }} onClick={onLogout}>Вийти з акаунту</button>
+          <button className="db-btn db-btn-danger db-btn-full db-btn-with-icon" style={{ marginTop: 16 }} onClick={onLogout}>
+            <IconLogout /> Вийти з акаунту
+          </button>
+
+          <div className="db-danger-zone">
+            <div className="db-danger-zone-header">
+              <span className="db-danger-zone-stripes" aria-hidden="true" />
+              <h4 className="db-danger-zone-title">Danger zone</h4>
+              <span className="db-danger-zone-stripes" aria-hidden="true" />
+            </div>
+            <p className="db-danger-zone-text">
+              Небезпечні дії, які можуть призвести до втрати даних або доступу до акаунту. Будьте обережні!
+            </p>
+            <div className="db-danger-zone-btn-wrap">
+              <button
+                type="button"
+                className="db-danger-btn"
+                onClick={() => setDeleteAccountModal(true)}
+              >
+                <span>Видалити акаунт</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         </div>{/* end db-profile-cards-right */}
@@ -694,6 +1114,23 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
         <OrganizerApplyModal
           onClose={() => setApplyModal(false)}
           onSubmit={handleApply}
+        />
+      )}
+
+      {deleteAccountModal && (
+        <DeleteAccountModal
+          user={user}
+          onClose={() => setDeleteAccountModal(false)}
+          onConfirm={handleDeleteAccount}
+        />
+      )}
+
+      {pwdModal && (
+        <ChangePasswordModal
+          user={user}
+          setUser={setUser}
+          toast={toast}
+          onClose={() => setPwdModal(false)}
         />
       )}
     </div>

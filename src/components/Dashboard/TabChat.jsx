@@ -24,6 +24,24 @@ import {
   ALL_BADGES, displayName,
 } from './db.shared.jsx';
 
+/** Backend `getPinnedMessages` returns `ChatPinned[]` with the actual message
+ *  nested under `.message`. Flatten to a message-shaped object the UI can read. */
+function normalizePinned(record) {
+  if (!record) return null;
+  const msg = record.message || record; // tolerate either shape
+  if (!msg) return null;
+  return {
+    ...msg,
+    id: msg.id ?? record.message_id ?? record.id,
+    text: msg.text ?? '',
+    file_url: msg.file_url ?? null,
+    username: msg.username ?? msg.user?.username ?? record.user?.username ?? 'Anonymous',
+    user_avatar_url: msg.user_avatar_url ?? msg.user?.user_avatar_url ?? null,
+    pinnedRecordId: record.id,
+    pinned_at: record.pinned_at ?? null,
+  };
+}
+
 export default function TabChat({ user, toast, userId, onUnreadChange, setTab, isMuted }) {
   const [myTeams,     setMyTeams]     = useState([]);
   const [room,        setRoom]        = useState('general');
@@ -121,7 +139,7 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
     // reactions and pinned via REST
     getChatReactions(room).then(setReactions).catch(() => {});
     getPinnedMessages(room)
-      .then(setPinnedMsgs)
+      .then(records => setPinnedMsgs((records || []).map(normalizePinned).filter(Boolean)))
       .catch(() => {
         // fallback: не очищати pinnedMsgs при помилці
         setChatError('Не вдалося завантажити закріплені повідомлення');
@@ -197,7 +215,11 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
     socket.on('message:edited', ({ messageId, newText, edited_at }) =>
       setMessages(prev => prev.map(m => m.id === messageId ? { ...m, text: newText, edited_at } : m))
     );
-    const onPinned   = ({ message }) => setPinnedMsgs(prev => prev.some(p => p.id === message.id) ? prev : [...prev, message]);
+    const onPinned   = (payload) => {
+      const msg = normalizePinned(payload?.message ? { message: payload.message } : payload);
+      if (!msg) return;
+      setPinnedMsgs(prev => prev.some(p => p.id === msg.id) ? prev : [...prev, msg]);
+    };
     const onUnpinned = ({ messageId }) => setPinnedMsgs(prev => prev.filter(p => p.id !== messageId));
     socket.on('message:pinned',   onPinned);
     socket.on('message:unpinned', onUnpinned);
@@ -343,17 +365,49 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
     setDeletePending(null);
   };
   const cancelDelete = () => setDeletePending(null);
+  const MAX_PINNED = 3;
+  const isMsgPinnable = (msg) => {
+    if (!msg) return false;
+    const text = (msg.text || '').trim();
+    const isSticker = text.startsWith(STICKER_PREFIX);
+    const fileUrls = parseFileUrls(msg.file_url);
+    if (isSticker) return true;
+    if (fileUrls.length > 0) return true;
+    if (text.length > 0) return true;
+    return false;
+  };
   const pinMsg = msg => {
+    if (!isMsgPinnable(msg)) {
+      toast?.error?.('Не можна закріпити порожнє повідомлення');
+      setCtxMenu(null);
+      return;
+    }
+    if (pinnedMsgs.length >= MAX_PINNED && !pinnedMsgs.some(p => p.id === msg.id)) {
+      toast?.error?.(`Можна закріпити максимум ${MAX_PINNED} повідомлень`);
+      setCtxMenu(null);
+      return;
+    }
     socket.emit('pin_message', { messageId: msg.id });
     setCtxMenu(null);
-    // optimistic: add immediately, backend will confirm via message:pinned
     setPinnedMsgs(prev => prev.some(p => p.id === msg.id) ? prev : [...prev, msg]);
   };
   const unpinMsg = msgId => {
     socket.emit('unpin_message', { messageId: msgId });
-    // optimistic: remove immediately
     setPinnedMsgs(prev => prev.filter(p => p.id !== msgId));
   };
+
+  /* Auto-cleanup: drop pinned messages that became empty (text wiped, no media). */
+  useEffect(() => {
+    const stale = pinnedMsgs.filter(p => !isMsgPinnable(p));
+    if (stale.length === 0) return;
+    setPinnedMsgs(prev => prev.filter(p => isMsgPinnable(p)));
+    stale.forEach(p => { try { socket?.emit?.('unpin_message', { messageId: p.id }); } catch {} });
+  }, [pinnedMsgs]);
+
+  const [activePinIdx, setActivePinIdx] = useState(0);
+  useEffect(() => {
+    if (activePinIdx >= pinnedMsgs.length) setActivePinIdx(0);
+  }, [pinnedMsgs.length, activePinIdx]);
 
   const handleFileChange = async e => {
     const selected = Array.from(e.target.files || []);
@@ -783,47 +837,57 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
           </div>
         )}
 
-        {pinnedMsgs.length > 0 && (
-          <div className="db-chat-pinned-bar">
-            <span className="db-chat-pinned-icon">📌</span>
-            <div className="db-chat-pinned-content">
-              {pinnedMsgs.length === 0 ? (
-                <div className="db-chat-pinned-empty">Немає закріплених</div>
-              ) : (
-                pinnedMsgs.map(p => {
-                  const isSticker = p.text && p.text.startsWith(STICKER_PREFIX);
-                  const stickerSrc = isSticker ? p.text.slice(STICKER_PREFIX.length) : null;
-                  const fileUrls = parseFileUrls(p.file_url);
-                  const hasFiles = fileUrls.length > 0;
-                  return (
-                    <div key={p.id} className="db-chat-pinned-item">
-                      <span className="db-chat-pinned-author">{p.username}:</span>
-                      {isSticker ? (
-                        <span className="db-chat-pinned-preview">
-                          <img src={resolveAvatarUrl(stickerSrc)} alt="стікер" loading="lazy" decoding="async" />
-                          <span className="db-chat-pinned-text">Стікер</span>
-                        </span>
-                      ) : hasFiles && !p.text ? (
-                        <span className="db-chat-pinned-preview">
-                          <img src={resolveAvatarUrl(fileUrls[0])} alt="зображення" loading="lazy" decoding="async" />
-                          <span className="db-chat-pinned-text">Зображення{fileUrls.length > 1 ? ` ×${fileUrls.length}` : ''}</span>
-                        </span>
-                      ) : (
-                        <span className="db-chat-pinned-text">
-                          {hasFiles && '🖼 '}
-                          {(p.text || '').slice(0, 100)}{p.text?.length > 100 ? '…' : ''}
-                        </span>
-                      )}
-                      {isAdmin && (
-                        <button className="db-chat-pinned-unpin" onClick={() => unpinMsg(p.id)} title="Відкріпити">✕</button>
-                      )}
-                    </div>
-                  );
-                })
+        {pinnedMsgs.length > 0 && (() => {
+          const current = pinnedMsgs[Math.min(activePinIdx, pinnedMsgs.length - 1)];
+          const text = (current.text || '');
+          const isSticker = text.startsWith(STICKER_PREFIX);
+          const stickerSrc = isSticker ? text.slice(STICKER_PREFIX.length) : null;
+          const fileUrls = parseFileUrls(current.file_url);
+          const hasFiles = fileUrls.length > 0;
+          const previewText = isSticker
+            ? 'Стікер'
+            : hasFiles && !text
+              ? `Зображення${fileUrls.length > 1 ? ` ×${fileUrls.length}` : ''}`
+              : text;
+          const cycle = () => setActivePinIdx(i => (i + 1) % pinnedMsgs.length);
+          return (
+            <div className="db-chat-pinned-bar db-chat-pinned-bar--compact" onClick={cycle}>
+              {/* left accent stripes — one per pinned message, current one highlighted */}
+              <div className="db-chat-pinned-stripes">
+                {pinnedMsgs.map((_, i) => (
+                  <span key={i} className={`db-chat-pinned-stripe${i === activePinIdx ? ' active' : ''}`} />
+                ))}
+              </div>
+              {(isSticker || hasFiles) && (
+                <div className="db-chat-pinned-thumb">
+                  {isSticker
+                    ? <img src={resolveAvatarUrl(stickerSrc)} alt="" loading="lazy" />
+                    : <img src={resolveAvatarUrl(fileUrls[0])} alt="" loading="lazy" />}
+                </div>
               )}
+              <div className="db-chat-pinned-content">
+                <div className="db-chat-pinned-title">
+                  Закріплене повідомлення
+                  {pinnedMsgs.length > 1 && (
+                    <span className="db-chat-pinned-count">{activePinIdx + 1}/{pinnedMsgs.length}</span>
+                  )}
+                </div>
+                <div className="db-chat-pinned-row">
+                  <span className="db-chat-pinned-counter-inline">{activePinIdx + 1}</span>
+                  <span className="db-chat-pinned-text">{previewText || '—'}</span>
+                </div>
+              </div>
+              <div className="db-chat-pinned-actions" onClick={e => e.stopPropagation()}>
+                {pinnedMsgs.length > 1 && (
+                  <button className="db-chat-pinned-iconbtn" onClick={cycle} title="Наступне">⇅</button>
+                )}
+                {isAdmin && (
+                  <button className="db-chat-pinned-iconbtn" onClick={() => unpinMsg(current.id)} title="Відкріпити">✕</button>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         <div className="db-chat-messages" ref={msgsRef} onScroll={handleMsgsScroll}>
           {loading

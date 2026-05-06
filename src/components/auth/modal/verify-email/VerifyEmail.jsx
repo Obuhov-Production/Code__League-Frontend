@@ -150,6 +150,7 @@ function VerifyEmailPage() {
       if (data.user) saveUser(data.user);
       clearPendingVerification();
       toast.success('Пошту підтверджено! Вітаємо');
+      localStorage.setItem('db_tab', 'overview');
       navigate('/dashboard', { replace: true });
     } catch (err) {
       toast.error(err.message || 'Невірний код');

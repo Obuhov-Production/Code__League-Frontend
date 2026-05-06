@@ -1,0 +1,12 @@
+export default function IconMedal(props) {
+  return (
+    <svg width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" {...props}>
+      <polygon points="6,2 9,2 11,8 7,8" fill="#ef4444" />
+      <polygon points="15,2 18,2 17,8 13,8" fill="#3b82f6" />
+      <polygon points="12,7 17,12 14,19 10,19 7,12" fill="#fbbf24" />
+      <polygon points="12,7 17,12 12,14" fill="#fde68a" />
+      <polygon points="12,7 7,12 12,14" fill="#f59e0b" />
+      <polygon points="10,19 14,19 12,22" fill="#d97706" />
+    </svg>
+  );
+}

@@ -19,7 +19,7 @@ import IconGithub      from '@images/dashboard_components/github.svg?react';
 
 import { getMe, clearSession, isLoggedIn, API_BASE, CHECK_BACKEND, DEV_MOCK_USER, loadCachedUser, saveUser,
   getNotifications, markNotificationRead, deleteNotification, markAllNotificationsRead,
-  deleteAllNotifications } from '@utils/authApi';
+  deleteAllNotifications, setMyStatus } from '@utils/authApi';
 import { useToast } from '@utils/toast.jsx';
 import { hasRole, UserAvatar, MiniProfileModal, UserSearchModal, TabTip, getSocket } from './db.shared.jsx';
 
@@ -93,17 +93,21 @@ export default function Dashboard() {
       return;
     }
     if (!isLoggedIn()) { navigate('/login'); return; }
+    /* On every dashboard mount we are by definition online — override any stale
+     * status/last_seen left in cache or returned by the server before the
+     * presence ping has had time to land. */
+    const nowOnline = u => u ? { ...u, status: 'online', last_seen_at: new Date().toISOString() } : u;
     const cached = loadCachedUser();
     if (cached) {
       if (hasRole(cached, 'banned')) { navigate('/banned', { replace: true }); return; }
-      setUser(cached);
+      setUser(nowOnline(cached));
       setLoading(false);
     }
     getMe()
       .then(fresh => {
         saveUser(fresh);
         if (hasRole(fresh, 'banned')) { navigate('/banned', { replace: true }); return; }
-        setUser(fresh);
+        setUser(nowOnline(fresh));
       })
       .catch(() => {
         if (!cached) { clearSession(); toast.error('Сесія закінчилась'); navigate('/login'); }
@@ -111,7 +115,51 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleLogout = () => { clearSession(); toast.info('Ви вийшли'); navigate('/'); };
+  /* ── Presence: keep status=online while tab open, offline on close ── */
+  useEffect(() => {
+    if (!user || !CHECK_BACKEND) return;
+
+    let alive = true;
+    /** Update server AND local React state, so the avatar dot flips immediately
+     *  without waiting for a page refresh. */
+    const applyStatus = (status, opts = {}) => {
+      setUser(u => u ? { ...u, status, last_seen_at: new Date().toISOString() } : u);
+      setMyStatus(status, opts).catch(() => {});
+    };
+    const ping   = (status) => applyStatus(status);
+    const beacon = (status) => applyStatus(status, { keepalive: true });
+
+    // Force online immediately on mount — overrides any stale 'away'/'offline'
+    // left in localStorage from a previous session's beforeunload beacon.
+    ping('online');
+    const heartbeat = setInterval(() => {
+      if (alive && document.visibilityState !== 'hidden') ping('online');
+    }, 45_000);
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') beacon('away');
+      else ping('online');
+    };
+    const onPageHide = () => { beacon('offline'); };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('beforeunload', onPageHide);
+
+    return () => {
+      alive = false;
+      clearInterval(heartbeat);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('beforeunload', onPageHide);
+      beacon('offline');
+    };
+  }, [user?.id]);
+
+  const handleLogout = () => {
+    if (CHECK_BACKEND) setMyStatus('offline', { keepalive: true }).catch(() => {});
+    clearSession(); toast.info('Ви вийшли'); navigate('/');
+  };
 
   /* --- Notification --- */
   const loadNotifications = () => {
@@ -367,7 +415,7 @@ export default function Dashboard() {
               {tab === 'chat'        && <TabChat        user={user} toast={toast} userId={user?.id} onUnreadChange={setChatHasUnread} setTab={setTab} isMuted={isMuted} />}
               {tab === 'profile'     && <TabProfile     user={user} setUser={setUser} toast={toast} onLogout={handleLogout} setTab={setTab} />}
               {tab === 'jury'      && (hasRole(user, 'admin') || hasRole(user, 'jury'))      && <TabJury      user={user} toast={toast} />}
-              {tab === 'organizer' && (hasRole(user, 'admin') || hasRole(user, 'organizer')) && <TabOrganizer toast={toast} />}
+              {tab === 'organizer' && (hasRole(user, 'admin') || hasRole(user, 'organizer')) && <TabOrganizer toast={toast} user={user} />}
               {tab === 'admin'     && hasRole(user, 'admin')                                  && <TabAdmin     toast={toast} />}
             </>
           )}

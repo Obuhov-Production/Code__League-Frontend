@@ -1,0 +1,9 @@
+export default function IconClock(props) {
+  return (
+    <svg width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" {...props}>
+      <polygon points="12,2 22,12 12,22 2,12" fill="#22d3ee" />
+      <polygon points="12,2 22,12 12,12" fill="#67e8f9" />
+      <polygon points="11,7 13,7 13,12 17,14 16,16 11,13" fill="#0e7490" />
+    </svg>
+  );
+}
