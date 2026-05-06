@@ -1,5 +1,4 @@
 ﻿/* Dashboard - Моноліт код стіля для нашого дашборду */
-
 /* -- Root / Page layout -- */
 .db-page {
   display: flex;
@@ -3864,8 +3863,8 @@
 /* ── Danger Zone block ────────────────────────────── */
 .db-danger-zone {
   margin-top: 22px;
-  padding: 16px 14px 18px;
-  border-radius: 14px;
+  padding: 16px 14px 28px;
+  border-radius: 18px;
   background:
     repeating-linear-gradient(135deg,
       rgba(239, 68, 68, .06) 0 10px,
@@ -3873,6 +3872,21 @@
   border: 1px dashed rgba(239, 68, 68, .55);
   position: relative;
   overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.7);
+}
+.db-danger-zone::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 11px;
+  background: repeating-linear-gradient(
+    -45deg,
+    #fbbf24 0 10px,
+    #2b2b33 10px 20px
+  );
+  border-top: 1px solid rgba(127,29,29,.18);
 }
 .db-danger-zone-header {
   display: flex;
@@ -3912,57 +3926,108 @@
   padding: 4px 0 2px;
 }
 
-/* ── DANGER ZONE hex button (uiverse-style) ───────── */
+/* ── Danger button ────────────────────────────────── */
 .db-danger-btn {
-  border: none;
   position: relative;
-  width: 250px;
-  height: 80px;
-  padding: 0;
-  clip-path: polygon(20% 0%, 80% 0%, 100% 50%, 80% 100%, 20% 100%, 0% 50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 248px;
+  min-height: 52px;
+  padding: 12px 22px;
+  border: 1px solid rgba(248,113,113,.35);
+  border-radius: 14px;
   cursor: pointer;
-  background: linear-gradient(45deg, #1a0606, #2a0e0e);
-  transition: background 0.35s ease, transform 0.2s ease, box-shadow 0.3s ease;
+  background: linear-gradient(180deg, #fff8f8 0%, #ffecec 100%);
+  box-shadow:
+    0 8px 20px rgba(239,68,68,.12),
+    inset 0 1px 0 rgba(255,255,255,.9);
+  transition: transform .18s ease, box-shadow .22s ease, background .22s ease, border-color .22s ease, color .22s ease;
   isolation: isolate;
+  overflow: hidden;
+}
+.db-danger-btn::after {
+  content: "";
+  position: absolute;
+  inset: -14px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(239,68,68,.22) 0%, rgba(239,68,68,.08) 38%, transparent 68%);
+  opacity: 0;
+  transform: scale(.9);
+  transition: opacity .24s ease, transform .28s ease;
+  z-index: 0;
+  pointer-events: none;
 }
 .db-danger-btn:hover {
-  background: linear-gradient(45deg, #c0392b, #e74c3c);
-  transform: translateY(0px);
-  box-shadow: 0 8px 24px rgba(231, 76, 60, .35);
+  transform: translateY(-3px) scale(1.02);
+  border-color: rgba(239,68,68,.55);
+  background: linear-gradient(180deg, #fff2f2 0%, #ffe2e2 100%);
+  box-shadow:
+    0 18px 34px rgba(239,68,68,.24),
+    0 0 0 4px rgba(239,68,68,.08),
+    inset 0 1px 0 rgba(255,255,255,.95);
+}
+.db-danger-btn:hover::after {
+  opacity: 1;
+  transform: scale(1.08);
+}
+.db-danger-btn:active {
+  transform: translateY(0);
+  box-shadow:
+    0 6px 14px rgba(239,68,68,.14),
+    inset 0 1px 0 rgba(255,255,255,.9);
 }
 .db-danger-btn span {
-  position: absolute;
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
-  font-size: 18px;
-  font-weight: 900;
-  left: 50%;
-  top: 50%;
-  letter-spacing: 1.5px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: .3px;
   text-align: center;
-  transform: translate(-50%, -50%);
-  color: #e74c3c;
-  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.4);
-  transition: color 0.3s ease, transform 0.3s ease;
+  color: #b91c1c;
+  text-shadow: none;
+  transition: color .22s ease, letter-spacing .22s ease;
+}
+.db-danger-btn span::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 0 4px rgba(239,68,68,.14);
+  margin-right: 10px;
+  flex-shrink: 0;
+  transition: transform .22s ease, box-shadow .22s ease, background .22s ease;
 }
 .db-danger-btn:hover span {
-  color: #fff;
-  transform: translate(-50%, -50%) rotate(-2deg);
+  color: #991b1b;
+  letter-spacing: .6px;
+}
+.db-danger-btn:hover span::before {
+  transform: scale(1.18);
+  box-shadow:
+    0 0 0 6px rgba(239,68,68,.12),
+    0 0 18px rgba(239,68,68,.28);
 }
 .db-danger-btn:before {
   content: "";
   position: absolute;
-  width: 0;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.3);
-  left: 0;
-  top: 0;
-  z-index: 0;
-  transition: width 0.4s ease-out;
+  inset: 0;
+  background:
+    linear-gradient(120deg, transparent 0%, rgba(255,255,255,.82) 42%, transparent 68%);
+  transform: translateX(-120%);
+  transition: transform .55s cubic-bezier(.22,1,.36,1);
+  z-index: 1;
 }
-.db-danger-btn:hover:before { width: 100%; }
+.db-danger-btn:hover:before { transform: translateX(120%); }
 
 /* ── Delete Account Modal (clean) ─────────────────── */
-.db-delete-account-modal {
+.db-delete-account-modal { 
   max-width: 460px;
   width: 100%;
   padding: 26px 24px 22px;
