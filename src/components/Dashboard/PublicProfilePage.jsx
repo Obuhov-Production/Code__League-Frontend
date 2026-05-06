@@ -4,10 +4,10 @@ import { getUserProfileByUsername } from '@utils/authApi';
 import {
   UserAvatar, PresenceBadge, displayName, formatDate, hasRole, resolveAvatarUrl,
 } from './db.shared.jsx';
-import IconUser     from '../Dashboard_components/icons/IconUser.jsx';
-import IconCalendar from '../Dashboard_components/icons/IconCalendar.jsx';
-import IconClock    from '../Dashboard_components/icons/IconClock.jsx';
-import IconStar     from '../Dashboard_components/icons/IconStar.jsx';
+import IconUser     from '@images/dashboard_components/icon_user_cube.svg?react';
+import IconCalendar from '@images/dashboard_components/icon_calendar_card.svg?react';
+import IconClock    from '@images/dashboard_components/icon_clock_diamond.svg?react';
+import IconStar     from '@images/dashboard_components/icon_star_badge.svg?react';
 
 function lastSeenUk(dateStr) {
   if (!dateStr) return 'ніколи';

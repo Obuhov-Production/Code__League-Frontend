@@ -8,25 +8,25 @@ import { getMe, getMyTeams, updateMe, uploadAvatar, uploadBanner, deleteBanner,
   deleteMyAccount, clearSession,
   requestPasswordChange, confirmPasswordChange } from '@utils/authApi';
 import { BANNER_PRESETS, StatusBadge, UserAvatar, formatDate, formatDateTime, hasRole, displayName, resolveAvatarUrl, PresenceBadge } from './db.shared.jsx';
-import IconUser     from '../Dashboard_components/icons/IconUser.jsx';
-import IconMedal    from '../Dashboard_components/icons/IconMedal.jsx';
-import IconTrophy   from '../Dashboard_components/icons/IconTrophy.jsx';
-import IconLock     from '../Dashboard_components/icons/IconLock.jsx';
-import IconScale    from '../Dashboard_components/icons/IconScale.jsx';
-import IconFolder   from '../Dashboard_components/icons/IconFolder.jsx';
-import IconAdmin    from '../Dashboard_components/icons/IconAdmin.jsx';
-import IconRefresh  from '../Dashboard_components/icons/IconRefresh.jsx';
-import IconStar     from '../Dashboard_components/icons/IconStar.jsx';
-import IconCalendar from '../Dashboard_components/icons/IconCalendar.jsx';
-import IconTrash    from '../Dashboard_components/icons/IconTrash.jsx';
-import IconMail     from '../Dashboard_components/icons/IconMail.jsx';
-import IconCheck    from '../Dashboard_components/icons/IconCheck.jsx';
-import IconWarning  from '../Dashboard_components/icons/IconWarning.jsx';
-import IconPin      from '../Dashboard_components/icons/IconPin.jsx';
-import IconEye      from '../Dashboard_components/icons/IconEye.jsx';
-import IconEyeOff   from '../Dashboard_components/icons/IconEyeOff.jsx';
-import IconLogout   from '../Dashboard_components/icons/IconLogout.jsx';
-import IconClock    from '../Dashboard_components/icons/IconClock.jsx';
+import IconUser     from '@images/dashboard_components/icon_user_cube.svg?react';
+import IconMedal    from '@images/dashboard_components/icon_medal.svg?react';
+import IconTrophy   from '@images/dashboard_components/icon_trophy_award.svg?react';
+import IconLock     from '@images/dashboard_components/icon_lock_shield.svg?react';
+import IconScale    from '@images/dashboard_components/icon_scale.svg?react';
+import IconFolder   from '@images/dashboard_components/icon_folder_panel.svg?react';
+import IconAdmin    from '@images/dashboard_components/icon_admin_badge.svg?react';
+import IconRefresh  from '@images/dashboard_components/icon_refresh_cycle.svg?react';
+import IconStar     from '@images/dashboard_components/icon_star_badge.svg?react';
+import IconCalendar from '@images/dashboard_components/icon_calendar_card.svg?react';
+import IconTrash    from '@images/dashboard_components/icon_trash_bin.svg?react';
+import IconMail     from '@images/dashboard_components/icon_mail_envelope.svg?react';
+import IconCheck    from '@images/dashboard_components/icon_check_diamond.svg?react';
+import IconWarning  from '@images/dashboard_components/icon_warning_triangle.svg?react';
+import IconPin      from '@images/dashboard_components/icon_pin_marker.svg?react';
+import IconEye      from '@images/dashboard_components/icon_eye_open.svg?react';
+import IconEyeOff   from '@images/dashboard_components/icon_eye_closed.svg?react';
+import IconLogout   from '@images/dashboard_components/icon_logout_exit.svg?react';
+import IconClock    from '@images/dashboard_components/icon_clock_diamond.svg?react';
 
 /** Return every role the user has, in priority order, with label + icon. */
 function userRoleChips(user) {
@@ -131,7 +131,7 @@ function DeleteAccountModal({ user, onClose, onConfirm }) {
 
         <div className="db-da-icon-wrap">
           <div className="db-da-icon-circle">
-            <IconTrash style={{ width: 28, height: 28 }} />
+            <IconWarning style={{ width: 42, height: 42 }} />
           </div>
         </div>
         <h3 className="db-da-title">Видалення акаунту</h3>
@@ -147,7 +147,7 @@ function DeleteAccountModal({ user, onClose, onConfirm }) {
 
         <div className="db-da-confirm-field">
           <label className="db-da-confirm-label">
-            Для підтвердження введіть <b>{required}</b>:
+            Для підтвердження введіть: <b>{required}</b>
           </label>
           <input
             className="db-input"
