@@ -4069,7 +4069,35 @@
 }
 .db-pwd-title { text-align: center; margin: 4px 0 10px; font-size: 19px; color: #1f2937; }
 .db-pwd-sub { color: #555; font-size: 14px; line-height: 1.45; margin: 0 0 14px; text-align: center; }
+.db-pwd-sub--compact { margin-top: -2px; font-size: 12.5px; color: #7a7a8c; }
 .db-pwd-timer { font-family: monospace; color: #7c5ff5; font-weight: 700; }
+
+.db-pwd-option-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(172,158,248,.18);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #faf9ff 0%, #f5f3ff 100%);
+}
+.db-pwd-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.db-pwd-option-text strong {
+  font-size: 13px;
+  color: #1f2937;
+}
+.db-pwd-option-text span {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #77758a;
+}
 
 .db-pwd-code-wrap { display: flex; justify-content: center; margin: 4px 0 8px; }
 .db-pwd-code-input {
