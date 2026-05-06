@@ -318,7 +318,7 @@ export function UserAvatar({ user, size = 36, onClick, className = '', showStatu
   if (!showStatus) return avatarContent;
   
   return (
-    <div className="db-avatar-with-status" style={{ position: 'relative', display: 'inline-block' }}>
+    <div className="db-avatar-with-status" style={{ position: 'relative' }}>
       {avatarContent}
       <div className={`db-avatar-status db-avatar-status--${status}`} />
     </div>

@@ -913,7 +913,9 @@
 .db-avatar-with-status {
   position: relative;
   border-radius: 100%;
-  display: inline-block;
+  display: block;
+  line-height: 0;
+  vertical-align: top;
 }
 
 .db-avatar-status {
