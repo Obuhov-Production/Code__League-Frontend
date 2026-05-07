@@ -6,7 +6,7 @@ import badge2Img from '@images/pin/bage2.png';
 import { getMe, getMyTeams, updateMe, uploadAvatar, uploadBanner, deleteBanner,
   submitOrganizerApplication, getMyOrganizerApplication, getMyBadges,
   deleteMyAccount, clearSession,
-  requestPasswordChange, confirmPasswordChange } from '@utils/authApi';
+  requestPasswordChange, confirmPasswordChange, verifyPasswordChangeCode } from '@utils/authApi';
 import { BANNER_PRESETS, StatusBadge, UserAvatar, formatDate, formatDateTime, hasRole, displayName, resolveAvatarUrl, PresenceBadge } from './db.shared.jsx';
 import IconUser     from '@images/dashboard_components/icon_user_cube.svg?react';
 import IconMedal    from '@images/dashboard_components/icon_medal.svg?react';
@@ -189,6 +189,7 @@ function ChangePasswordModal({ user, toast, onClose, setUser }) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -212,13 +213,21 @@ function ChangePasswordModal({ user, toast, onClose, setUser }) {
     } finally { setSending(false); }
   };
 
-  const handleVerifyCode = (e) => {
+  const handleVerifyCode = async (e) => {
     e?.preventDefault();
     if (!/^\d{6}$/.test(code.trim())) {
       toast.error('Введіть 6-значний код');
       return;
     }
-    setStep('password');
+    setVerifying(true);
+    try {
+      await verifyPasswordChangeCode({ code: code.trim() });
+      setStep('password');
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setVerifying(false);
+    }
   };
 
   const handleSubmitNewPassword = async (e) => {
@@ -294,8 +303,8 @@ function ChangePasswordModal({ user, toast, onClose, setUser }) {
             </div>
             <div className="db-edit-actions">
               <button type="button" className="db-btn db-btn-ghost" onClick={onClose}>Скасувати</button>
-              <button type="submit" className="db-btn db-btn-primary" disabled={code.length !== 6}>
-                Далі →
+              <button type="submit" className="db-btn db-btn-primary" disabled={code.length !== 6 || verifying}>
+                {verifying ? 'Перевірка...' : 'Далі →'}
               </button>
             </div>
           </form>

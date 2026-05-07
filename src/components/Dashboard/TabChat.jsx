@@ -533,12 +533,22 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
               })()}
             </span>
           )}
-          {msg.reply_to_id && (
-            <div className="db-chat-reply-preview">
-              <span className="db-crp-name">{msg.reply_username || '…'}</span>
-              <span className="db-crp-text">{(msg.reply_text || '').slice(0, 80)}{(msg.reply_text?.length > 80) ? '…' : ''}</span>
-            </div>
-          )}
+          {msg.reply_to_id && (() => {
+            const rText = msg.reply_text || '';
+            const rIsSticker = rText.startsWith(STICKER_PREFIX);
+            const rFiles = parseFileUrls(msg.reply_file_url);
+            const rPreview = rIsSticker
+              ? '🖼 Стікер'
+              : rFiles.length > 0 && !rText
+                ? `📎 Зображення${rFiles.length > 1 ? ` ×${rFiles.length}` : ''}`
+                : rText;
+            return (
+              <div className="db-chat-reply-preview">
+                <span className="db-crp-name">{msg.reply_username || '…'}</span>
+                <span className="db-crp-text">{rPreview.slice(0, 80)}{rPreview.length > 80 ? '…' : ''}</span>
+              </div>
+            );
+          })()}
           {isEditing ? (
             <div className="db-chat-edit-wrap">
               <input autoFocus className="db-chat-edit-input" value={editText}
@@ -861,7 +871,7 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
               {(isSticker || hasFiles) && (
                 <div className="db-chat-pinned-thumb">
                   {isSticker
-                    ? <img src={resolveAvatarUrl(stickerSrc)} alt="" loading="lazy" />
+                    ? <img src={stickerSrc} alt="" loading="lazy" />
                     : <img src={resolveAvatarUrl(fileUrls[0])} alt="" loading="lazy" />}
                 </div>
               )}
@@ -913,12 +923,22 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
         )}
 
         <div className="db-chat-bottom">
-          {replyTo && (
+          {replyTo && (() => {
+            const rText = replyTo.text || '';
+            const rIsSticker = rText.startsWith(STICKER_PREFIX);
+            const rFiles = parseFileUrls(replyTo.file_url);
+            const rPreview = rIsSticker
+              ? '🖼 Стікер'
+              : rFiles.length > 0 && !rText
+                ? `📎 Зображення${rFiles.length > 1 ? ` ×${rFiles.length}` : ''}`
+                : rText;
+            return (
             <div className="db-chat-reply-bar">
-              <span>↩ <strong>{replyTo.username}</strong>: {(replyTo.text || '').slice(0, 60)}{replyTo.text?.length > 60 ? '…' : ''}</span>
+              <span>↩ <strong>{replyTo.username}</strong>: {rPreview.slice(0, 60)}{rPreview.length > 60 ? '…' : ''}</span>
               <button className="db-chat-reply-cancel" onClick={() => setReplyTo(null)}>✕</button>
             </div>
-          )}
+            );
+          })()}
           {imgFiles.length > 0 && (
             <div className="db-chat-img-preview db-chat-img-preview--multi">
               {imgFiles.map((f, i) => (

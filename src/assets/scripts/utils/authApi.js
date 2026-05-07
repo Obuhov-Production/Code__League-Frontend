@@ -415,6 +415,50 @@ export async function requestPasswordChange() {
   return data;
 }
 
+export async function verifyPasswordChangeCode({ code }) {
+  const res = await fetch(`${BASE}/users/me/password/verify-code`, {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || data.message || 'Невірний код');
+  return data;
+}
+
+export async function forgotPasswordRequest(email) {
+  const res = await fetch(`${BASE}/auth/password/forgot`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || data.message || 'Не вдалося надіслати код');
+  return data;
+}
+
+export async function forgotPasswordVerifyCode({ email, code }) {
+  const res = await fetch(`${BASE}/auth/password/forgot/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, code }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || data.message || 'Невірний код');
+  return data;
+}
+
+export async function forgotPasswordReset({ email, code, newPassword }) {
+  const res = await fetch(`${BASE}/auth/password/forgot/reset`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, code, newPassword }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || data.message || 'Не вдалося оновити пароль');
+  return data;
+}
+
 export async function confirmPasswordChange({ code, newPassword, currentPassword }) {
   const res = await fetch(`${BASE}/users/me/password/confirm`, {
     method: 'POST',
