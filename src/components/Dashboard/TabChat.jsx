@@ -17,11 +17,12 @@ import {
 import {
   BASE_ROOMS, EMOJI_QUICK, EMOJI_REACT,
   isEmojiOnly, compressImage, parseFileUrls,
-  getSocket, playMsgSound,
+  getSocket,
   UserProfileModal,
   resolveAvatarUrl,
   STICKERS, STICKER_PREFIX,
   ALL_BADGES, displayName,
+  playMsgSound, playReplySound, playReactionSound, playDeleteSound,
 } from './db.shared.jsx';
 
 /** Backend `getPinnedMessages` returns `ChatPinned[]` with the actual message
@@ -42,14 +43,23 @@ function normalizePinned(record) {
   };
 }
 
-export default function TabChat({ user, toast, userId, onUnreadChange, setTab, isMuted }) {
+export default function TabChat({
+  user, toast, userId, setTab, isMuted, isActive = true,
+  chatUnreadByRoom, setChatUnreadByRoom,
+  setActiveChatRoom,
+  soundOn, setSoundOn,
+}) {
   const [myTeams,     setMyTeams]     = useState([]);
   const [room,        setRoom]        = useState('general');
   const [messages,    setMessages]    = useState([]);
   const [reactions,   setReactions]   = useState({});
   const [text,        setText]        = useState('');
   const [loading,     setLoading]     = useState(true);
-  const [online,      setOnline]      = useState(false);
+  const [online,      setOnline]      = useState(() => {
+    const s = getSocket();
+    return !!s?.connected;
+  });
+  const [hasEverConnected, setHasEverConnected] = useState(false);
   const [onlineCount, setOnlineCount] = useState(0);
   const [typingUsers, setTypingUsers] = useState([]);
   const [showEmoji,   setShowEmoji]   = useState(false);
@@ -58,10 +68,11 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
   const [editingId,   setEditingId]   = useState(null);
   const [editText,    setEditText]    = useState('');
   const [ctxMenu,     setCtxMenu]     = useState(null);
-  const [soundOn,     setSoundOn]     = useState(true);
   const [imgFiles,    setImgFiles]    = useState([]);
   const [uploading,   setUploading]   = useState(false);
-  const [unreadCounts,setUnreadCounts]= useState({});
+  const [hasMoreOlder, setHasMoreOlder] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const unreadCounts = chatUnreadByRoom || {};
   const [deletePending,setDeletePending]=useState(null);
   const [chatProfile, setChatProfile] = useState(null);
   const [hoveredMsg,  setHoveredMsg]  = useState(null);
@@ -73,8 +84,8 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
   const [chatError,   setChatError]   = useState('');
   const [customRooms, setCustomRooms] = useState([]);
   const [roomsOpen,   setRoomsOpen]   = useState(false);
-  const [showScrollBtn, setShowScrollBtn] = useState(false);
-  const [reactPos,    setReactPos]    = useState(null); // { msgId, top, left, right, showBelow, isMe }
+  const [showScrollBtn,    setShowScrollBtn]    = useState(false);
+  const [highlightedMsgId, setHighlightedMsgId] = useState(null);
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [addMemberQuery, setAddMemberQuery] = useState('');
   const [addMemberResult, setAddMemberResult] = useState(null);
@@ -90,9 +101,17 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
     } catch { setChatProfile({ ...basic, loading: false }); }
   }
 
+  // Tell Dashboard which room is currently active so it can suppress unread/sound for it
   useEffect(() => {
-    onUnreadChange?.(Object.values(unreadCounts).some(v => v > 0));
-  }, [unreadCounts, onUnreadChange]);
+    if (isActive) {
+      setActiveChatRoom?.(room);
+      // Clear any unread that arrived while hidden — user is now actively viewing
+      setChatUnreadByRoom?.(prev => { if (!prev[room]) return prev; const n = { ...prev }; delete n[room]; return n; });
+    } else {
+      setActiveChatRoom?.(null);
+    }
+    return () => setActiveChatRoom?.(null);
+  }, [room, isActive, setActiveChatRoom, setChatUnreadByRoom]);
 
   const bottomRef      = useRef(null);
   const typingTimer    = useRef(null);
@@ -100,8 +119,9 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
   const socket         = getSocket();
   const fileRef        = useRef(null);
   const inputRef       = useRef(null);
-  const ctxRef         = useRef(null);
-  const reactHideTimer = useRef(null);
+  const ctxRef        = useRef(null);
+  const lastUsedEmoji = useRef('❤️');
+  const justLoadedRef = useRef(true);
   const meId        = user?.id ?? userId;
   const isAdmin     = user?.role === 'admin';
 
@@ -121,10 +141,14 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
     setMessages([]); setReactions({}); setTypingUsers([]);
     setReplyTo(null); setEditingId(null); setCtxMenu(null); setImgFiles([]);
     setDeletePending(null); setPinnedMsgs([]); setChatError(''); setRoomLocked(false);
-    setUnreadCounts(prev => { const n = { ...prev }; delete n[room]; return n; });
-    getChatHistory(room)
+    setHasMoreOlder(true);
+    setChatUnreadByRoom?.(prev => { const n = { ...prev }; delete n[room]; return n; });
+    justLoadedRef.current = true;
+    getChatHistory(room, { limit: 50 })
       .then(msgs => {
-        if (msgs?.length) setMessages(msgs.map(m => ({
+        const arr = Array.isArray(msgs) ? msgs : [];
+        if (arr.length < 50) setHasMoreOlder(false);
+        if (arr.length) setMessages(arr.map(m => ({
           ...m,
           username:        m.username        ?? m.user?.username        ?? 'Anonymous',
           first_name:      m.first_name      ?? m.user?.first_name      ?? null,
@@ -168,18 +192,16 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
     const onHistory = ({ room: r, messages: msgs }) => {
       if (r === room) { setMessages((msgs || []).map(normalizeMsg)); setLoading(false); }
     };
-    // message:new — backend event name
+    // message:new — backend event name. Unread for OTHER rooms is handled
+    // globally by Dashboard. Here we append to the currently-viewed room
+    // and play receive sound for messages from other users.
     const onMsg = msg => {
       const m = normalizeMsg(msg);
-      if (m.room !== room) {
-        setUnreadCounts(prev => ({ ...prev, [m.room]: (prev[m.room] || 0) + 1 }));
-        if (soundOn) playMsgSound();
-        return;
-      }
+      if (m.room !== room) return;
       setMessages(prev => [...prev, m]);
       if (m.user_id !== meId && soundOn) playMsgSound();
     };
-    const onConn    = () => { setOnline(true); doJoin(); };
+    const onConn    = () => { setOnline(true); setHasEverConnected(true); doJoin(); };
     const onDisconn = () => setOnline(false);
     // user:typing — backend sends { userId, username, isTyping }
     const onTyping  = ({ username: u, isTyping }) => {
@@ -197,10 +219,16 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
     };
     const onError = ({ message: msg }) => setChatError(msg);
     const onReactionUpdate = ({ messageId, emoji, count, users }) => {
-      setReactions(prev => ({
-        ...prev,
-        [`${messageId}_${emoji}`]: { count, users: users || [] },
-      }));
+      setReactions(prev => {
+        const prevEntry = prev[`${messageId}_${emoji}`] || { count: 0, users: [] };
+        const isFromOther = !(users || []).includes(user?.username) || count < prevEntry.count;
+        const isAdded = count > prevEntry.count;
+        if (isAdded && isFromOther && soundOn) playReactionSound();
+        return {
+          ...prev,
+          [`${messageId}_${emoji}`]: { count, users: users || [] },
+        };
+      });
     };
 
     socket.on('room:history',  onHistory);
@@ -209,9 +237,13 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
     socket.on('disconnect',    onDisconn);
     socket.on('user:typing',   onTyping);
     socket.on('reaction:update', onReactionUpdate);
-    socket.on('message:deleted', ({ messageId }) =>
-      setMessages(prev => prev.filter(m => m.id !== messageId))
-    );
+    socket.on('message:deleted', ({ messageId }) => {
+      setMessages(prev => {
+        const existed = prev.some(m => m.id === messageId);
+        if (existed && soundOn) playDeleteSound();
+        return prev.filter(m => m.id !== messageId);
+      });
+    });
     socket.on('message:edited', ({ messageId, newText, edited_at }) =>
       setMessages(prev => prev.map(m => m.id === messageId ? { ...m, text: newText, edited_at } : m))
     );
@@ -223,7 +255,7 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
     const onUnpinned = ({ messageId }) => setPinnedMsgs(prev => prev.filter(p => p.id !== messageId));
     socket.on('message:pinned',   onPinned);
     socket.on('message:unpinned', onUnpinned);
-    if (socket.connected) setOnline(true);
+    if (socket.connected) { setOnline(true); setHasEverConnected(true); }
     return () => {
       socket.emit('room:leave', { room });
       socket.off('room:history',  onHistory);
@@ -242,18 +274,39 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
 
   const msgsRef = useRef(null);
 
+  // Instant scroll to bottom when initial room load completes
+  useEffect(() => {
+    if (!loading && justLoadedRef.current && msgsRef.current) {
+      justLoadedRef.current = false;
+      msgsRef.current.scrollTop = msgsRef.current.scrollHeight;
+      setShowScrollBtn(false);
+    }
+  }, [loading]);
+
   // Auto-scroll to bottom on new messages (only if already near bottom)
   useEffect(() => {
+    if (justLoadedRef.current) return;
     const el = msgsRef.current;
     if (!el) return;
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
-    if (nearBottom) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-    else setShowScrollBtn(true);
+    if (nearBottom) {
+      el.scrollTop = el.scrollHeight;
+    } else {
+      setShowScrollBtn(true);
+    }
   }, [messages]);
 
   const scrollToBottom = () => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (msgsRef.current) msgsRef.current.scrollTop = msgsRef.current.scrollHeight;
     setShowScrollBtn(false);
+  };
+
+  const scrollToMsg = (msgId) => {
+    const el = document.getElementById(`msg-${msgId}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightedMsgId(msgId);
+    setTimeout(() => setHighlightedMsgId(null), 2000);
   };
 
   const handleMsgsScroll = () => {
@@ -261,6 +314,44 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
     if (!el) return;
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     setShowScrollBtn(!nearBottom);
+    // Trigger pagination when user scrolls near the top
+    if (el.scrollTop < 80 && hasMoreOlder && !loadingOlder && messages.length > 0) {
+      loadOlderMessages();
+    }
+  };
+
+  const loadOlderMessages = async () => {
+    if (loadingOlder || !hasMoreOlder || messages.length === 0) return;
+    const el = msgsRef.current;
+    if (!el) return;
+    setLoadingOlder(true);
+    const oldestId = messages[0]?.id;
+    const prevHeight = el.scrollHeight;
+    const prevTop = el.scrollTop;
+    try {
+      const older = await getChatHistory(room, { limit: 50, before: oldestId });
+      const arr = Array.isArray(older) ? older : [];
+      if (arr.length < 50) setHasMoreOlder(false);
+      if (arr.length > 0) {
+        const normalized = arr.map(m => ({
+          ...m,
+          username:        m.username        ?? m.user?.username        ?? 'Anonymous',
+          first_name:      m.first_name      ?? m.user?.first_name      ?? null,
+          last_name:       m.last_name       ?? m.user?.last_name       ?? null,
+          pinned_badge:    m.pinned_badge    ?? m.user?.pinned_badge    ?? null,
+          role:            m.role            ?? m.user?.role            ?? 'user',
+          user_avatar_url: m.user_avatar_url ?? m.user?.user_avatar_url ?? null,
+        }));
+        setMessages(prev => [...normalized, ...prev]);
+        // Preserve scroll position so user doesn't jump while older messages prepend
+        requestAnimationFrame(() => {
+          if (msgsRef.current) {
+            msgsRef.current.scrollTop = prevTop + (msgsRef.current.scrollHeight - prevHeight);
+          }
+        });
+      }
+    } catch {}
+    finally { setLoadingOlder(false); }
   };
 
   useEffect(() => {
@@ -317,6 +408,7 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
       reply_to_id: replyTo?.id || undefined,
       file_url,
     });
+    if (replyTo && soundOn) playReplySound();
     socket.emit('message:typing', { room, isTyping: false });
     clearTimeout(typingTimer.current);
     setText(''); setReplyTo(null); setShowEmoji(false); setImgFiles([]);
@@ -344,13 +436,31 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
     setShowEmoji(false);
     setReplyTo(null);
   };
-  const sendReaction = (messageId, emoji) => { if (online) socket.emit('react', { room, messageId, emoji }); };
-  const startEdit = msg => { setEditingId(msg.id); setEditText(msg.text); setCtxMenu(null); };
+  const sendReaction = (messageId, emoji) => {
+    if (!online) return;
+    socket.emit('react', { room, messageId, emoji });
+    lastUsedEmoji.current = emoji;
+    if (soundOn) playReactionSound();
+  };
+  const startEdit = msg => {
+    setEditingId(msg.id);
+    setEditText(msg.text);
+    setCtxMenu(null);
+    setReplyTo(null);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
   const submitEdit = () => {
     if (!editText.trim() || !online) return;
-    socket.emit('message:edit', { messageId: editingId, room, newText: editText.trim() });
-    // optimistic update
-    setMessages(prev => prev.map(m => m.id === editingId ? { ...m, text: editText.trim(), edited_at: 1 } : m));
+    const original = messages.find(m => m.id === editingId);
+    const newText = editText.trim();
+    // No actual change — just close edit mode without emitting / marking as edited
+    if (original && (original.text || '').trim() === newText) {
+      setEditingId(null); setEditText('');
+      return;
+    }
+    socket.emit('message:edit', { messageId: editingId, room, newText });
+    // optimistic update — mark as edited only because text actually changed
+    setMessages(prev => prev.map(m => m.id === editingId ? { ...m, text: newText, edited_at: Date.now() } : m));
     setEditingId(null); setEditText('');
   };
   const cancelEdit = () => { setEditingId(null); setEditText(''); };
@@ -359,6 +469,7 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
     if (!deletePending) return;
     try {
       socket.emit('message:delete', { messageId: deletePending.id, room });
+      if (soundOn) playDeleteSound();
       // optimistic: remove locally immediately
       setMessages(prev => prev.filter(m => m.id !== deletePending.id));
     } catch {}
@@ -408,6 +519,38 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
   useEffect(() => {
     if (activePinIdx >= pinnedMsgs.length) setActivePinIdx(0);
   }, [pinnedMsgs.length, activePinIdx]);
+
+  // Auto-switch pinned bar based on viewport: when the currently shown pinned
+  // message becomes visible, rotate the bar to show a different (not-visible) pin.
+  // Mirrors Telegram behaviour — the bar always points to a pin you haven't seen yet.
+  useEffect(() => {
+    if (pinnedMsgs.length < 2 || !msgsRef.current) return;
+    const visibleIds = new Set();
+    const els = pinnedMsgs
+      .map(p => document.getElementById(`msg-${p.id}`))
+      .filter(Boolean);
+    if (els.length === 0) return;
+
+    const obs = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        const id = parseInt(e.target.id.replace('msg-', ''), 10);
+        if (e.isIntersecting) visibleIds.add(id);
+        else visibleIds.delete(id);
+      });
+      setActivePinIdx(curIdx => {
+        const cur = pinnedMsgs[curIdx];
+        if (!cur || !visibleIds.has(cur.id)) return curIdx;
+        for (let i = 1; i <= pinnedMsgs.length; i++) {
+          const tryIdx = (curIdx + i) % pinnedMsgs.length;
+          if (!visibleIds.has(pinnedMsgs[tryIdx].id)) return tryIdx;
+        }
+        return curIdx;
+      });
+    }, { root: msgsRef.current, threshold: 0.4 });
+
+    els.forEach(el => obs.observe(el));
+    return () => obs.disconnect();
+  }, [pinnedMsgs, messages.length]);
 
   const handleFileChange = async e => {
     const selected = Array.from(e.target.files || []);
@@ -489,22 +632,13 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
       );
     }
 
-    const bubbleRef = useRef(null);
-    const handleBubbleEnter = () => {
-      clearTimeout(reactHideTimer.current);
-      if (!bubbleRef.current) return;
-      const rect = bubbleRef.current.getBoundingClientRect();
-      setReactPos({ msgId: msg.id, rect, isMe, showBelow: rect.top < 60 });
-    };
-    const handleBubbleLeave = () => {
-      reactHideTimer.current = setTimeout(() => setReactPos(null), 180);
-    };
-
     return (
-      <div className={`db-chat-msg${isMe ? ' me' : ''}${msg.role === 'admin' ? ' from-admin' : ''}`}
+      <div id={`msg-${msg.id}`}
+        className={`db-chat-msg${isMe ? ' me' : ''}${msg.role === 'admin' ? ' from-admin' : ''}${highlightedMsgId === msg.id ? ' db-chat-msg--highlighted' : ''}`}
         onMouseEnter={() => setHoveredMsg(msg.id)}
         onMouseLeave={() => setHoveredMsg(null)}
-        onContextMenu={e => handleMsgContextMenu(e, msg)}>
+        onContextMenu={e => handleMsgContextMenu(e, msg)}
+        onDoubleClick={() => sendReaction(msg.id, lastUsedEmoji.current)}>
         {!isMe && (
           <div className="db-chat-msg-avatar-wrap"
             title={`Профіль ${msg.username}`}
@@ -543,27 +677,14 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
                 ? `📎 Зображення${rFiles.length > 1 ? ` ×${rFiles.length}` : ''}`
                 : rText;
             return (
-              <div className="db-chat-reply-preview">
+              <div className="db-chat-reply-preview" onClick={e => { e.stopPropagation(); scrollToMsg(msg.reply_to_id); }} style={{ cursor: 'pointer' }}>
                 <span className="db-crp-name">{msg.reply_username || '…'}</span>
                 <span className="db-crp-text">{rPreview.slice(0, 80)}{rPreview.length > 80 ? '…' : ''}</span>
               </div>
             );
           })()}
-          {isEditing ? (
-            <div className="db-chat-edit-wrap">
-              <input autoFocus className="db-chat-edit-input" value={editText}
-                onChange={e => setEditText(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') submitEdit(); if (e.key === 'Escape') cancelEdit(); }} />
-              <div className="db-chat-edit-btns">
-                <button className="db-btn db-btn-sm db-btn-primary" onClick={submitEdit}>Зберегти</button>
-                <button className="db-btn db-btn-sm db-btn-ghost"   onClick={cancelEdit}>Скас.</button>
-              </div>
-            </div>
-          ) : (
-            <div ref={bubbleRef}
-            className={`db-chat-bubble${bigEmoji ? ' big-emoji' : ''}${isSticker ? ' sticker-bubble' : ''}`}
-            onMouseEnter={handleBubbleEnter}
-            onMouseLeave={handleBubbleLeave}>
+          {(
+            <div className={`db-chat-bubble${bigEmoji ? ' big-emoji' : ''}${isSticker ? ' sticker-bubble' : ''}${isEditing ? ' db-chat-bubble--editing' : ''}`}>
               {isSticker ? (
                 <img src={stickerSrc} alt="sticker" className="db-chat-sticker"
                   loading="lazy" decoding="async" />
@@ -596,7 +717,14 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
               ))}
             </div>
           )}
-          <span className="db-chat-time">{time}</span>
+          <span className="db-chat-time">
+            {time}
+            {isMe && (
+              <span className={`db-chat-read-status${msg.is_read ? ' read' : ''}`} title={msg.is_read ? 'Прочитано' : 'Надіслано'}>
+                {msg.is_read ? '✓✓' : '✓'}
+              </span>
+            )}
+          </span>
         </div>
       </div>
     );
@@ -634,7 +762,7 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
           <button className="db-ctx-btn" onClick={() => { navigator.clipboard?.writeText(ctxMenu.msg.text); setCtxMenu(null); toast.success('Скопійовано'); }}>
             <span className="db-ctx-icon">📋</span> Копіювати
           </button>
-          {ctxMenu.msg.user_id === meId && (
+          {ctxMenu.msg.user_id === meId && !(ctxMenu.msg.text || '').startsWith(STICKER_PREFIX) && (
             <button className="db-ctx-btn" onClick={() => startEdit(ctxMenu.msg)}>
               <span className="db-ctx-icon">✏️</span> Редагувати
             </button>
@@ -720,8 +848,9 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
             <div className="db-rooms-drawer-footer">
               <button className="db-chat-sound-btn" onClick={() => setSoundOn(p => !p)}
                 title={soundOn ? 'Вимкнути звук' : 'Увімкнути звук'}>{soundOn ? '🔔' : '🔕'}</button>
-              <div className={`db-chat-status${online ? ' online' : ''}`}>
-                <span className="db-chat-dot" />{online ? 'Онлайн' : 'Офлайн'}
+              <div className={`db-chat-status${online ? ' online' : ''}${!online && !hasEverConnected ? ' connecting' : ''}`}>
+                <span className="db-chat-dot" />
+                {online ? 'Онлайн' : (hasEverConnected ? 'Офлайн' : 'Підключення...')}
               </div>
             </div>
           </div>
@@ -861,7 +990,7 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
               : text;
           const cycle = () => setActivePinIdx(i => (i + 1) % pinnedMsgs.length);
           return (
-            <div className="db-chat-pinned-bar db-chat-pinned-bar--compact" onClick={cycle}>
+            <div className="db-chat-pinned-bar db-chat-pinned-bar--compact" onClick={() => { scrollToMsg(current.id); cycle(); }}>
               {/* left accent stripes — one per pinned message, current one highlighted */}
               <div className="db-chat-pinned-stripes">
                 {pinnedMsgs.map((_, i) => (
@@ -899,12 +1028,42 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
           );
         })()}
 
-        <div className="db-chat-messages" ref={msgsRef} onScroll={handleMsgsScroll}>
+        <div className={`db-chat-messages${loading ? ' db-chat-messages--fading' : ''}`} ref={msgsRef} onScroll={handleMsgsScroll}>
+          {loadingOlder && (
+            <div className="db-chat-load-older"><div className="db-spinner db-spinner--sm" /></div>
+          )}
           {loading
             ? <div className="db-loading"><div className="db-spinner" /></div>
             : messages.length === 0
               ? <div className="db-empty" style={{ marginTop: 48 }}><IconChat /><p>Поки немає повідомлень. Будьте першим!</p></div>
-              : messages.map(m => <ChatMsg key={m.id} msg={m} />)
+              : (() => {
+                  const fmtDay = iso => {
+                    if (!iso) return '';
+                    const d = new Date(iso);
+                    const today = new Date();
+                    const yesterday = new Date(today);
+                    yesterday.setDate(today.getDate() - 1);
+                    const isSameDay = (a, b) =>
+                      a.getFullYear() === b.getFullYear() &&
+                      a.getMonth() === b.getMonth() &&
+                      a.getDate() === b.getDate();
+                    if (isSameDay(d, today)) return 'Сьогодні';
+                    if (isSameDay(d, yesterday)) return 'Вчора';
+                    return d.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: d.getFullYear() !== today.getFullYear() ? 'numeric' : undefined });
+                  };
+                  const getDay = iso => iso ? new Date(iso).toDateString() : '';
+                  const items = [];
+                  let lastDay = null;
+                  messages.forEach(m => {
+                    const day = getDay(m.created_at);
+                    if (day !== lastDay) {
+                      lastDay = day;
+                      items.push(<div key={`sep-${day}`} className="db-chat-date-sep"><span>{fmtDay(m.created_at)}</span></div>);
+                    }
+                    items.push(<ChatMsg key={m.id} msg={m} />);
+                  });
+                  return items;
+                })()
           }
           {typingUsers.length > 0 && (
             <div className="db-typing-indicator">
@@ -923,7 +1082,24 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
         )}
 
         <div className="db-chat-bottom">
-          {replyTo && (() => {
+          {editingId && (() => {
+            const orig = messages.find(m => m.id === editingId);
+            const oText = orig?.text || '';
+            const oIsSticker = oText.startsWith(STICKER_PREFIX);
+            const oFiles = parseFileUrls(orig?.file_url);
+            const oPreview = oIsSticker
+              ? '🖼 Стікер'
+              : oFiles.length > 0 && !oText
+                ? `📎 Зображення${oFiles.length > 1 ? ` ×${oFiles.length}` : ''}`
+                : oText;
+            return (
+              <div className="db-chat-reply-bar db-chat-edit-bar">
+                <span>✏️ <strong>Змінити повідомлення</strong>: {oPreview.slice(0, 60)}{oPreview.length > 60 ? '…' : ''}</span>
+                <button className="db-chat-reply-cancel" onClick={cancelEdit} title="Скасувати редагування">✕</button>
+              </div>
+            );
+          })()}
+          {replyTo && !editingId && (() => {
             const rText = replyTo.text || '';
             const rIsSticker = rText.startsWith(STICKER_PREFIX);
             const rFiles = parseFileUrls(replyTo.file_url);
@@ -982,7 +1158,7 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
               )}
             </div>
           )}
-          <form className="db-chat-input-row" onSubmit={send}>
+          <form className="db-chat-input-row" onSubmit={e => { e.preventDefault(); if (editingId) submitEdit(); else send(e); }}>
             <div className="db-chat-input-tools">
               <button type="button"
                 className={`db-emoji-toggle${showEmoji ? ' active' : ''}`}
@@ -1004,20 +1180,44 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
               <div className="db-chat-locked-input">🔒 Чат заблоковано адміністратором</div>
             ) : (
               <>
-                <textarea ref={inputRef} value={text} onChange={handleInput}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(e); } }}
-                  placeholder={chatError || (online ? 'Написати повідомлення...' : 'Підключення...')}
+                <textarea ref={inputRef}
+                  value={editingId ? editText : text}
+                  onChange={e => {
+                    if (editingId) {
+                      if (e.target.value.length <= 500) setEditText(e.target.value);
+                      e.target.style.height = 'auto';
+                      e.target.style.height = Math.min(e.target.scrollHeight, 140) + 'px';
+                    } else {
+                      handleInput(e);
+                    }
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Escape' && editingId) { e.preventDefault(); cancelEdit(); return; }
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (editingId) submitEdit();
+                      else send(e);
+                    }
+                  }}
+                  placeholder={editingId ? 'Редагування...' : (chatError || (online ? 'Написати повідомлення...' : 'Підключення...'))}
                   disabled={!online || uploading} className={`db-chat-input${chatError ? ' error' : ''}`}
                   maxLength={500} rows={1} />
-                {text.length > 300 && (
-                  <span className={`db-chat-char-count${text.length >= 480 ? ' danger' : text.length >= 400 ? ' warn' : ''}`}>
-                    {text.length}/500
+                {(editingId ? editText : text).length > 300 && (
+                  <span className={`db-chat-char-count${(editingId ? editText : text).length >= 480 ? ' danger' : (editingId ? editText : text).length >= 400 ? ' warn' : ''}`}>
+                    {(editingId ? editText : text).length}/500
                   </span>
                 )}
                 <button type="submit" className="db-btn db-btn-primary db-btn-sm db-send-btn"
-                  disabled={!online || (!text.trim() && !imgFiles.length) || uploading}>
+                  disabled={!online || (editingId ? !editText.trim() : (!text.trim() && !imgFiles.length)) || uploading}>
                   {uploading ? (
                     '⏳'
+                  ) : editingId ? (
+                    <>
+                      <svg className="db-send-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path d="M5 12l5 5L20 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <span className="db-send-label">Зберегти</span>
+                    </>
                   ) : (
                     <>
                       <svg className="db-send-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -1110,26 +1310,6 @@ export default function TabChat({ user, toast, userId, onUnreadChange, setTab, i
         document.body
       )}
 
-      {reactPos && ctxMenu?.msg?.id !== reactPos.msgId && createPortal(
-        <div
-          className="db-chat-react-portal"
-          style={{
-            top:   reactPos.showBelow ? reactPos.rect.bottom + 4 : reactPos.rect.top - 48,
-            left:  reactPos.isMe ? 'auto' : reactPos.rect.left,
-            right: reactPos.isMe ? window.innerWidth - reactPos.rect.right : 'auto',
-          }}
-          onMouseEnter={() => clearTimeout(reactHideTimer.current)}
-          onMouseLeave={() => { reactHideTimer.current = setTimeout(() => setReactPos(null), 180); }}
-        >
-          {EMOJI_REACT.map(emoji => (
-            <button key={emoji} className="db-react-btn"
-              onClick={() => { sendReaction(reactPos.msgId, emoji); setReactPos(null); }}>
-              {emoji}
-            </button>
-          ))}
-        </div>,
-        document.body
-      )}
 
       {lightboxImg && createPortal(        <div className="db-lightbox-overlay" onClick={() => setLightboxImg(null)}>
           <button className="db-lightbox-close" onClick={() => setLightboxImg(null)} aria-label="Закрити перегляд">✕</button>

@@ -89,6 +89,16 @@ async function request(url, options = {}) {
     console.groupEnd();
   }
 
+  if (res.status === 401 && !url.includes('/auth/')) {
+    // Token invalid/expired — clear session and redirect to login (debounced to avoid loops)
+    if (!window.__cl_session_expired) {
+      window.__cl_session_expired = true;
+      try { localStorage.removeItem('cl_token'); localStorage.removeItem('cl_user'); } catch {}
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
+  }
   if (!res.ok) throw new Error(data.message || 'Request failed');
   return data;
 }
@@ -350,9 +360,13 @@ export async function uploadBanner(file) {
   return data;
 }
 
-export async function getChatHistory(room) {
+export async function getChatHistory(room, opts = {}) {
   if (!CHECK_BACKEND) return [];
-  return request(`${BASE}/chat-messages?room=${encodeURIComponent(room)}`, { headers: authHeaders() });
+  const { limit = 50, before } = opts;
+  const params = new URLSearchParams({ room });
+  if (limit) params.set('limit', String(limit));
+  if (before) params.set('before', String(before));
+  return request(`${BASE}/chat-messages?${params.toString()}`, { headers: authHeaders() });
 }
 
 export async function searchUsers(query) {
@@ -388,6 +402,13 @@ export async function deleteBanner() {
 
 export async function getSubmissionDailyStats(days = 7) {
   const res = await fetch(`${BASE}/submissions/stats/daily?days=${days}`, { headers: authHeaders() });
+  const data = await res.json().catch(() => []);
+  if (!res.ok) throw new Error(data.error || data.message || 'Не вдалося завантажити статистику');
+  return Array.isArray(data) ? data : [];
+}
+
+export async function getUserDailyStats(days = 7) {
+  const res = await fetch(`${BASE}/admin/users/daily-stats?days=${days}`, { headers: authHeaders() });
   const data = await res.json().catch(() => []);
   if (!res.ok) throw new Error(data.error || data.message || 'Не вдалося завантажити статистику');
   return Array.isArray(data) ? data : [];
@@ -486,7 +507,7 @@ export async function uploadChatFile(file) {
   const token = getToken();
   const fd = new FormData();
   fd.append('file', file);
-  const res = await fetch(`${BASE}/chat/upload`, {
+  const res = await fetch(`${BASE}/chat/messages/upload`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
     body: fd,

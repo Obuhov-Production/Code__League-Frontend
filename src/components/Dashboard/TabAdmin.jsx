@@ -9,24 +9,67 @@ import {
   getChatRoomSettings, setChatRoomSettings, postChatAnnouncement,
   getAdminOrganizerApplications, reviewOrganizerApplication,
   getAdminUserBadges, adminGrantBadge, adminRevokeBadge,
-  getSubmissionDailyStats,
+  getUserDailyStats,
 } from '@utils/authApi';
 import { StatusBadge, RoleBadges, CustomSelect, ConfirmModal, formatDate, STATUS_LABEL, UserAvatar, UserProfileModal, ALL_BADGES, TournamentForm, PresenceBadge } from './db.shared.jsx';
 
-/* ── Submission Activity Chart ─────────────────────────── */
-function SubmissionActivityChart() {
+/* ── Period Dropdown for Charts ───────────────────── */
+const PERIOD_OPTIONS = [
+  { value: 7,  label: 'Останні 7 днів' },
+  { value: 14, label: 'Останні 14 днів' },
+  { value: 30, label: 'Останні 30 днів' },
+  { value: 90, label: 'Останні 90 днів' },
+];
+
+function PeriodDropdown({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const current = PERIOD_OPTIONS.find(o => o.value === value) || PERIOD_OPTIONS[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const close = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  return (
+    <div className="db-period-dropdown" ref={ref}>
+      <button type="button" className="db-period-dropdown-trigger" onClick={() => setOpen(p => !p)}>
+        <span className="db-period-dropdown-label">{current.label}</span>
+        <span className="db-period-dropdown-arrow">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="db-period-dropdown-menu">
+          {PERIOD_OPTIONS.map(o => (
+            <div
+              key={o.value}
+              className={`db-period-dropdown-option${o.value === value ? ' active' : ''}`}
+              onClick={() => { onChange(o.value); setOpen(false); }}
+            >
+              {o.label}
+              {o.value === value && <span className="db-period-dropdown-check">✓</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Users Activity Chart ─────────────────────────── */
+function UsersActivityChart() {
   const [days, setDays] = useState(7);
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [hover, setHover] = useState(null); // { i, x, y, d }
+  const [hover, setHover] = useState(null);
   const bodyRef = useRef(null);
   const [width, setWidth] = useState(800);
 
   useEffect(() => {
     if (!bodyRef.current) return;
     const obs = new ResizeObserver(([entry]) => {
-      const w = Math.max(320, Math.floor(entry.contentRect.width));
-      setWidth(w);
+      setWidth(Math.max(320, Math.floor(entry.contentRect.width)));
     });
     obs.observe(bodyRef.current);
     return () => obs.disconnect();
@@ -35,20 +78,22 @@ function SubmissionActivityChart() {
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    getSubmissionDailyStats(days)
+    getUserDailyStats(days)
       .then(d => { if (alive) setData(Array.isArray(d) ? d : []); })
       .catch(() => { if (alive) setData([]); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [days]);
 
-  /* Use container width directly so circles stay round (no preserveAspectRatio="none"). */
   const W = width;
   const H = 200;
-  const PAD_X = 24;
+  const PAD_X = 28;
   const PAD_TOP = 24;
   const PAD_BOT = 32;
   const max = Math.max(1, ...data.map(d => d.count));
+  const total = data.reduce((s, d) => s + d.count, 0);
+  const peak = total === 0 ? 0 : max;
+
   const xAt = i => data.length <= 1 ? W / 2 : PAD_X + (i * (W - PAD_X * 2)) / (data.length - 1);
   const yAt = v => H - PAD_BOT - ((v / max) * (H - PAD_TOP - PAD_BOT));
 
@@ -58,11 +103,13 @@ function SubmissionActivityChart() {
     ? `${linePath} L${points[points.length - 1].x},${H - PAD_BOT} L${points[0].x},${H - PAD_BOT} Z`
     : '';
 
-  const total = data.reduce((s, d) => s + d.count, 0);
-  const fmtDate = (iso) => {
+  const fmtDate = iso => {
     if (!iso) return '';
-    const dt = new Date(iso);
-    return dt.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' });
+    return new Date(iso).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' });
+  };
+  const fmtDateFull = iso => {
+    if (!iso) return '';
+    return new Date(iso).toLocaleDateString('uk-UA', { day: '2-digit', month: 'long', year: 'numeric' });
   };
   const labelEvery = data.length > 14 ? Math.ceil(data.length / 7) : 1;
 
@@ -70,25 +117,20 @@ function SubmissionActivityChart() {
     <div className="db-admin-chart-card">
       <div className="db-admin-chart-header">
         <div>
-          <h3 className="db-admin-chart-title">Submission Activity</h3>
+          <h3 className="db-admin-chart-title">Users Activity</h3>
           <p className="db-admin-chart-subtitle">
-            Всього за період: <b>{total}</b> · Пік: <b>{max === 1 && total === 0 ? 0 : max}</b>/день
+            Нових за період: <b>{total}</b> · Пік: <b>{peak}</b>/день
           </p>
         </div>
-        <select className="db-admin-chart-select" value={days} onChange={e => setDays(parseInt(e.target.value, 10))}>
-          <option value={7}>Останні 7 днів</option>
-          <option value={14}>Останні 14 днів</option>
-          <option value={30}>Останні 30 днів</option>
-          <option value={90}>Останні 90 днів</option>
-        </select>
+        <PeriodDropdown value={days} onChange={setDays} />
       </div>
       <div className="db-admin-chart-body" ref={bodyRef} style={{ position: 'relative', height: H }}>
         {loading && <div className="db-admin-chart-loading">Завантаження…</div>}
         {!loading && data.length === 0 && <div className="db-admin-chart-loading">Немає даних</div>}
         {!loading && data.length > 0 && total === 0 && (
           <div className="db-admin-chart-empty">
-            <strong>Поки немає сабмішнів</strong>
-            <span>Графік оновиться, коли команди почнуть подавати рішення</span>
+            <strong>Нових реєстрацій немає</strong>
+            <span>Графік оновиться, коли з'являться нові користувачі</span>
           </div>
         )}
         {!loading && data.length > 0 && (
@@ -96,13 +138,12 @@ function SubmissionActivityChart() {
             <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="db-admin-chart-svg"
                  onMouseLeave={() => setHover(null)} style={{ display: 'block' }}>
               <defs>
-                <linearGradient id="chartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                <linearGradient id="userChartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
                   <stop offset="0%" stopColor="#AC9EF8" stopOpacity="0.4" />
                   <stop offset="100%" stopColor="#AC9EF8" stopOpacity="0" />
                 </linearGradient>
               </defs>
 
-              {/* horizontal grid + Y-axis labels */}
               {[0, 0.25, 0.5, 0.75, 1].map(f => {
                 const y = H - PAD_BOT - f * (H - PAD_TOP - PAD_BOT);
                 const v = Math.round(max * f);
@@ -116,7 +157,7 @@ function SubmissionActivityChart() {
                 );
               })}
 
-              {total > 0 && <path d={areaPath} fill="url(#chartGradient)" />}
+              {total > 0 && <path d={areaPath} fill="url(#userChartGradient)" />}
               {total > 0 && (
                 <path d={linePath} fill="none" stroke="#AC9EF8" strokeWidth="2.5"
                       strokeLinejoin="round" strokeLinecap="round" />
@@ -149,10 +190,10 @@ function SubmissionActivityChart() {
 
             {hover && (
               <div className="db-admin-chart-tooltip" style={{ left: hover.x, top: hover.y }}>
-                <div className="db-admin-chart-tooltip-date">{fmtDate(hover.d.date)}</div>
-                <div className="db-admin-chart-tooltip-row"><span>Всього:</span><b>{hover.d.count}</b></div>
-                <div className="db-admin-chart-tooltip-row"><span>Подано:</span><b style={{color:'#22c55e'}}>{hover.d.submitted}</b></div>
-                <div className="db-admin-chart-tooltip-row"><span>Чернетки:</span><b style={{color:'#9ca3af'}}>{hover.d.drafts}</b></div>
+                <div className="db-admin-chart-tooltip-date">{fmtDateFull(hover.d.date)}</div>
+                <div className="db-admin-chart-tooltip-row">
+                  <span>👤 Нових:</span><b style={{ color: '#AC9EF8' }}>{hover.d.count}</b>
+                </div>
               </div>
             )}
           </>
@@ -1011,9 +1052,8 @@ export default function TabAdmin({ toast }) {
                 ))}
               </div>
               
-              {/* Submission Activity Chart */}
               <div className="db-admin-charts-row">
-                <SubmissionActivityChart />
+                <UsersActivityChart />
                 
                 {/* Upcoming Deadlines */}
                 <div className="db-admin-deadlines-card">

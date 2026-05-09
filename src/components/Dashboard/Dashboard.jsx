@@ -21,7 +21,7 @@ import { getMe, clearSession, isLoggedIn, API_BASE, CHECK_BACKEND, DEV_MOCK_USER
   getNotifications, markNotificationRead, deleteNotification, markAllNotificationsRead,
   deleteAllNotifications, setMyStatus } from '@utils/authApi';
 import { useToast } from '@utils/toast.jsx';
-import { hasRole, UserAvatar, MiniProfileModal, UserSearchModal, TabTip, getSocket } from './db.shared.jsx';
+import { hasRole, UserAvatar, MiniProfileModal, UserSearchModal, TabTip, getSocket, playMsgSound, BASE_ROOMS, STICKER_PREFIX, parseFileUrls } from './db.shared.jsx';
 
 import TabOverview    from './TabOverview.jsx';
 import TabTournaments from './TabTournaments.jsx';
@@ -79,12 +79,24 @@ export default function Dashboard() {
   const [notifLoading,   setNotifLoading]   = useState(false);
   const [miniProfile,    setMiniProfile]    = useState(false);
   const [userSearchOpen, setUserSearchOpen] = useState(false);
-  const [chatHasUnread,  setChatHasUnread]  = useState(false);
+  const [chatUnreadByRoom, setChatUnreadByRoom] = useState({});
+  const [chatLastMsgs,    setChatLastMsgs]      = useState({});
+  const [activeChatRoom,  setActiveChatRoom]    = useState(null);
+  const [soundOn,         setSoundOn]           = useState(() => {
+    try { return JSON.parse(localStorage.getItem('cl_chat_sound') ?? 'true'); }
+    catch { return true; }
+  });
   const [notifFilter,    setNotifFilter]    = useState('all');
   const [bellShake,      setBellShake]      = useState(false);
   const [newNotifIds,    setNewNotifIds]    = useState(new Set());
   const notifRef      = useRef(null);
   const autoMarkTimer = useRef(null);
+
+  const chatUnreadTotal = Object.values(chatUnreadByRoom).reduce((s, v) => s + (v || 0), 0);
+
+  useEffect(() => {
+    try { localStorage.setItem('cl_chat_sound', JSON.stringify(soundOn)); } catch {}
+  }, [soundOn]);
 
   useEffect(() => {
     if (!CHECK_BACKEND) {
@@ -190,6 +202,26 @@ export default function Dashboard() {
     return () => socket.off('notification:new', onNotif);
   }, [user]);
 
+  // Global chat-message listener — track unread per room + play sound platform-wide
+  useEffect(() => {
+    if (!user) return;
+    const socket = getSocket();
+    if (!socket) return;
+    const onChatMsg = msg => {
+      if (!msg?.room) return;
+      const isMyMsg = msg.user_id === user.id;
+      const isViewing = tab === 'chat' && activeChatRoom === msg.room && document.visibilityState === 'visible';
+      if (isMyMsg || isViewing) return;
+      setChatUnreadByRoom(prev => ({ ...prev, [msg.room]: (prev[msg.room] || 0) + 1 }));
+      setChatLastMsgs(prev => ({ ...prev, [msg.room]: msg }));
+      setBellShake(true);
+      setTimeout(() => setBellShake(false), 700);
+      if (soundOn) playMsgSound();
+    };
+    socket.on('message:new', onChatMsg);
+    return () => socket.off('message:new', onChatMsg);
+  }, [user, tab, activeChatRoom, soundOn]);
+
   // Request browser notification permission once user is loaded
   useEffect(() => {
     if (!user) return;
@@ -250,8 +282,43 @@ export default function Dashboard() {
   const filteredNotifications = notifications.filter(n => {
     if (notifFilter === 'tournaments') return n.link_tab === 'tournaments' || n.type === 'tournament';
     if (notifFilter === 'system')      return !n.link_tab || n.type === 'system';
+    if (notifFilter === 'admin')       return n.link_tab === 'admin';
+    if (notifFilter === 'chat')        return false;
     return true;
   });
+
+  // Build pseudo-notifications from unread chat rooms (for "chat" filter tab)
+  const chatNotifItems = Object.entries(chatUnreadByRoom)
+    .filter(([, count]) => count > 0)
+    .map(([roomId, count]) => {
+      const last = chatLastMsgs[roomId];
+      const baseRoom = BASE_ROOMS.find(r => r.id === roomId);
+      const roomLabel = baseRoom?.label
+        || (roomId.startsWith('team_') ? `🔒 Команда #${roomId.slice(5)}` : `# ${roomId}`);
+      let preview = '';
+      if (last) {
+        const text = last.text || '';
+        if (text.startsWith(STICKER_PREFIX)) preview = '🖼 Стікер';
+        else if (parseFileUrls(last.file_url).length > 0 && !text) preview = '📎 Зображення';
+        else preview = text.slice(0, 80);
+      }
+      return {
+        id: `chat-${roomId}`,
+        roomId,
+        count,
+        roomLabel,
+        username: last?.username || '',
+        preview,
+        created_at: last?.created_at,
+      };
+    })
+    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+
+  const handleChatNotifClick = (roomId) => {
+    setTab('chat');
+    setNotifOpen(false);
+    setActiveChatRoom(roomId);
+  };
 
 
   const TABS = [
@@ -308,7 +375,11 @@ export default function Dashboard() {
               <span className="db-nav-icon"><Icon /></span>
               <span className="db-nav-label">{label}</span>
               {(id === 'admin' || id === 'organizer') && <span className="db-nav-badge">●</span>}
-              {id === 'chat' && chatHasUnread && tab !== 'chat' && <span className="db-nav-badge chat-unread">●</span>}
+              {id === 'chat' && chatUnreadTotal > 0 && tab !== 'chat' && (
+                <span className="db-nav-badge chat-unread chat-unread-count">
+                  {chatUnreadTotal > 99 ? '99+' : chatUnreadTotal}
+                </span>
+              )}
             </button>
           ))}
         </nav>
@@ -344,7 +415,11 @@ export default function Dashboard() {
             <div ref={notifRef} className={`db-topbar-icon-btn db-bell-wrap${notifOpen ? ' open' : ''}${bellShake ? ' shake' : ''}`}
               onClick={() => { setNotifOpen(p => { if (!p) loadNotifications(); return !p; }); setMiniProfile(false); }}>
               <IconBell />
-              {unreadCount > 0 && <span className="db-bell-dot" />}
+              {(unreadCount + chatUnreadTotal) > 0 && (
+                <span className={`db-bell-dot${chatUnreadTotal > 0 ? ' has-chat' : ''}`}>
+                  {(unreadCount + chatUnreadTotal) > 99 ? '99+' : (unreadCount + chatUnreadTotal)}
+                </span>
+              )}
               {notifOpen && (
                 <div className="db-notif-panel" onClick={e => e.stopPropagation()}>
                   <div className="db-notif-header">
@@ -356,15 +431,48 @@ export default function Dashboard() {
                       </div>
                     </div>
                     <div className="db-notif-filter-tabs">
-                      {[['all','Всі'],['tournaments','Турніри'],['system','Система']].map(([key, label]) => (
-                        <button key={key} className={`db-notif-ftab${notifFilter === key ? ' active' : ''}`}
+                      {[
+                        ['all','Всі', 0],
+                        ['chat','Чат', chatUnreadTotal],
+                        ['tournaments','Турніри', 0],
+                        ['system','Система', 0],
+                        ...(hasRole(user, 'admin') ? [['admin','Адмін', 0]] : []),
+                      ].map(([key, label, badge]) => (
+                        <button key={key}
+                          className={`db-notif-ftab${notifFilter === key ? ' active' : ''}${key === 'chat' && badge > 0 ? ' has-unread' : ''}`}
                           onClick={e => { e.stopPropagation(); setNotifFilter(key); }}>
                           {label}
+                          {badge > 0 && <span className="db-notif-ftab-badge">{badge > 99 ? '99+' : badge}</span>}
                         </button>
                       ))}
                     </div>
                   </div>
-                  {notifLoading ? (
+                  {notifFilter === 'chat' ? (
+                    chatNotifItems.length === 0 ? (
+                      <div className="db-notif-empty">
+                        <span className="db-notif-empty-icon">💬</span>
+                        <span>Немає непрочитаних повідомлень</span>
+                      </div>
+                    ) : (
+                      <div className="db-notif-list">
+                        {chatNotifItems.map(c => (
+                          <div key={c.id} className="db-notif-item db-notif-item--chat"
+                            onClick={() => handleChatNotifClick(c.roomId)}>
+                            <span className="db-notif-icon">💬</span>
+                            <div className="db-notif-body">
+                              <span className="db-notif-text">
+                                <strong>{c.roomLabel}</strong>
+                                {c.username && <span style={{ color: '#888' }}> · {c.username}</span>}
+                              </span>
+                              {c.preview && <span className="db-notif-time" style={{ color: '#666', fontSize: 12 }}>{c.preview}</span>}
+                              {c.created_at && <span className="db-notif-time">{relativeTime(c.created_at)}</span>}
+                            </div>
+                            <span className="db-notif-chat-count">{c.count > 99 ? '99+' : c.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  ) : notifLoading ? (
                     <div style={{ padding: '16px 0', textAlign: 'center', color: '#888', fontSize: 13 }}>Завантаження...</div>
                   ) : filteredNotifications.length === 0 ? (
                     <div className="db-notif-empty">
@@ -412,7 +520,17 @@ export default function Dashboard() {
               {tab === 'tournaments' && <TabTournaments user={user} toast={toast} />}
               {tab === 'teams'       && <TabTeams       toast={toast} setTab={setTab} />}
               {tab === 'leaderboard' && <TabLeaderboard toast={toast} />}
-              {tab === 'chat'        && <TabChat        user={user} toast={toast} userId={user?.id} onUnreadChange={setChatHasUnread} setTab={setTab} isMuted={isMuted} />}
+              {/* TabChat stays mounted on every tab so messages stream in live in the background.
+                  Hidden via display:none when not on chat tab — state, sockets and listeners survive. */}
+              {user && (
+                <div style={{ display: tab === 'chat' ? 'contents' : 'none' }}>
+                  <TabChat user={user} toast={toast} userId={user?.id}
+                    setTab={setTab} isMuted={isMuted} isActive={tab === 'chat'}
+                    chatUnreadByRoom={chatUnreadByRoom} setChatUnreadByRoom={setChatUnreadByRoom}
+                    setActiveChatRoom={setActiveChatRoom}
+                    soundOn={soundOn} setSoundOn={setSoundOn} />
+                </div>
+              )}
               {tab === 'profile'     && <TabProfile     user={user} setUser={setUser} toast={toast} onLogout={handleLogout} setTab={setTab} />}
               {tab === 'jury'      && (hasRole(user, 'admin') || hasRole(user, 'jury'))      && <TabJury      user={user} toast={toast} />}
               {tab === 'organizer' && (hasRole(user, 'admin') || hasRole(user, 'organizer')) && <TabOrganizer toast={toast} user={user} />}

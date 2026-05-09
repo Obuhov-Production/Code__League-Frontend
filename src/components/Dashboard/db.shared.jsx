@@ -714,6 +714,42 @@ export function playMsgSound() {
   } catch {}
 }
 
+/** Generic tone helper — used by the chat-action sound effects below. */
+function playTone({ freq = 880, duration = 0.18, volume = 0.1, type = 'sine', sweepTo = null }) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    if (sweepTo !== null) {
+      osc.frequency.exponentialRampToValueAtTime(sweepTo, ctx.currentTime + duration);
+    }
+    gain.gain.setValueAtTime(volume, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + duration);
+    osc.onended = () => ctx.close();
+  } catch {}
+}
+
+/** When the user replies (sends a reply) — short upward swoosh. */
+export function playReplySound() {
+  playTone({ freq: 520, sweepTo: 880, duration: 0.16, volume: 0.09, type: 'triangle' });
+}
+
+/** When the user adds a reaction — soft pop. */
+export function playReactionSound() {
+  playTone({ freq: 1100, sweepTo: 1500, duration: 0.1, volume: 0.08, type: 'sine' });
+  setTimeout(() => playTone({ freq: 1700, duration: 0.06, volume: 0.05, type: 'sine' }), 60);
+}
+
+/** When a message is deleted — short downward whoosh. */
+export function playDeleteSound() {
+  playTone({ freq: 520, sweepTo: 180, duration: 0.22, volume: 0.09, type: 'sawtooth' });
+}
+
 /* ══════════════════════════════════════════════════
    JURY SEARCH SELECTOR
    Пошук користувачів з фільтрацією за ролями (organizer/jury)
