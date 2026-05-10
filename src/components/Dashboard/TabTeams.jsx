@@ -3,7 +3,7 @@
 import IconTeams from "@images/dashboard_components/icon_teams.svg?react";
 
 import { getMyTeams, getTeamById, updateTeam, searchUsers, getTournamentRounds, getTeamSubmissions, createSubmission, updateSubmission } from "@utils/authApi";
-import { StatusBadge } from "./db.shared.jsx";
+import { StatusBadge, UserAvatar } from "./db.shared.jsx";
 
 const AVATAR_GRADIENTS = [
   "linear-gradient(135deg,#AC9EF8,#7c5ff5)",
@@ -454,20 +454,32 @@ export default function TabTeams({ toast, setTab }) {
                           <p className="db-team-detail-title">Учасники команди</p>
                           {members.length > 0 ? (
                             <div className="db-team-members-grid">
-                              {members.map((m, i) => (
-                                <div key={i} className="db-team-member-row">
-                                  <div className="db-team-member-avatar" style={{ background: AVATAR_GRADIENTS[i % AVATAR_GRADIENTS.length] }}>
-                                    {(m.full_name || m.username || "?").slice(0,2).toUpperCase()}
+                              {members.map((m, i) => {
+                                const userObj = m.user_id ? {
+                                  id: m.user_id,
+                                  username: m.username,
+                                  user_avatar_url: m.user_avatar_url,
+                                  status: m.presence,
+                                } : null;
+                                return (
+                                  <div key={i} className="db-team-member-row">
+                                    {userObj ? (
+                                      <UserAvatar user={userObj} size={36} showStatus={true} />
+                                    ) : (
+                                      <div className="db-team-member-avatar" style={{ background: AVATAR_GRADIENTS[i % AVATAR_GRADIENTS.length] }}>
+                                        {(m.full_name || m.username || "?").slice(0,2).toUpperCase()}
+                                      </div>
+                                    )}
+                                    <div className="db-team-member-info">
+                                      <span className="db-team-member-name">{m.full_name || m.username}</span>
+                                      {m.email && <span className="db-team-member-email">{m.email}</span>}
+                                    </div>
+                                    {m.username && (
+                                      <span className="db-team-member-platform-badge">На платформі</span>
+                                    )}
                                   </div>
-                                  <div className="db-team-member-info">
-                                    <span className="db-team-member-name">{m.full_name || m.username}</span>
-                                    {m.email && <span className="db-team-member-email">{m.email}</span>}
-                                  </div>
-                                  {m.username && (
-                                    <span className="db-team-member-platform-badge">На платформі</span>
-                                  )}
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           ) : (
                             <p className="db-team-no-members">Немає даних про учасників</p>

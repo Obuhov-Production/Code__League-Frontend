@@ -21,6 +21,20 @@ const PERIOD_OPTIONS = [
   { value: 90, label: 'Останні 90 днів' },
 ];
 
+/* ── Metric options for activity chart ────────────── */
+const METRIC_OPTIONS = [
+  { value: 'users',       label: 'Реєстрації',       icon: '👤', color: '#AC9EF8',
+    title: 'Users Activity', subtitle: 'Нові користувачі за період', tooltip: 'Нових' },
+  { value: 'chat',        label: 'Повідомлення в чаті', icon: '💬', color: '#60a5fa',
+    title: 'Chat Activity',  subtitle: 'Відправлено повідомлень',    tooltip: 'Повідомлень' },
+  { value: 'tournaments', label: 'Турніри',          icon: '🏆', color: '#f59e0b',
+    title: 'Tournaments Activity', subtitle: 'Створено турнірів',    tooltip: 'Турнірів' },
+  { value: 'teams',       label: 'Команди',          icon: '👥', color: '#34d399',
+    title: 'Teams Activity', subtitle: 'Створено команд',            tooltip: 'Команд' },
+  { value: 'submissions', label: 'Сабміти',          icon: '📦', color: '#f472b6',
+    title: 'Submissions Activity', subtitle: 'Відправлено сабмітів', tooltip: 'Сабмітів' },
+];
+
 function PeriodDropdown({ value, onChange }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -57,14 +71,53 @@ function PeriodDropdown({ value, onChange }) {
   );
 }
 
+function MetricDropdown({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const current = METRIC_OPTIONS.find(o => o.value === value) || METRIC_OPTIONS[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const close = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  return (
+    <div className="db-period-dropdown" ref={ref}>
+      <button type="button" className="db-period-dropdown-trigger" onClick={() => setOpen(p => !p)}>
+        <span className="db-period-dropdown-label">{current.icon} {current.label}</span>
+        <span className="db-period-dropdown-arrow">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="db-period-dropdown-menu">
+          {METRIC_OPTIONS.map(o => (
+            <div
+              key={o.value}
+              className={`db-period-dropdown-option${o.value === value ? ' active' : ''}`}
+              onClick={() => { onChange(o.value); setOpen(false); }}
+            >
+              <span>{o.icon} {o.label}</span>
+              {o.value === value && <span className="db-period-dropdown-check">✓</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Users Activity Chart ─────────────────────────── */
 function UsersActivityChart() {
   const [days, setDays] = useState(7);
+  const [metric, setMetric] = useState('users');
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [hover, setHover] = useState(null);
   const bodyRef = useRef(null);
   const [width, setWidth] = useState(800);
+
+  const metricInfo = METRIC_OPTIONS.find(m => m.value === metric) || METRIC_OPTIONS[0];
 
   useEffect(() => {
     if (!bodyRef.current) return;
@@ -78,12 +131,12 @@ function UsersActivityChart() {
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    getUserDailyStats(days)
+    getUserDailyStats(days, metric)
       .then(d => { if (alive) setData(Array.isArray(d) ? d : []); })
       .catch(() => { if (alive) setData([]); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [days]);
+  }, [days, metric]);
 
   const W = width;
   const H = 200;
@@ -117,20 +170,23 @@ function UsersActivityChart() {
     <div className="db-admin-chart-card">
       <div className="db-admin-chart-header">
         <div>
-          <h3 className="db-admin-chart-title">Users Activity</h3>
+          <h3 className="db-admin-chart-title">{metricInfo.title}</h3>
           <p className="db-admin-chart-subtitle">
-            Нових за період: <b>{total}</b> · Пік: <b>{peak}</b>/день
+            {metricInfo.subtitle}: <b>{total}</b> · Пік: <b>{peak}</b>/день
           </p>
         </div>
-        <PeriodDropdown value={days} onChange={setDays} />
+        <div className="db-admin-chart-controls">
+          <MetricDropdown value={metric} onChange={setMetric} />
+          <PeriodDropdown value={days} onChange={setDays} />
+        </div>
       </div>
       <div className="db-admin-chart-body" ref={bodyRef} style={{ position: 'relative', height: H }}>
         {loading && <div className="db-admin-chart-loading">Завантаження…</div>}
         {!loading && data.length === 0 && <div className="db-admin-chart-loading">Немає даних</div>}
         {!loading && data.length > 0 && total === 0 && (
           <div className="db-admin-chart-empty">
-            <strong>Нових реєстрацій немає</strong>
-            <span>Графік оновиться, коли з'являться нові користувачі</span>
+            <strong>{metricInfo.subtitle}: 0</strong>
+            <span>Графік оновиться, коли з'являться нові дані</span>
           </div>
         )}
         {!loading && data.length > 0 && (
@@ -139,8 +195,8 @@ function UsersActivityChart() {
                  onMouseLeave={() => setHover(null)} style={{ display: 'block' }}>
               <defs>
                 <linearGradient id="userChartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#AC9EF8" stopOpacity="0.4" />
-                  <stop offset="100%" stopColor="#AC9EF8" stopOpacity="0" />
+                  <stop offset="0%" stopColor={metricInfo.color} stopOpacity="0.4" />
+                  <stop offset="100%" stopColor={metricInfo.color} stopOpacity="0" />
                 </linearGradient>
               </defs>
 
@@ -159,7 +215,7 @@ function UsersActivityChart() {
 
               {total > 0 && <path d={areaPath} fill="url(#userChartGradient)" />}
               {total > 0 && (
-                <path d={linePath} fill="none" stroke="#AC9EF8" strokeWidth="2.5"
+                <path d={linePath} fill="none" stroke={metricInfo.color} strokeWidth="2.5"
                       strokeLinejoin="round" strokeLinecap="round" />
               )}
 
@@ -167,7 +223,7 @@ function UsersActivityChart() {
                 <g key={i}>
                   <circle cx={p.x} cy={p.y}
                           r={hover?.i === i ? 6 : (p.d.count > 0 ? 4 : 3)}
-                          fill={p.d.count > 0 ? '#AC9EF8' : '#d1d5db'}
+                          fill={p.d.count > 0 ? metricInfo.color : '#d1d5db'}
                           stroke="#fff"
                           strokeWidth={hover?.i === i ? 3 : 2} />
                   <rect x={p.x - 18} y={0} width={36} height={H} fill="transparent"
@@ -177,7 +233,7 @@ function UsersActivityChart() {
 
               {hover && (
                 <line x1={hover.x} x2={hover.x} y1={PAD_TOP} y2={H - PAD_BOT}
-                      stroke="#7c5ff5" strokeDasharray="3 3" strokeWidth="1" opacity="0.5" />
+                      stroke={metricInfo.color} strokeDasharray="3 3" strokeWidth="1" opacity="0.6" />
               )}
 
               {points.map((p, i) => (
@@ -192,7 +248,8 @@ function UsersActivityChart() {
               <div className="db-admin-chart-tooltip" style={{ left: hover.x, top: hover.y }}>
                 <div className="db-admin-chart-tooltip-date">{fmtDateFull(hover.d.date)}</div>
                 <div className="db-admin-chart-tooltip-row">
-                  <span>👤 Нових:</span><b style={{ color: '#AC9EF8' }}>{hover.d.count}</b>
+                  <span>{metricInfo.icon} {metricInfo.tooltip}:</span>
+                  <b style={{ color: metricInfo.color }}>{hover.d.count}</b>
                 </div>
               </div>
             )}

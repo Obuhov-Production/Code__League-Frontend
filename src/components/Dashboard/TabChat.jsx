@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 
 import IconChat    from '@images/dashboard_components/icon_chat.svg?react';
 import IconEmoji   from '@images/dashboard_components/icon_emoji.svg?react';
@@ -11,7 +12,7 @@ import {
   getPinnedMessages, uploadChatFile, getUserProfile,
   getMutedChatUsers, toggleChatMute,
   pinChatMessage, unpinChatMessage,
-  searchUsers, addTeamChatMember,
+  searchUsers, addTeamChatMember, getTeamChatMembers,
   API_BASE,
 } from '@utils/authApi';
 import {
@@ -49,6 +50,7 @@ export default function TabChat({
   setActiveChatRoom,
   soundOn, setSoundOn,
 }) {
+  const navigate = useNavigate();
   const [myTeams,     setMyTeams]     = useState([]);
   const [room,        setRoom]        = useState('general');
   const [messages,    setMessages]    = useState([]);
@@ -92,6 +94,9 @@ export default function TabChat({
   const [addMemberSearching, setAddMemberSearching] = useState(false);
   const [addMemberAdding, setAddMemberAdding] = useState(false);
   const addMemberTimer = useRef(null);
+  const [membersPanelOpen, setMembersPanelOpen] = useState(false);
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [teamMembersLoading, setTeamMembersLoading] = useState(false);
 
   async function openChatProfile(basic) {
     setChatProfile({ ...basic, loading: true });
@@ -190,7 +195,12 @@ export default function TabChat({
       user_avatar_url: msg.user_avatar_url ?? msg.user?.user_avatar_url ?? null,
     });
     const onHistory = ({ room: r, messages: msgs }) => {
-      if (r === room) { setMessages((msgs || []).map(normalizeMsg)); setLoading(false); }
+      if (r === room) {
+        setMessages((msgs || []).map(normalizeMsg));
+        setLoading(false);
+        // Room opened → mark every incoming unread message as read for the sender.
+        if (isActive) socket.emit('chat:markRead', { room });
+      }
     };
     // message:new — backend event name. Unread for OTHER rooms is handled
     // globally by Dashboard. Here we append to the currently-viewed room
@@ -199,7 +209,17 @@ export default function TabChat({
       const m = normalizeMsg(msg);
       if (m.room !== room) return;
       setMessages(prev => [...prev, m]);
-      if (m.user_id !== meId && soundOn) playMsgSound();
+      if (m.user_id !== meId) {
+        if (soundOn) playMsgSound();
+        // Active room is being viewed → mark this message as read immediately.
+        if (isActive) socket.emit('chat:markRead', { room });
+      }
+    };
+    // message:read — sender side: flip ✓ → ✓✓ for the listed message ids.
+    const onRead = ({ room: r, message_ids }) => {
+      if (r !== room || !Array.isArray(message_ids) || message_ids.length === 0) return;
+      const idSet = new Set(message_ids);
+      setMessages(prev => prev.map(m => idSet.has(m.id) ? { ...m, is_read: true } : m));
     };
     const onConn    = () => { setOnline(true); setHasEverConnected(true); doJoin(); };
     const onDisconn = () => setOnline(false);
@@ -255,6 +275,7 @@ export default function TabChat({
     const onUnpinned = ({ messageId }) => setPinnedMsgs(prev => prev.filter(p => p.id !== messageId));
     socket.on('message:pinned',   onPinned);
     socket.on('message:unpinned', onUnpinned);
+    socket.on('message:read',     onRead);
     if (socket.connected) { setOnline(true); setHasEverConnected(true); }
     return () => {
       socket.emit('room:leave', { room });
@@ -269,8 +290,9 @@ export default function TabChat({
       socket.off('message:edited');
       socket.off('message:pinned',   onPinned);
       socket.off('message:unpinned', onUnpinned);
+      socket.off('message:read',     onRead);
     };
-  }, [room, socket, soundOn, meId]);
+  }, [room, socket, soundOn, meId, isActive]);
 
   const msgsRef = useRef(null);
 
@@ -578,6 +600,75 @@ export default function TabChat({
   const currentRoom = ROOMS.find(r => r.id === room);
   const currentTeam = room.startsWith('team_') ? myTeams.find(t => `team_${t.id}` === room) : null;
 
+  // Load team chat members when panel opens or active team changes
+  useEffect(() => {
+    if (!membersPanelOpen || !currentTeam) return;
+    let alive = true;
+    setTeamMembersLoading(true);
+    getTeamChatMembers(currentTeam.id)
+      .then(list => { if (alive) setTeamMembers(Array.isArray(list) ? list : []); })
+      .catch(() => { if (alive) setTeamMembers([]); })
+      .finally(() => { if (alive) setTeamMembersLoading(false); });
+    return () => { alive = false; };
+  }, [membersPanelOpen, currentTeam?.id]);
+
+  // For non-team rooms: derive unique participants from loaded messages.
+  const derivedRoomMembers = useMemo(() => {
+    if (currentTeam) return null;
+    const byId = new Map();
+    for (const m of messages) {
+      if (!m.user_id || byId.has(m.user_id)) continue;
+      byId.set(m.user_id, {
+        id: m.user_id,
+        username: m.username,
+        user_avatar_url: m.user_avatar_url ?? null,
+        status: null, // unknown presence in non-team rooms
+        is_captain: false,
+      });
+    }
+    return Array.from(byId.values());
+  }, [messages, currentTeam]);
+
+  // Heuristic: treat any non-offline status as stale → offline if last_seen_at older than 3 minutes.
+  // Reason: the DB `status` column can be left at 'online'/'away'/'do_not_disturb' if the socket
+  // disconnect handler didn't fire (browser killed, network drop). last_seen_at is updated on every
+  // socket ping, so it's the reliable freshness signal.
+  const STALE_PRESENCE_MS = 3 * 60 * 1000;
+  const computeEffectivePresence = (m) => {
+    if (m.id === meId) return online ? 'online' : 'offline';
+    if (!m.status) return null; // unknown — non-team room derived member
+    if (m.status === 'offline') return 'offline';
+    if (m.last_seen_at) {
+      const seenAgo = Date.now() - new Date(m.last_seen_at).getTime();
+      if (seenAgo > STALE_PRESENCE_MS) return 'offline';
+    }
+    return m.status;
+  };
+
+  const groupedTeamMembers = useMemo(() => {
+    const source = currentTeam ? teamMembers : (derivedRoomMembers || []);
+    const online = [];
+    const offline = [];
+    for (const m of source) {
+      const ep = computeEffectivePresence(m);
+      const decorated = { ...m, effective_status: ep };
+      // 'away'/'do_not_disturb' are treated as still online (they're connected).
+      const isOnline = ep === 'online' || ep === 'do_not_disturb' || ep === 'away';
+      (isOnline ? online : offline).push(decorated);
+    }
+    const byCaptainThenName = (a, b) => {
+      if (a.is_captain !== b.is_captain) return a.is_captain ? -1 : 1;
+      return (a.username || '').localeCompare(b.username || '');
+    };
+    online.sort(byCaptainThenName);
+    offline.sort(byCaptainThenName);
+    return { online, offline };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamMembers, derivedRoomMembers, currentTeam, meId, online]);
+
+  const visibleMembersList = currentTeam ? teamMembers : (derivedRoomMembers || []);
+  const isMembersLoading = currentTeam ? teamMembersLoading : false;
+
   const handleAddMemberSearch = (q) => {
     setAddMemberQuery(q);
     setAddMemberResult(null);
@@ -645,6 +736,7 @@ export default function TabChat({
             onClick={() => openChatProfile({ user_id: msg.user_id, username: msg.username, user_avatar_url: msg.user_avatar_url, role: msg.role })}>
             <img src={resolveAvatarUrl(msg.user_avatar_url)}
               alt={msg.username}
+              referrerPolicy="no-referrer"
               className={`db-chat-msg-avatar db-chat-msg-avatar--img${msg.role === 'admin' ? ' admin' : ''}`}
               style={{ display: msg.user_avatar_url ? undefined : 'none' }}
               onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextElementSibling && (e.currentTarget.nextElementSibling.style.removeProperty('display')); }}
@@ -920,23 +1012,45 @@ export default function TabChat({
       {/* Main area */}
       <div className="db-chat-main">
         <div className="db-chat-header">
-          <button className="db-chat-rooms-toggle"
+          <div className="db-chat-header-room"
             onClick={e => { e.stopPropagation(); setRoomsOpen(true); }}
+            role="button" tabIndex={0}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setRoomsOpen(true); } }}
             title="Кімнати чату" aria-label="Відкрити список кімнат">
-            ☰
-            {Object.values(unreadCounts).some(v => v > 0) && <span className="db-rooms-toggle-badge" />}
-          </button>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <strong>{currentRoom?.label ?? room}</strong>
-            {currentRoom?.locked && <span className="db-chat-locked-tag">приватна</span>}
-            {roomLocked && <span className="db-chat-locked-tag locked">🔒 заблоковано</span>}
+            <button className="db-chat-rooms-toggle" tabIndex={-1} aria-hidden="true">
+              ☰
+              {Object.values(unreadCounts).some(v => v > 0) && <span className="db-rooms-toggle-badge" />}
+            </button>
+            <div className="db-chat-header-room-title">
+              <strong>{currentRoom?.label ?? room}</strong>
+              {currentRoom?.locked && <span className="db-chat-locked-tag">приватна</span>}
+              {roomLocked && <span className="db-chat-locked-tag locked">🔒 заблоковано</span>}
+            </div>
+            <svg className="db-chat-header-room-chev" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+              <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
           </div>
           {online && onlineCount > 0 && <span className="db-chat-online-count">⚫ {onlineCount} онлайн</span>}
-          {currentTeam && (
-            <button className="db-chat-add-member-btn" onClick={() => setAddMemberOpen(true)} title="Додати учасника до чату">
-              ➕
+          <div className="db-chat-header-actions">
+            <button
+              className={`db-chat-members-toggle${membersPanelOpen ? ' active' : ''}`}
+              onClick={() => setMembersPanelOpen(p => !p)}
+              title="Список учасників"
+              aria-label="Список учасників"
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
             </button>
-          )}
+            {currentTeam && (
+              <button className="db-chat-add-member-btn" onClick={() => setAddMemberOpen(true)} title="Додати учасника до чату">
+                ➕
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Add member modal for team rooms */}
@@ -1234,55 +1348,263 @@ export default function TabChat({
         </div>
       </div>
 
-      {/* Mini-profile overlay */}
-      {chatProfile && (
-        <div className="db-chat-profile-overlay" onClick={() => setChatProfile(null)}>
-          <div className="db-chat-profile-card" onClick={e => e.stopPropagation()}>
-            <div className="db-cp-header"
-              style={chatProfile.banner_url
-                ? { backgroundImage: `url(${API_BASE + chatProfile.banner_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-                : { background: chatProfile.banner_color || '#191A23' }
-              }>
-              <button className="db-chat-profile-close" onClick={() => setChatProfile(null)}>✕</button>
+      {/* Members panel — Discord-style sidebar (works for all rooms) */}
+      {membersPanelOpen && (
+        <>
+          <div className="db-chat-members-backdrop" onClick={() => setMembersPanelOpen(false)} />
+          <aside className="db-chat-members-panel" onClick={e => e.stopPropagation()}>
+            <div className="db-chat-members-header">
+              <span className="db-chat-members-title">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+                {currentTeam ? 'Учасники команди' : 'Учасники чату'}
+              </span>
+              <button className="db-chat-members-close" onClick={() => setMembersPanelOpen(false)} aria-label="Закрити">✕</button>
             </div>
-            <div className="db-cp-avatar-wrap">
-              <img src={resolveAvatarUrl(chatProfile.user_avatar_url)}
-                alt={chatProfile.username}
-                className={`db-cp-avatar db-cp-avatar--img${chatProfile.role === 'admin' ? ' admin' : ''}`}
-                style={{ display: chatProfile.user_avatar_url ? undefined : 'none' }}
-                onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextElementSibling && (e.currentTarget.nextElementSibling.style.removeProperty('display')); }}
-              />
-              <div className={`db-cp-avatar${chatProfile.role === 'admin' ? ' admin' : ''}`}
-                style={{ display: chatProfile.user_avatar_url ? 'none' : undefined }}>
-                {(chatProfile.username || '?').slice(0, 2).toUpperCase()}
-              </div>
+
+            <div className="db-chat-members-body">
+              {isMembersLoading && <div className="db-chat-members-loading">Завантаження…</div>}
+
+              {!isMembersLoading && visibleMembersList.length === 0 && (
+                <div className="db-chat-members-empty">
+                  {currentTeam ? 'Учасників ще немає' : 'Поки що ніхто не писав у цій кімнаті'}
+                </div>
+              )}
+
+              {!isMembersLoading && groupedTeamMembers.online.length > 0 && (
+                <div className="db-chat-members-group">
+                  <div className="db-chat-members-group-label">
+                    В мережі — {groupedTeamMembers.online.length}
+                  </div>
+                  {groupedTeamMembers.online.map(m => (
+                    <div key={m.id} className="db-chat-members-row"
+                         onClick={() => openChatProfile({
+                           user_id: m.id, username: m.username,
+                           avatar_url: m.user_avatar_url,
+                         })}>
+                      <div className="db-chat-members-avatar-wrap">
+                        {m.user_avatar_url ? (
+                          <img src={m.user_avatar_url.startsWith('http') ? m.user_avatar_url : `${API_BASE}${m.user_avatar_url}`}
+                               alt={m.username || 'user'}
+                               referrerPolicy="no-referrer"
+                               className="db-chat-members-avatar" />
+                        ) : (
+                          <div className="db-chat-members-avatar db-chat-members-avatar--initials">
+                            {(m.username || '?').slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                        <span className={`db-chat-members-dot db-chat-members-dot--${m.effective_status || 'online'}`} />
+                      </div>
+                      <div className="db-chat-members-info">
+                        <span className="db-chat-members-name">{m.username || `user#${m.id}`}</span>
+                        {m.is_captain && <span className="db-chat-members-tag">👑 Капітан</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {!isMembersLoading && groupedTeamMembers.offline.length > 0 && (
+                <div className="db-chat-members-group">
+                  <div className="db-chat-members-group-label">
+                    {currentTeam ? `Не в мережі — ${groupedTeamMembers.offline.length}` : `Учасники — ${groupedTeamMembers.offline.length}`}
+                  </div>
+                  {groupedTeamMembers.offline.map(m => (
+                    <div key={m.id} className="db-chat-members-row db-chat-members-row--offline"
+                         onClick={() => openChatProfile({
+                           user_id: m.id, username: m.username,
+                           avatar_url: m.user_avatar_url,
+                         })}>
+                      <div className="db-chat-members-avatar-wrap">
+                        {m.user_avatar_url ? (
+                          <img src={m.user_avatar_url.startsWith('http') ? m.user_avatar_url : `${API_BASE}${m.user_avatar_url}`}
+                               alt={m.username || 'user'}
+                               referrerPolicy="no-referrer"
+                               className="db-chat-members-avatar" />
+                        ) : (
+                          <div className="db-chat-members-avatar db-chat-members-avatar--initials">
+                            {(m.username || '?').slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                        <span className="db-chat-members-dot db-chat-members-dot--offline" />
+                      </div>
+                      <div className="db-chat-members-info">
+                        <span className="db-chat-members-name">{m.username || `user#${m.id}`}</span>
+                        {m.is_captain && <span className="db-chat-members-tag">👑 Капітан</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="db-cp-body">
-              <div className="db-cp-name">{chatProfile.username || 'Anonymous'}</div>
-              {chatProfile.role && chatProfile.role !== 'user' && (
-                <div className="db-cp-role-badge">{chatProfile.role === 'admin' ? '⚙ Admin' : chatProfile.role}</div>
-              )}
-              {chatProfile.user_description && !chatProfile.loading && (
-                <p className="db-cp-desc">{chatProfile.user_description}</p>
-              )}
-              <div className="db-cp-meta">
-                {chatProfile.loading
-                  ? <span className="db-cp-date">Завантаження...</span>
-                  : chatProfile.created_at && (
-                    <span className="db-cp-date">Реєстрація: {new Date(chatProfile.created_at).toLocaleDateString('uk-UA', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                  )
-                }
+          </aside>
+        </>
+      )}
+
+      {/* Mini-profile popover (Discord-style) */}
+      {chatProfile && (() => {
+        const fullName = [chatProfile.first_name, chatProfile.last_name].filter(Boolean).join(' ').trim();
+        const displayName = fullName || chatProfile.username || 'Anonymous';
+        // Apply same effective-presence rules as panel: trust socket for self,
+        // demote stale online/away/dnd statuses if last_seen_at > 3 min ago.
+        const presence = (() => {
+          if (chatProfile.user_id === meId) return online ? 'online' : 'offline';
+          const raw = chatProfile.status;
+          if (!raw || raw === 'offline') return raw;
+          if (chatProfile.last_seen_at) {
+            const seenAgo = Date.now() - new Date(chatProfile.last_seen_at).getTime();
+            if (seenAgo > 3 * 60 * 1000) return 'offline';
+          }
+          return raw;
+        })();
+        const presenceLabel = presence === 'online' ? 'У мережі'
+          : presence === 'away' ? 'Не на місці'
+          : presence === 'do_not_disturb' ? 'Не турбувати'
+          : presence === 'offline' ? 'Не в мережі'
+          : (chatProfile.last_seen_text || '');
+        const isAdmin = String(chatProfile.role || '').includes('admin');
+        const isOrg   = String(chatProfile.role || '').includes('organizer');
+        const isJury  = String(chatProfile.role || '').includes('jury');
+        const isSelf  = chatProfile.user_id === meId;
+        const regDate = chatProfile.created_at
+          ? new Date(chatProfile.created_at).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' })
+          : null;
+        return (
+          <div className="db-chat-profile-overlay" onClick={() => setChatProfile(null)}>
+            <div className="db-chat-profile-card db-mp" onClick={e => e.stopPropagation()}>
+              <div className="db-mp-banner"
+                style={chatProfile.banner_url
+                  ? { backgroundImage: `url(${API_BASE + chatProfile.banner_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+                  : { background: chatProfile.banner_color
+                      ? `linear-gradient(135deg, ${chatProfile.banner_color} 0%, rgba(0,0,0,.35) 100%)`
+                      : 'linear-gradient(135deg, #2c2540 0%, #191A23 100%)' }
+                }>
+                <button className="db-mp-close" onClick={() => setChatProfile(null)} aria-label="Закрити">✕</button>
               </div>
-              <div className="db-cp-actions">
-                {chatProfile.user_id === meId
-                  ? <button className="db-cp-btn" onClick={() => { setChatProfile(null); setTab('profile'); }}>Редагувати профіль</button>
-                  : <button className="db-cp-btn" onClick={() => { setViewProfile(chatProfile); setChatProfile(null); }}>Профіль →</button>
-                }
+
+              <div className="db-mp-avatar-wrap">
+                {chatProfile.user_avatar_url ? (
+                  <img src={resolveAvatarUrl(chatProfile.user_avatar_url)}
+                    alt={chatProfile.username}
+                    referrerPolicy="no-referrer"
+                    className="db-mp-avatar"
+                    onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextElementSibling && (e.currentTarget.nextElementSibling.style.removeProperty('display')); }}
+                  />
+                ) : null}
+                <div className="db-mp-avatar db-mp-avatar--initials"
+                  style={{ display: chatProfile.user_avatar_url ? 'none' : undefined }}>
+                  {(chatProfile.username || '?').slice(0, 2).toUpperCase()}
+                </div>
+                {presence && (
+                  <span className={`db-mp-presence db-mp-presence--${presence}`}
+                        title={presenceLabel} />
+                )}
+              </div>
+
+              <div className="db-mp-body">
+                {chatProfile.loading && (
+                  <div className="db-mp-loading">Завантаження…</div>
+                )}
+
+                <div className="db-mp-name-block">
+                  <div className="db-mp-display-name">{displayName}</div>
+                  {chatProfile.username && fullName && (
+                    <div className="db-mp-handle">@{chatProfile.username}</div>
+                  )}
+                  {!fullName && chatProfile.username && (
+                    <div className="db-mp-handle">@{chatProfile.username}</div>
+                  )}
+                </div>
+
+                {(() => {
+                  const pinnedBadgeMeta = chatProfile.pinned_badge
+                    ? ALL_BADGES.find(b => b.id === chatProfile.pinned_badge)
+                    : null;
+                  if (!isAdmin && !isOrg && !isJury && !pinnedBadgeMeta) return null;
+                  return (
+                    <div className="db-mp-badges">
+                      {isAdmin && <span className="db-mp-badge admin">⚙ Адмін</span>}
+                      {isOrg   && <span className="db-mp-badge org">🎯 Організатор</span>}
+                      {isJury  && <span className="db-mp-badge jury">⚖ Журі</span>}
+                      {pinnedBadgeMeta && (
+                        <span className="db-mp-badge pinned"
+                              title={pinnedBadgeMeta.description}>
+                          {pinnedBadgeMeta.image
+                            ? <img src={pinnedBadgeMeta.image} alt="" className="db-mp-badge-icon" />
+                            : '🏅'}
+                          {pinnedBadgeMeta.name}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {chatProfile.user_description && !chatProfile.loading && (
+                  <div className="db-mp-section">
+                    <div className="db-mp-section-label">Про себе</div>
+                    <p className="db-mp-desc">{chatProfile.user_description}</p>
+                  </div>
+                )}
+
+                <div className="db-mp-section">
+                  <div className="db-mp-section-label">Дані</div>
+                  <div className="db-mp-data">
+                    {regDate && (
+                      <div className="db-mp-data-row">
+                        <span className="db-mp-data-label">📅 На платформі з</span>
+                        <span className="db-mp-data-value">{regDate}</span>
+                      </div>
+                    )}
+                    {typeof chatProfile.elo === 'number' && (
+                      <div className="db-mp-data-row">
+                        <span className="db-mp-data-label">⭐ ELO</span>
+                        <span className="db-mp-data-value">{chatProfile.elo}</span>
+                      </div>
+                    )}
+                    {presence && (
+                      <div className="db-mp-data-row">
+                        <span className="db-mp-data-label">Статус</span>
+                        <span className="db-mp-data-value">
+                          <span className={`db-mp-presence-mini db-mp-presence--${presence}`} />
+                          {presenceLabel}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="db-mp-actions">
+                  {isSelf ? (
+                    <button className="db-mp-btn primary" onClick={() => { setChatProfile(null); setTab('profile'); }}>
+                      ✏ Редагувати профіль
+                    </button>
+                  ) : (
+                    <>
+                      <button className="db-mp-btn primary"
+                        onClick={() => {
+                          const u = chatProfile.username;
+                          setChatProfile(null);
+                          if (u) navigate(`/dashboard/profile/${u}`);
+                        }}
+                        disabled={!chatProfile.username}
+                      >
+                        Повний профіль →
+                      </button>
+                      <button className="db-mp-btn ghost" onClick={() => setChatProfile(null)}>
+                        Закрити
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {viewProfile && (
         <UserProfileModal

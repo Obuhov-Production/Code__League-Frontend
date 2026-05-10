@@ -83,19 +83,17 @@ function TeamRegForm({ tournament, toast, onSuccess, onCancel, user }) {
       email:     m.linkedUser.email?.trim() || null,
       user_id:   m.linkedUser.userId,
     }));
-    try { 
+    try {
       const teamPayload = {
         name: teamName.trim(),
         tournament_id: tournament.id,
         city: city.trim(),
         school: school.trim(),
         telegram_username: telegram.trim(),
+        members: cleanMembers,
       };
-      const newTeam = await registerTeam(teamPayload); 
-      if (cleanMembers && cleanMembers.length > 0) {
-        await updateTeam(newTeam.id, { ...teamPayload, members: cleanMembers });
-      }
-      onSuccess(); 
+      await registerTeam(teamPayload);
+      onSuccess();
     }
     catch (err) { toast.error(err.message); }
     finally { setLoading(false); }

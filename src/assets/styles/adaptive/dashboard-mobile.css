@@ -206,7 +206,7 @@
     height: 100%;
   }
   /* Header: padding-left leaves room for the absolute-positioned toggle button */
-  .db-chat-header      { flex-shrink: 0; padding: 10px 14px 10px 54px; min-height: 48px; font-size: 13px; }
+  .db-chat-header      { flex-shrink: 0; padding: 8px 12px; gap: 8px; min-height: 48px; font-size: 13px; }
   .db-chat-messages {
     flex: 1;
     overflow-y: auto;

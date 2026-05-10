@@ -19,7 +19,8 @@ import IconGithub      from '@images/dashboard_components/github.svg?react';
 
 import { getMe, clearSession, isLoggedIn, API_BASE, CHECK_BACKEND, DEV_MOCK_USER, loadCachedUser, saveUser,
   getNotifications, markNotificationRead, deleteNotification, markAllNotificationsRead,
-  deleteAllNotifications, setMyStatus } from '@utils/authApi';
+  deleteAllNotifications, setMyStatus,
+  getTeamInviteDetails, acceptTeamInvite, rejectTeamInvite } from '@utils/authApi';
 import { useToast } from '@utils/toast.jsx';
 import { hasRole, UserAvatar, MiniProfileModal, UserSearchModal, TabTip, getSocket, playMsgSound, BASE_ROOMS, STICKER_PREFIX, parseFileUrls } from './db.shared.jsx';
 
@@ -36,15 +37,18 @@ import TabOrganizer  from './TabOrganizer.jsx';
 /* Map legacy icon-name strings (e.g. "check-circle") to emoji.
    New backend code emits emoji directly, but old DB rows still hold the names. */
 const NOTIF_ICON_MAP = {
-  'check-circle': '✅',
-  'x-circle':     '❌',
-  'check':        '✅',
-  'cross':        '❌',
-  'warning':      '⚠️',
-  'info':         'ℹ️',
-  'bell':         '🔔',
-  'trophy':       '🏆',
-  'star':         '⭐',
+  'check-circle':           '✅',
+  'x-circle':               '❌',
+  'check':                  '✅',
+  'cross':                  '❌',
+  'warning':                '⚠️',
+  'info':                   'ℹ️',
+  'bell':                   '🔔',
+  'trophy':                 '🏆',
+  'star':                   '⭐',
+  'team_invite':            '📨',
+  'team_member_joined':     '🎉',
+  'team_invite_rejected':   '🚫',
 };
 function notifIcon(raw) {
   if (!raw) return '🔔';
@@ -62,6 +66,111 @@ function relativeTime(dateStr) {
   const days = Math.floor(hrs / 24);
   if (days < 7)  return `${days} д тому`;
   return new Date(dateStr).toLocaleDateString('uk-UA', { day: 'numeric', month: 'short' });
+}
+
+/* ── Team invite card (inline-expandable inside notification panel) ── */
+function TeamInviteCard({ notif, onResolved, toast }) {
+  const memberId = Number(String(notif.link_tab || '').split(':')[1]);
+  const [expanded, setExpanded] = useState(false);
+  const [details, setDetails] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [acting, setActing] = useState(null); // 'accept' | 'reject' | null
+  const [resolved, setResolved] = useState(null); // 'accepted' | 'rejected' | 'gone'
+
+  const toggle = async () => {
+    if (resolved) return;
+    if (expanded) { setExpanded(false); return; }
+    setExpanded(true);
+    if (!details && !loading) {
+      setLoading(true);
+      try {
+        const d = await getTeamInviteDetails(memberId);
+        setDetails(d);
+        if (d?.status && d.status !== 'pending') setResolved(d.status);
+      } catch (err) {
+        toast?.error?.(err.message || 'Не вдалося завантажити запрошення');
+        setResolved('gone');
+      } finally { setLoading(false); }
+    }
+  };
+
+  const handleAccept = async (e) => {
+    e.stopPropagation();
+    setActing('accept');
+    try {
+      await acceptTeamInvite(memberId);
+      setResolved('accepted');
+      toast?.success?.('Ви приєдналися до команди');
+      onResolved?.('accepted');
+    } catch (err) { toast?.error?.(err.message); }
+    finally { setActing(null); }
+  };
+
+  const handleReject = async (e) => {
+    e.stopPropagation();
+    setActing('reject');
+    try {
+      await rejectTeamInvite(memberId);
+      setResolved('rejected');
+      toast?.success?.('Запрошення відхилено');
+      onResolved?.('rejected');
+    } catch (err) { toast?.error?.(err.message); }
+    finally { setActing(null); }
+  };
+
+  return (
+    <div className={`db-notif-item db-notif-invite${notif.is_read ? ' read' : ''}${expanded ? ' expanded' : ''}`}
+         onClick={toggle}>
+      <span className="db-notif-icon">📨</span>
+      <div className="db-notif-body">
+        <span className="db-notif-text">{notif.message}</span>
+        {notif.created_at && <span className="db-notif-time">{relativeTime(notif.created_at)}</span>}
+        {expanded && (
+          <div className="db-notif-invite-details" onClick={e => e.stopPropagation()}>
+            {loading && <div className="db-notif-invite-loading">Завантаження…</div>}
+            {!loading && details && (
+              <>
+                <div className="db-notif-invite-row"><span>Команда:</span><b>{details.team?.name ?? '—'}</b></div>
+                {details.tournament && (
+                  <div className="db-notif-invite-row"><span>Турнір:</span><b>{details.tournament.name}</b></div>
+                )}
+                {details.captain && (
+                  <div className="db-notif-invite-row"><span>Капітан:</span><b>@{details.captain.username}</b></div>
+                )}
+                {details.team?.city && (
+                  <div className="db-notif-invite-row"><span>Місто:</span><b>{details.team.city}</b></div>
+                )}
+                {details.team?.school && (
+                  <div className="db-notif-invite-row"><span>Школа:</span><b>{details.team.school}</b></div>
+                )}
+              </>
+            )}
+            {resolved === 'accepted' && (
+              <div className="db-notif-invite-status accepted">✅ Ви прийняли запрошення</div>
+            )}
+            {resolved === 'rejected' && (
+              <div className="db-notif-invite-status rejected">✕ Запрошення відхилено</div>
+            )}
+            {resolved === 'gone' && (
+              <div className="db-notif-invite-status rejected">Запрошення вже не активне</div>
+            )}
+            {!resolved && !loading && (
+              <div className="db-notif-invite-actions">
+                <button className="db-btn db-btn-primary db-btn-sm"
+                        onClick={handleAccept} disabled={!!acting}>
+                  {acting === 'accept' ? '...' : 'Прийняти'}
+                </button>
+                <button className="db-btn db-btn-ghost db-btn-sm"
+                        onClick={handleReject} disabled={!!acting}>
+                  {acting === 'reject' ? '...' : 'Відхилити'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function Dashboard() {
@@ -259,6 +368,8 @@ export default function Dashboard() {
       markNotificationRead(notif.id).catch(() => {});
       setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, is_read: true } : n));
     }
+    // Team invite: expand inline, do NOT navigate
+    if (notif.link_tab && notif.link_tab.startsWith('team_invite:')) return;
     if (notif.link_tab) { setTab(notif.link_tab); setNotifOpen(false); }
   };
 
@@ -481,17 +592,30 @@ export default function Dashboard() {
                     </div>
                   ) : (
                     <div className="db-notif-list">
-                      {filteredNotifications.map(n => (
-                        <div key={n.id} className={`db-notif-item${n.is_read ? ' read' : ''}${newNotifIds.has(n.id) ? ' new-item' : ''}`}
-                          onClick={() => handleNotifClick(n)}>
-                          <span className="db-notif-icon">{notifIcon(n.icon)}</span>
-                          <div className="db-notif-body">
-                            <span className="db-notif-text">{n.message}</span>
-                            {n.created_at && <span className="db-notif-time">{relativeTime(n.created_at)}</span>}
+                      {filteredNotifications.map(n => {
+                        if (n.link_tab && n.link_tab.startsWith('team_invite:')) {
+                          return (
+                            <TeamInviteCard key={n.id} notif={n} toast={toast}
+                              onResolved={() => {
+                                if (!n.is_read) {
+                                  markNotificationRead(n.id).catch(() => {});
+                                  setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, is_read: true } : x));
+                                }
+                              }} />
+                          );
+                        }
+                        return (
+                          <div key={n.id} className={`db-notif-item${n.is_read ? ' read' : ''}${newNotifIds.has(n.id) ? ' new-item' : ''}`}
+                            onClick={() => handleNotifClick(n)}>
+                            <span className="db-notif-icon">{notifIcon(n.icon)}</span>
+                            <div className="db-notif-body">
+                              <span className="db-notif-text">{n.message}</span>
+                              {n.created_at && <span className="db-notif-time">{relativeTime(n.created_at)}</span>}
+                            </div>
+                            <button className="db-notif-del" title="Видалити" onClick={e => handleNotifDelete(e, n.id)}>✕</button>
                           </div>
-                          <button className="db-notif-del" title="Видалити" onClick={e => handleNotifDelete(e, n.id)}>✕</button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>

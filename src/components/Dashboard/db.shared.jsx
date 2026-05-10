@@ -284,14 +284,15 @@ export function UserAvatar({ user, size = 36, onClick, className = '', showStatu
   const status = presenceOf(user);
   
   const avatarContent = url && !imgError ? (
-    <img 
-      src={url} 
-      alt={user?.username || 'User'} 
+    <img
+      src={url}
+      alt={user?.username || 'User'}
       title={user?.username || user?.email}
-      style={{ ...style, objectFit: 'cover', display: 'block' }} 
-      onClick={onClick} 
-      className={`db-avatar-img ${className}`} 
-      onError={() => setImgError(true)} 
+      referrerPolicy="no-referrer"
+      style={{ ...style, objectFit: 'cover', display: 'block' }}
+      onClick={onClick}
+      className={`db-avatar-img ${className}`}
+      onError={() => setImgError(true)}
     />
   ) : (
     <div 

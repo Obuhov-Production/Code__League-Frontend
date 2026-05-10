@@ -407,8 +407,8 @@ export async function getSubmissionDailyStats(days = 7) {
   return Array.isArray(data) ? data : [];
 }
 
-export async function getUserDailyStats(days = 7) {
-  const res = await fetch(`${BASE}/admin/users/daily-stats?days=${days}`, { headers: authHeaders() });
+export async function getUserDailyStats(days = 7, metric = 'users') {
+  const res = await fetch(`${BASE}/admin/users/daily-stats?days=${days}&metric=${encodeURIComponent(metric)}`, { headers: authHeaders() });
   const data = await res.json().catch(() => []);
   if (!res.ok) throw new Error(data.error || data.message || 'Не вдалося завантажити статистику');
   return Array.isArray(data) ? data : [];
@@ -705,6 +705,29 @@ export async function updateTeam(id, data) {
     method: 'PATCH',
     headers: authHeaders(),
     body: JSON.stringify(data),
+  });
+}
+
+/* ── Team invites ─────────────────────────────────── */
+export async function getMyTeamInvites() {
+  return request(`${BASE}/teams/invites/mine`, { headers: authHeaders() });
+}
+
+export async function getTeamInviteDetails(memberId) {
+  return request(`${BASE}/teams/invites/${memberId}`, { headers: authHeaders() });
+}
+
+export async function acceptTeamInvite(memberId) {
+  return request(`${BASE}/teams/invites/${memberId}/accept`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+}
+
+export async function rejectTeamInvite(memberId) {
+  return request(`${BASE}/teams/invites/${memberId}/reject`, {
+    method: 'POST',
+    headers: authHeaders(),
   });
 }
 
