@@ -13,13 +13,15 @@ import IconJury        from '@images/dashboard_components/icon_jury.svg?react';
 import IconOrganizer  from '@images/dashboard_components/icon_tournament.svg?react';
 import IconChat        from '@images/dashboard_components/icon_chat.svg?react';
 import IconBell        from '@images/dashboard_components/icon_bell.svg?react';
+import IconChatBubble  from '@images/dashboard_components/chat.svg?react';
+import IconTrash       from '@images/dashboard_components/icon_trash_bin.svg?react';
 import IconSearch      from '@images/dashboard_components/icon_search.svg?react';
 import IconLogout      from '@images/dashboard_components/icon_logout.svg?react';
 import IconGithub      from '@images/dashboard_components/github.svg?react';
 
 import { getMe, clearSession, isLoggedIn, API_BASE, CHECK_BACKEND, DEV_MOCK_USER, loadCachedUser, saveUser,
   getNotifications, markNotificationRead, deleteNotification, markAllNotificationsRead,
-  deleteAllNotifications, setMyStatus,
+  deleteAllNotifications, setMyStatus, getMyTeams,
   getTeamInviteDetails, acceptTeamInvite, rejectTeamInvite } from '@utils/authApi';
 import { useToast } from '@utils/toast.jsx';
 import { hasRole, UserAvatar, MiniProfileModal, UserSearchModal, TabTip, getSocket, playMsgSound, BASE_ROOMS, STICKER_PREFIX, parseFileUrls } from './db.shared.jsx';
@@ -198,8 +200,8 @@ export default function Dashboard() {
   const [notifFilter,    setNotifFilter]    = useState('all');
   const [bellShake,      setBellShake]      = useState(false);
   const [newNotifIds,    setNewNotifIds]    = useState(new Set());
-  const notifRef      = useRef(null);
-  const autoMarkTimer = useRef(null);
+  const [myTeams,        setMyTeams]        = useState([]);
+  const notifRef = useRef(null);
 
   const chatUnreadTotal = Object.values(chatUnreadByRoom).reduce((s, v) => s + (v || 0), 0);
 
@@ -236,43 +238,98 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
   }, []);
 
-  /* ── Presence: keep status=online while tab open, offline on close ── */
+  /* ── Presence: activity-aware status tracking ──
+     online  = platform open + activity in last 5 min
+     away    = platform open but idle > 5 min (or browser tab hidden)
+     offline = page closed / idle > 20 min                              */
   useEffect(() => {
     if (!user || !CHECK_BACKEND) return;
 
     let alive = true;
-    /** Update server AND local React state, so the avatar dot flips immediately
-     *  without waiting for a page refresh. */
+    let currentStatus = 'online';
+    let idleTimer = null;
+
+    const IDLE_AWAY_MS    =  5 * 60 * 1000;  // 5 min  → away
+    const IDLE_OFFLINE_MS = 20 * 60 * 1000;  // 20 min → offline
+
     const applyStatus = (status, opts = {}) => {
+      if (!alive) return;
+      currentStatus = status;
       setUser(u => u ? { ...u, status, last_seen_at: new Date().toISOString() } : u);
       setMyStatus(status, opts).catch(() => {});
     };
-    const ping   = (status) => applyStatus(status);
-    const beacon = (status) => applyStatus(status, { keepalive: true });
+    const beacon = (status) => {
+      currentStatus = status;
+      setUser(u => u ? { ...u, status, last_seen_at: new Date().toISOString() } : u);
+      setMyStatus(status, { keepalive: true }).catch(() => {});
+    };
 
-    // Force online immediately on mount — overrides any stale 'away'/'offline'
-    // left in localStorage from a previous session's beforeunload beacon.
-    ping('online');
+    const resetIdleTimer = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        applyStatus('away');
+        // After another 15 min of being away (= 20 min total) → offline
+        idleTimer = setTimeout(() => applyStatus('offline'), IDLE_OFFLINE_MS - IDLE_AWAY_MS);
+      }, IDLE_AWAY_MS);
+    };
+
+    const onActivity = () => {
+      if (!alive) return;
+      resetIdleTimer();
+      if (currentStatus !== 'online' && document.visibilityState !== 'hidden') {
+        applyStatus('online');
+      }
+    };
+
+    // Go online immediately on mount
+    applyStatus('online');
+    resetIdleTimer();
+
+    // Heartbeat — keep last_seen_at fresh while the user is active
     const heartbeat = setInterval(() => {
-      if (alive && document.visibilityState !== 'hidden') ping('online');
+      if (alive && currentStatus === 'online' && document.visibilityState !== 'hidden') {
+        applyStatus('online');
+      }
     }, 45_000);
 
     const onVisibility = () => {
-      if (document.visibilityState === 'hidden') beacon('away');
-      else ping('online');
+      if (document.visibilityState === 'hidden') {
+        clearTimeout(idleTimer);
+        beacon('away');
+      } else {
+        onActivity();
+      }
     };
-    const onPageHide = () => { beacon('offline'); };
+    const onPageHide = () => beacon('offline');
+
+    // Throttle high-frequency events so we don't spam the server
+    let lastThrottledAt = 0;
+    const throttled = () => {
+      const now = Date.now();
+      if (now - lastThrottledAt > 10_000) { lastThrottledAt = now; onActivity(); }
+    };
 
     document.addEventListener('visibilitychange', onVisibility);
-    window.addEventListener('pagehide', onPageHide);
-    window.addEventListener('beforeunload', onPageHide);
+    window.addEventListener('pagehide',      onPageHide);
+    window.addEventListener('beforeunload',  onPageHide);
+    document.addEventListener('keydown',     onActivity,  { passive: true });
+    document.addEventListener('click',       onActivity,  { passive: true });
+    document.addEventListener('mousemove',   throttled,   { passive: true });
+    document.addEventListener('touchstart',  throttled,   { passive: true });
+    document.addEventListener('scroll',      throttled,   { passive: true, capture: true });
 
     return () => {
       alive = false;
+      clearTimeout(idleTimer);
       clearInterval(heartbeat);
       document.removeEventListener('visibilitychange', onVisibility);
-      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('pagehide',     onPageHide);
       window.removeEventListener('beforeunload', onPageHide);
+      document.removeEventListener('keydown',    onActivity);
+      document.removeEventListener('click',      onActivity);
+      document.removeEventListener('mousemove',  throttled);
+      document.removeEventListener('touchstart', throttled);
+      document.removeEventListener('scroll',     throttled, { capture: true });
       beacon('offline');
     };
   }, [user?.id]);
@@ -281,6 +338,12 @@ export default function Dashboard() {
     if (CHECK_BACKEND) setMyStatus('offline', { keepalive: true }).catch(() => {});
     clearSession(); toast.info('Ви вийшли'); navigate('/');
   };
+
+  /* --- Team rooms for notification labels --- */
+  useEffect(() => {
+    if (!user) return;
+    getMyTeams().then(d => setMyTeams(Array.isArray(d) ? d : [])).catch(() => {});
+  }, [user?.id]);
 
   /* --- Notification --- */
   const loadNotifications = () => {
@@ -349,17 +412,6 @@ export default function Dashboard() {
     return () => { document.removeEventListener('mousedown', onMouse); document.removeEventListener('keydown', onKey); };
   }, [notifOpen]);
 
-  // Auto-mark all visible unread as read after 2s of panel being open
-  useEffect(() => {
-    if (!notifOpen) { clearTimeout(autoMarkTimer.current); return; }
-    const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
-    if (!unreadIds.length) return;
-    autoMarkTimer.current = setTimeout(() => {
-      unreadIds.forEach(id => markNotificationRead(id).catch(() => {}));
-      setNotifications(prev => prev.map(n => unreadIds.includes(n.id) ? { ...n, is_read: true } : n));
-    }, 2000);
-    return () => clearTimeout(autoMarkTimer.current);
-  }, [notifOpen]);
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
@@ -404,8 +456,11 @@ export default function Dashboard() {
     .map(([roomId, count]) => {
       const last = chatLastMsgs[roomId];
       const baseRoom = BASE_ROOMS.find(r => r.id === roomId);
+      const teamName = roomId.startsWith('team_')
+        ? myTeams.find(t => `team_${t.id}` === roomId)?.name
+        : null;
       const roomLabel = baseRoom?.label
-        || (roomId.startsWith('team_') ? `🔒 Команда #${roomId.slice(5)}` : `# ${roomId}`);
+        || (teamName ? teamName : roomId.startsWith('team_') ? `Команда #${roomId.slice(5)}` : `# ${roomId}`);
       let preview = '';
       if (last) {
         const text = last.text || '';
@@ -538,7 +593,7 @@ export default function Dashboard() {
                       <p className="db-notif-title">Сповіщення{unreadCount > 0 && <span className="db-notif-badge">{unreadCount}</span>}</p>
                       <div className="db-notif-actions">
                         {unreadCount > 0 && <button className="db-notif-read-all" onClick={handleMarkAllRead}>Прочитати всі</button>}
-                        {notifications.length > 0 && <button className="db-notif-del-all" title="Видалити всі" onClick={handleDeleteAll}>🗑</button>}
+                        {notifications.length > 0 && <button className="db-notif-del-all" title="Видалити всі" onClick={handleDeleteAll}><IconTrash style={{ width: 14, height: 14 }} /></button>}
                       </div>
                     </div>
                     <div className="db-notif-filter-tabs">
@@ -561,7 +616,7 @@ export default function Dashboard() {
                   {notifFilter === 'chat' ? (
                     chatNotifItems.length === 0 ? (
                       <div className="db-notif-empty">
-                        <span className="db-notif-empty-icon">💬</span>
+                        <span className="db-notif-empty-icon"><IconChatBubble style={{ width: 22, height: 22 }} /></span>
                         <span>Немає непрочитаних повідомлень</span>
                       </div>
                     ) : (
@@ -569,7 +624,7 @@ export default function Dashboard() {
                         {chatNotifItems.map(c => (
                           <div key={c.id} className="db-notif-item db-notif-item--chat"
                             onClick={() => handleChatNotifClick(c.roomId)}>
-                            <span className="db-notif-icon">💬</span>
+                            <span className="db-notif-icon"><IconChatBubble style={{ width: 18, height: 18 }} /></span>
                             <div className="db-notif-body">
                               <span className="db-notif-text">
                                 <strong>{c.roomLabel}</strong>

@@ -1,5 +1,18 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 
+import IconPensil  from '@images/dashboard_components/pensil.svg?react';
+import IconChat    from '@images/dashboard_components/chat.svg?react';
+import IconAdd     from '@images/dashboard_components/add.svg?react';
+import IconOglad   from '@images/dashboard_components/oglad.svg?react';
+import IconTime    from '@images/dashboard_components/time.svg?react';
+import IconZaiavki from '@images/dashboard_components/zaiavki.svg?react';
+import IconUser    from '@images/dashboard_components/icon_user.svg?react';
+import IconTeams   from '@images/dashboard_components/icon_teams.svg?react';
+import IconSave    from '@images/dashboard_components/save.svg?react';
+import IconBroom   from '@images/dashboard_components/broom.svg?react';
+import IconLock    from '@images/dashboard_components/icon_lock_shield.svg?react';
+import IconTrash   from '@images/dashboard_components/icon_trash_bin.svg?react';
+
 import {
   getTournaments, getAdminUsers, getAdminStats, getAdminTeams,
   createTournament, updateTournament,
@@ -25,11 +38,11 @@ const PERIOD_OPTIONS = [
 const METRIC_OPTIONS = [
   { value: 'users',       label: 'Реєстрації',       icon: '👤', color: '#AC9EF8',
     title: 'Users Activity', subtitle: 'Нові користувачі за період', tooltip: 'Нових' },
-  { value: 'chat',        label: 'Повідомлення в чаті', icon: '💬', color: '#60a5fa',
+  { value: 'chat',        label: 'Повідомлення в чаті', icon: <IconChat style={{ width: 18, height: 18 }} />, color: '#60a5fa',
     title: 'Chat Activity',  subtitle: 'Відправлено повідомлень',    tooltip: 'Повідомлень' },
   { value: 'tournaments', label: 'Турніри',          icon: '🏆', color: '#f59e0b',
     title: 'Tournaments Activity', subtitle: 'Створено турнірів',    tooltip: 'Турнірів' },
-  { value: 'teams',       label: 'Команди',          icon: '👥', color: '#34d399',
+  { value: 'teams',       label: 'Команди',          icon: <IconUser style={{ width: 18, height: 18, color: '#34d399' }} />, color: '#34d399',
     title: 'Teams Activity', subtitle: 'Створено команд',            tooltip: 'Команд' },
   { value: 'submissions', label: 'Сабміти',          icon: '📦', color: '#f472b6',
     title: 'Submissions Activity', subtitle: 'Відправлено сабмітів', tooltip: 'Сабмітів' },
@@ -322,7 +335,7 @@ function StatusPicker({ value, onChange, compact = false }) {
 
 /* ── Role Filter Dropdown (custom) ─────────────────── */
 const ROLE_FILTER_OPTIONS = [
-  { value: 'all',       label: 'Всі ролі',    icon: '👥', color: '#7c5ff5' },
+  { value: 'all',       label: 'Всі ролі',    icon: <IconUser style={{ width: 16, height: 16, color: '#7c5ff5' }} />, color: '#7c5ff5' },
   { value: 'admin',     label: 'Адмін',        icon: '⚙️', color: '#7c5ff5' },
   { value: 'organizer', label: 'Організатор',  icon: '🗂️', color: '#0ea5e9' },
   { value: 'jury',      label: 'Журі',         icon: '⚖️', color: '#16a34a' },
@@ -507,7 +520,7 @@ function ManageUserModal({ user, toast, onClose, onRoleChange, onDelete }) {
           <div className="db-mu-section db-mu-danger">
             <label className="db-mu-label" style={{ color: '#ef4444' }}>Небезпечна зона</label>
             <button className="db-btn db-btn-danger db-btn-full" onClick={() => onDelete(user.id, user.username)}>
-              🗑 Видалити акаунт назавжди
+              <IconTrash style={{ width: 15, height: 15, verticalAlign: -2, marginRight: 6 }} /> Видалити акаунт назавжди
             </button>
           </div>
         </div>
@@ -549,7 +562,7 @@ function EditTournamentModal({ tournament, allTeams, toast, onClose, onSuccess, 
             <span className="db-edit-id">id #{tournament.id}</span>
           </div>
           <div className="db-et-tabs">
-            {[['info','📋 Інформація'], ['teams','👫 Команди']].map(([id, lbl]) => (
+            {[['info','📋 Інформація'], ['teams', <><IconTeams style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 4, color: '#60a5fa' }} /> Команди</>]].map(([id, lbl]) => (
               <button key={id} className={`db-et-tab-btn${activeTab === id ? ' active' : ''}`} onClick={() => setActiveTab(id)}>{lbl}</button>
             ))}
           </div>
@@ -587,7 +600,7 @@ function EditTournamentModal({ tournament, allTeams, toast, onClose, onSuccess, 
                           <button className="db-btn db-btn-danger db-btn-sm" onClick={() => {
                             onDeleteTeam(t.id, t.name);
                             setTourTeams(prev => prev.filter(x => x.id !== t.id));
-                          }}>🗑</button>
+                          }}><IconTrash style={{ width: 14, height: 14 }} /></button>
                         </td>
                       </tr>
                     ))}
@@ -606,12 +619,12 @@ function EditTournamentModal({ tournament, allTeams, toast, onClose, onSuccess, 
 /* ── Application View Modal ──────────────────── */
 function ApplicationViewModal({ app, onClose, onAccept, onDecline }) {
   const STATUS_COLOR = { pending: '#f59e0b', approved: '#16a34a', rejected: '#ef4444' };
-  const STATUS_LABEL_MAP = { pending: '⏳ Очікує', approved: '✓ Прийнято', rejected: '✗ Відхилено' };
+  const STATUS_LABEL_MAP = { pending: <><IconTime style={{ width: 13, height: 13, verticalAlign: -2, marginRight: 3 }} /> Очікує</>, approved: '✓ Прийнято', rejected: '✗ Відхилено' };
   const [viewProfile, setViewProfile] = useState(null);
 
   const contacts = [
     app.contact_email    && { icon: '📧', label: 'Email',    value: app.contact_email },
-    app.contact_telegram && { icon: '💬', label: 'Telegram', value: app.contact_telegram },
+    app.contact_telegram && { icon: <IconChat style={{ width: 14, height: 14 }} />, label: 'Telegram', value: app.contact_telegram },
     app.contact_phone    && { icon: '📱', label: 'Телефон',  value: app.contact_phone },
   ].filter(Boolean);
 
@@ -634,7 +647,7 @@ function ApplicationViewModal({ app, onClose, onAccept, onDecline }) {
           </div>
 
           <div className="db-app-review-section">
-            <label className="db-edit-label">💬 Мотивація</label>
+            <label className="db-edit-label"><IconChat style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 4 }} /> Мотивація</label>
             <div className="db-app-review-text">{app.motivation || '—'}</div>
           </div>
 
@@ -981,11 +994,11 @@ export default function TabAdmin({ toast }) {
       badge: { text: 'ACTIVE', color: '#4ade80', bg: 'rgba(74,222,128,.15)' },
       trend: '+12%'
     },
-    { 
-      label: 'Registered Teams', 
-      value: stats.teams, 
-      color: '#0ea5e9', 
-      icon: '👥',
+    {
+      label: 'Registered Teams',
+      value: stats.teams,
+      color: '#0ea5e9',
+      icon: <IconUser style={{ width: 20, height: 20, color: '#0ea5e9' }} />,
       badge: { text: '+14%', color: '#0ea5e9', bg: 'rgba(14,165,233,.1)' },
       trend: null
     },
@@ -1022,11 +1035,11 @@ export default function TabAdmin({ toast }) {
       badge: { text: 'ONLINE', color: '#22c55e', bg: 'rgba(34,197,94,.15)' },
       trend: null
     },
-    { 
-      label: 'Total Messages', 
-      value: stats.messages, 
-      color: '#06b6d4', 
-      icon: '💬',
+    {
+      label: 'Total Messages',
+      value: stats.messages,
+      color: '#06b6d4',
+      icon: <IconChat style={{ width: 20, height: 20 }} />,
       badge: { text: 'CHAT', color: '#06b6d4', bg: 'rgba(6,182,212,.1)' },
       trend: '+23%'
     },
@@ -1059,12 +1072,12 @@ export default function TabAdmin({ toast }) {
 
       <div className="db-admin-tabs">
         {[
-          ['overview',     '📊 Огляд'],
-          ['applications', '📄 Заявки'],
+          ['overview',     <><IconOglad   style={{ width: 15, height: 15, verticalAlign: -2, marginRight: 5 }} /> Огляд</>],
+          ['applications', <><IconZaiavki style={{ width: 15, height: 15, verticalAlign: -2, marginRight: 5 }} /> Заявки</>],
           ['tournaments',  '🏆 Турніри'],
-          ['users',        '👥 Користувачі'],
-          ['teams',        '👫 Команди'],
-          ['chat',         '💬 Чат'],
+          ['users',        <><IconUser    style={{ width: 15, height: 15, verticalAlign: -2, marginRight: 5, color: '#7c5ff5' }} /> Користувачі</>],
+          ['teams',        <><IconTeams   style={{ width: 15, height: 15, verticalAlign: -2, marginRight: 5, color: '#60a5fa' }} /> Команди</>],
+          ['chat',         <><IconChat    style={{ width: 15, height: 15, verticalAlign: -2, marginRight: 5 }} /> Чат</>],
         ].map(([id, lbl]) => (
           <button key={id} className={`db-admin-tab-btn${adminTab === id ? ' active' : ''}`} onClick={() => setAdminTab(id)}>
             {lbl}
@@ -1128,7 +1141,7 @@ export default function TabAdmin({ toast }) {
                         return (
                           <div key={t.id} className="db-admin-deadline-item">
                             <div className="db-admin-deadline-icon" style={{ background: daysLeft < 2 ? '#fef3c7' : '#ede9fe' }}>
-                              {daysLeft < 2 ? '⏰' : '🏆'}
+                              {daysLeft < 2 ? <IconTime style={{ width: 22, height: 22 }} /> : '🏆'}
                             </div>
                             <div className="db-admin-deadline-info">
                               <strong>{t.name}</strong>
@@ -1157,12 +1170,12 @@ export default function TabAdmin({ toast }) {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <button className="db-panel-access-btn" onClick={() => setAdminTab('tournaments')}>
-                      <span className="db-pab-icon">➕</span>
+                      <span className="db-pab-icon"><IconAdd style={{ width: 18, height: 18 }} /></span>
                       <div className="db-pab-text"><strong>Створити турнір</strong><span>Відкрити форму створення</span></div>
                       <span className="db-pab-arrow">→</span>
                     </button>
                     <button className="db-panel-access-btn" onClick={() => { setAdminTab('tournaments'); }}>
-                      <span className="db-pab-icon">✏️</span>
+                      <span className="db-pab-icon"><IconPensil style={{ width: 18, height: 18 }} /></span>
                       <div className="db-pab-text"><strong>Керувати турнірами</strong><span>Редагування, статуси, команди</span></div>
                       <span className="db-pab-arrow">→</span>
                     </button>
@@ -1178,7 +1191,7 @@ export default function TabAdmin({ toast }) {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <button className="db-panel-access-btn" onClick={() => setAdminTab('users')}>
-                      <span className="db-pab-icon">👥</span>
+                      <span className="db-pab-icon"><IconUser style={{ width: 18, height: 18, color: '#7c5ff5' }} /></span>
                       <div className="db-pab-text"><strong>Усі користувачі</strong><span>Управління ролями</span></div>
                       <span className="db-pab-arrow">→</span>
                     </button>
@@ -1194,7 +1207,7 @@ export default function TabAdmin({ toast }) {
                 </div>
                 <div className="db-admin-card">
                   <div className="db-admin-card-header">
-                    <div className="db-admin-card-icon" style={{ background: 'rgba(14,165,233,.1)' }}>💬</div>
+                    <div className="db-admin-card-icon" style={{ background: 'rgba(14,165,233,.1)' }}><IconChat style={{ width: 22, height: 22 }} /></div>
                     <div className="db-admin-card-header-text">
                       <h3 className="db-admin-card-title">Чат та команди</h3>
                       <p className="db-admin-card-sub">Швидкі дії</p>
@@ -1207,7 +1220,7 @@ export default function TabAdmin({ toast }) {
                       <span className="db-pab-arrow">→</span>
                     </button>
                     <button className="db-panel-access-btn" onClick={() => setAdminTab('teams')}>
-                      <span className="db-pab-icon">👫</span>
+                      <span className="db-pab-icon"><IconTeams style={{ width: 18, height: 18, color: '#60a5fa' }} /></span>
                       <div className="db-pab-text"><strong>Команди</strong><span>Усі учасники</span></div>
                       <span className="db-pab-arrow">→</span>
                     </button>
@@ -1222,7 +1235,7 @@ export default function TabAdmin({ toast }) {
             <div>
               <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
                 <span style={{ fontSize: 13, color: '#888' }}>Фільтр:</span>
-                {[['pending','⏳ Очікують'], ['approved','✓ Прийняті'], ['rejected','✗ Відхилені'], ['all','Усі']].map(([v, l]) => (
+                {[['pending', <><IconTime style={{ width: 13, height: 13, verticalAlign: -2, marginRight: 3 }} /> Очікують</>], ['approved','✓ Прийняті'], ['rejected','✗ Відхилені'], ['all','Усі']].map(([v, l]) => (
                   <button key={v}
                     className={`db-admin-tab-btn${appFilter === v ? ' active' : ''}`}
                     style={{ padding: '4px 12px', fontSize: 13 }}
@@ -1267,7 +1280,7 @@ export default function TabAdmin({ toast }) {
                           </td>
                           <td style={{ fontSize: 12, color: '#888', whiteSpace: 'nowrap' }}>{formatDate(a.created_at)}</td>
                           <td>
-                            {a.status === 'pending' && <span style={{ color: '#f59e0b', fontWeight: 600, fontSize: 12 }}>⏳ Очікує</span>}
+                            {a.status === 'pending' && <span style={{ color: '#f59e0b', fontWeight: 600, fontSize: 12 }}><IconTime style={{ width: 12, height: 12, verticalAlign: -2, marginRight: 3 }} /> Очікує</span>}
                             {a.status === 'approved' && <span style={{ color: '#16a34a', fontWeight: 600, fontSize: 12 }}>✓ Прийнято</span>}
                             {a.status === 'rejected' && <span style={{ color: '#ef4444', fontWeight: 600, fontSize: 12 }}>✗ Відхилено</span>}
                           </td>
@@ -1353,7 +1366,7 @@ export default function TabAdmin({ toast }) {
                     <div className="db-admin-bulk-actions">
                       <span className="db-admin-selected-count">{selectedUsers.length} вибрано</span>
                       <button className="db-btn db-btn-danger db-btn-sm" onClick={() => {/* bulk delete */}}>
-                        🗑 Видалити
+                        <IconTrash style={{ width: 13, height: 13, verticalAlign: -2, marginRight: 4 }} /> Видалити
                       </button>
                     </div>
                   )}
@@ -1414,7 +1427,7 @@ export default function TabAdmin({ toast }) {
                         <td colSpan="8" className="db-admin-users-empty">
                           {userSearch || userRoleFilter !== 'all' 
                             ? '🔍 Користувачів не знайдено' 
-                            : '👥 Немає користувачів'}
+                            : <><IconUser style={{ width: 16, height: 16, verticalAlign: -3, marginRight: 5, color: '#7c5ff5' }} /> Немає користувачів</>}
                         </td>
                       </tr>
                     ) : (
@@ -1485,7 +1498,7 @@ export default function TabAdmin({ toast }) {
                         <td>{t.members_count}</td>
                         <td><StatusBadge status={t.tournament_status} /></td>
                         <td>
-                          <button className="db-btn db-btn-danger db-btn-sm" onClick={() => handleDeleteAdminTeam(t.id, t.name)}>🗑 Видалити</button>
+                          <button className="db-btn db-btn-danger db-btn-sm" onClick={() => handleDeleteAdminTeam(t.id, t.name)}><IconTrash style={{ width: 13, height: 13, verticalAlign: -2, marginRight: 4 }} /> Видалити</button>
                         </td>
                       </tr>
                     ))
@@ -1502,7 +1515,7 @@ export default function TabAdmin({ toast }) {
               {/* ── CARD 1: Rooms ── */}
               <div className="db-admin-card">
                 <div className="db-admin-card-header">
-                  <div className="db-admin-card-icon" style={{ background: 'rgba(172,158,248,.15)' }}>💬</div>
+                  <div className="db-admin-card-icon" style={{ background: 'rgba(172,158,248,.15)' }}><IconChat style={{ width: 22, height: 22 }} /></div>
                   <div className="db-admin-card-header-text">
                     <h3 className="db-admin-card-title">Кімнати чату</h3>
                     <p className="db-admin-card-sub">Системні та кастомні кімнати</p>
@@ -1517,9 +1530,9 @@ export default function TabAdmin({ toast }) {
                       <div className="db-admin-room-info">
                         <span className="db-admin-chat-room-label">{r.label}</span>
                         <span className="db-admin-room-tag db-admin-room-tag--sys">Системна</span>
-                        {roomSettings[r.id]?.locked && <span className="db-admin-room-tag db-admin-room-tag--locked">🔒 Заблоковано</span>}
+                        {roomSettings[r.id]?.locked && <span className="db-admin-room-tag db-admin-room-tag--locked"><IconLock style={{ width: 11, height: 11, verticalAlign: -1, marginRight: 3 }} /> Заблоковано</span>}
                       </div>
-                      <button className="db-btn db-btn-danger db-btn-sm" onClick={() => handleClearChat(r.id)}>🧹 Очистити</button>
+                      <button className="db-btn db-btn-danger db-btn-sm" onClick={() => handleClearChat(r.id)}><IconBroom style={{ width: 13, height: 13, verticalAlign: -2, marginRight: 4 }} /> Очистити</button>
                     </div>
                   ))}
 
@@ -1530,11 +1543,11 @@ export default function TabAdmin({ toast }) {
                         <div className="db-admin-room-info">
                           <span className="db-admin-chat-room-label">{r.label}</span>
                           <span className="db-admin-room-tag db-admin-room-tag--custom">Кастомна</span>
-                          {roomSettings[r.id]?.locked && <span className="db-admin-room-tag db-admin-room-tag--locked">🔒</span>}
+                          {roomSettings[r.id]?.locked && <span className="db-admin-room-tag db-admin-room-tag--locked"><IconLock style={{ width: 11, height: 11 }} /></span>}
                         </div>
                         <div style={{ display: 'flex', gap: 6 }}>
-                          <button className="db-btn db-btn-ghost db-btn-sm" title="Видалити кімнату" onClick={() => handleDeleteRoom(r.customId, r.label)}>🗑</button>
-                          <button className="db-btn db-btn-danger db-btn-sm" onClick={() => handleClearChat(r.id)}>🧹</button>
+                          <button className="db-btn db-btn-ghost db-btn-sm" title="Видалити кімнату" onClick={() => handleDeleteRoom(r.customId, r.label)}><IconTrash style={{ width: 14, height: 14 }} /></button>
+                          <button className="db-btn db-btn-danger db-btn-sm" onClick={() => handleClearChat(r.id)}><IconBroom style={{ width: 14, height: 14 }} /></button>
                         </div>
                       </div>
                     ))}
@@ -1583,7 +1596,7 @@ export default function TabAdmin({ toast }) {
                 <form onSubmit={handleSaveSettings} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <div className="db-admin-setting-row">
                     <div className="db-admin-setting-info">
-                      <span className="db-admin-setting-icon">🔒</span>
+                      <span className="db-admin-setting-icon"><IconLock style={{ width: 20, height: 20 }} /></span>
                       <div>
                         <div className="db-admin-setting-title">Заблокувати чат</div>
                         <div className="db-admin-setting-desc">Лише адмін може писати у цій кімнаті</div>
@@ -1597,7 +1610,7 @@ export default function TabAdmin({ toast }) {
 
                   <div className="db-admin-setting-row db-admin-setting-row--block">
                     <div className="db-admin-setting-info">
-                      <span className="db-admin-setting-icon">⏰</span>
+                      <span className="db-admin-setting-icon"><IconTime style={{ width: 20, height: 20 }} /></span>
                       <div>
                         <div className="db-admin-setting-title">Часові обмеження</div>
                         <div className="db-admin-setting-desc">Дозволити писати лише у вказаний час</div>
@@ -1621,7 +1634,7 @@ export default function TabAdmin({ toast }) {
                   )}
 
                   <button type="submit" className="db-btn db-btn-primary" style={{ alignSelf: 'flex-start' }} disabled={savingSettings}>
-                    {savingSettings ? 'Збереження...' : '💾 Зберегти налаштування'}
+                    {savingSettings ? 'Збереження...' : <><IconSave style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Зберегти налаштування</>}
                   </button>
                 </form>
               </div>

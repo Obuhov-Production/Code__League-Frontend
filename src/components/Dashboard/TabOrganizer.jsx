@@ -6,6 +6,8 @@ import {
   getAdminTeams,
 } from '@utils/authApi';
 import { StatusBadge, ConfirmModal, formatDate, TournamentForm } from './db.shared.jsx';
+import IconTeams from '@images/dashboard_components/icon_teams.svg?react';
+import IconLock  from '@images/dashboard_components/icon_lock_shield.svg?react';
 
 const TOUR_STATUS_OPTS = [
   { value: 'draft',        label: 'Draft',        color: '#888' },
@@ -157,7 +159,7 @@ export default function TabOrganizer({ toast, user }) {
       </div>
 
       <div className="db-admin-tabs">
-        {[['tournaments', '🏆 Турніри'], ['teams', '👫 Команди']].map(([id, lbl]) => (
+        {[['tournaments', '🏆 Турніри'], ['teams', <><IconTeams style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5, color: '#60a5fa' }} /> Команди</>]].map(([id, lbl]) => (
           <button
             key={id}
             className={`db-admin-tab-btn${orgTab === id ? ' active' : ''}`}
@@ -226,7 +228,7 @@ export default function TabOrganizer({ toast, user }) {
                           ) : (
                             <span style={{ fontSize: 12, color: '#aaa', alignSelf: 'center' }}
                                   title={`Створив: ${t.creator_name || '—'}`}>
-                              🔒 Чужий турнір
+                              <IconLock style={{ width: 12, height: 12, verticalAlign: -1, marginRight: 4 }} /> Чужий турнір
                             </span>
                           )}
                         </td>

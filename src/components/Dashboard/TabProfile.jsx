@@ -21,6 +21,11 @@ import IconCalendar from '@images/dashboard_components/icon_calendar_card.svg?re
 import IconTrash    from '@images/dashboard_components/icon_trash_bin.svg?react';
 import IconMail     from '@images/dashboard_components/icon_mail_envelope.svg?react';
 import IconCheck    from '@images/dashboard_components/icon_check_diamond.svg?react';
+import IconPensil     from '@images/dashboard_components/pensil.svg?react';
+import IconChatBubble from '@images/dashboard_components/chat.svg?react';
+import IconTime       from '@images/dashboard_components/time.svg?react';
+import IconZaiavki    from '@images/dashboard_components/zaiavki.svg?react';
+import IconSave       from '@images/dashboard_components/save.svg?react';
 import IconWarning  from '@images/dashboard_components/icon_warning_triangle.svg?react';
 import IconPin      from '@images/dashboard_components/icon_pin_marker.svg?react';
 import IconEye      from '@images/dashboard_components/icon_eye_open.svg?react';
@@ -91,7 +96,7 @@ function BadgeModal({ badge, pinnedBadge, onPin, onClose }) {
         <h3 className="db-badge-modal-name">{badge.name}</h3>
         <span className="db-badge-modal-status"
           style={{ background: badge.color + '22', color: badge.color }}>
-          {badge.earned ? '✓ Отримано' : '🔒 Не отримано'}
+          {badge.earned ? '✓ Отримано' : <><IconLock style={{ width: 13, height: 13, verticalAlign: -2, marginRight: 4 }} /> Не отримано</>}
         </span>
         <p className="db-badge-modal-desc">{badge.description}</p>
         {!badge.secret
@@ -169,7 +174,7 @@ function DeleteAccountModal({ user, onClose, onConfirm }) {
             onClick={handleClick}
             disabled={!canDelete}
           >
-            {deleting ? '⏳ Видалення...' : (<><IconTrash style={{ width: 16, height: 16, verticalAlign: -3, marginRight: 6 }} /> Видалити назавжди</>)}
+            {deleting ? <><IconTime style={{ width: 16, height: 16, verticalAlign: -3, marginRight: 4 }} /> Видалення...</> : (<><IconTrash style={{ width: 16, height: 16, verticalAlign: -3, marginRight: 6 }} /> Видалити назавжди</>)}
           </button>
         </div>
       </div>
@@ -354,7 +359,7 @@ function ChangePasswordModal({ user, toast, onClose, setUser }) {
               </button>
               <button type="submit" className="db-btn db-btn-primary"
                 disabled={submitting || newPassword.length < 8 || newPassword !== confirmPassword}>
-                {submitting ? '⏳ Збереження...' : '✓ Змінити пароль'}
+                {submitting ? <><IconTime style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 4 }} /> Збереження...</> : '✓ Змінити пароль'}
               </button>
             </div>
           </form>
@@ -469,7 +474,7 @@ function OrganizerApplyModal({ onClose, onSubmit }) {
                     placeholder="email@example.com" />
                 </div>
                 <div className="db-app-contact-row">
-                  <span className="db-app-contact-icon">💬</span>
+                  <span className="db-app-contact-icon"><IconChatBubble style={{ width: 16, height: 16 }} /></span>
                   <input className="db-input" value={form.contact_telegram}
                     onChange={e => setForm(f => ({ ...f, contact_telegram: e.target.value }))}
                     placeholder="@telegram_username" />
@@ -486,7 +491,7 @@ function OrganizerApplyModal({ onClose, onSubmit }) {
             <div className="db-edit-actions">
               <button type="button" className="db-btn db-btn-ghost" onClick={onClose}>Скасувати</button>
               <button type="submit" className="db-btn db-btn-primary db-btn-submit" disabled={saving || !form.motivation.trim() || !hasContact}>
-                {saving ? '⏳ Надсилання...' : '📤 Подати заявку'}
+                {saving ? <><IconTime style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 4 }} /> Надсилання...</> : '📤 Подати заявку'}
               </button>
             </div>
           </form>
@@ -739,7 +744,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
                   📤 Завантажити <span>до 10 МБ</span>
                 </button>
                 {user.banner_url && (
-                  <button className="db-bep-del" onClick={handleDeleteBanner}>🗑 Видалити</button>
+                  <button className="db-bep-del" onClick={handleDeleteBanner}><IconTrash style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 4 }} /> Видалити</button>
                 )}
               </div>
             )}
@@ -798,11 +803,11 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
         {/* Desktop action buttons */}
         <div className="db-profile-actions db-profile-actions--desktop">
           {!editing ? (
-            <button className="db-btn db-btn-primary" onClick={() => setEditing(true)}>✏️ Редагувати</button>
+            <button className="db-btn db-btn-primary" onClick={() => setEditing(true)}><IconPensil style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Редагувати</button>
           ) : (
             <>
               <button className="db-btn db-btn-ghost" onClick={() => setEditing(false)} disabled={saving}>Скасувати</button>
-              <button className="db-btn db-btn-primary" onClick={handleSave} disabled={saving}>{saving ? '⏳...' : '✓ Зберегти'}</button>
+              <button className="db-btn db-btn-primary" onClick={handleSave} disabled={saving}>{saving ? <IconTime style={{ width: 14, height: 14 }} /> : '✓ Зберегти'}</button>
             </>
           )}
         </div>
@@ -818,11 +823,11 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
       {/* ━━━━━━ STICKY ACTION BUTTONS (mobile only) ━━━━━━ */}
       <div className="db-profile-sticky-actions">
         {!editing ? (
-          <button className="db-btn db-btn-primary" style={{ flex: 1 }} onClick={() => setEditing(true)}>✏️ Редагувати профіль</button>
+          <button className="db-btn db-btn-primary" style={{ flex: 1 }} onClick={() => setEditing(true)}><IconPensil style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Редагувати профіль</button>
         ) : (
           <>
             <button className="db-btn db-btn-ghost" style={{ flex: 1 }} onClick={() => setEditing(false)} disabled={saving}>Скасувати</button>
-            <button className="db-btn db-btn-primary" style={{ flex: 2 }} onClick={handleSave} disabled={saving}>{saving ? '⏳ Збереження...' : '✓ Зберегти'}</button>
+            <button className="db-btn db-btn-primary" style={{ flex: 2 }} onClick={handleSave} disabled={saving}>{saving ? <><IconTime style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 4 }} /> Збереження...</> : '✓ Зберегти'}</button>
           </>
         )}
       </div>
@@ -837,13 +842,13 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
               <div className="db-field-row">
                 <label>
                   Нікнейм
-                  {!canChangeUsername() && <span className="db-field-hint">🔒 через {daysUntilChange()} дн.</span>}
+                  {!canChangeUsername() && <span className="db-field-hint"><IconLock style={{ width: 11, height: 11, verticalAlign: -1, marginRight: 3 }} /> через {daysUntilChange()} дн.</span>}
                 </label>
                 <div className={!canChangeUsername() ? 'db-field-locked' : undefined}>
                   <input className="db-field-input" value={form.username}
                     onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
                     disabled={!canChangeUsername()} placeholder="Ваш нікнейм" />
-                  {!canChangeUsername() && <span className="db-field-locked-badge">🔒 Заблоковано</span>}
+                  {!canChangeUsername() && <span className="db-field-locked-badge"><IconLock style={{ width: 11, height: 11, verticalAlign: -1, marginRight: 3 }} /> Заблоковано</span>}
                 </div>
               </div>
 
@@ -896,7 +901,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
                 <div className="db-pib-save">
                   <button className="db-btn db-btn-primary db-btn-sm"
                     onClick={handleSavePib} disabled={savingPib}>
-                    {savingPib ? '⏳ Збереження...' : '💾 Зберегти ПІБ'}
+                    {savingPib ? <><IconTime style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 4 }} /> Збереження...</> : <><IconSave style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 4 }} /> Зберегти ПІБ</>}
                   </button>
                 </div>
               </div>
@@ -1055,7 +1060,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
           {/* Organizer application — only for plain users without organizer/admin role */}
           {!hasRole(user, 'organizer') && !hasRole(user, 'admin') && (
             <div className="db-profile-panel-access" style={{ marginTop: 12 }}>
-              <h4 className="db-profile-panel-label">📄 Заявка на організатора</h4>
+              <h4 className="db-profile-panel-label"><IconZaiavki style={{ width: 16, height: 16, verticalAlign: -3, marginRight: 5 }} /> Заявка на організатора</h4>
               {myApplication === undefined && (
                 <div style={{ fontSize: 13, color: '#888', padding: '6px 0' }}>Завантаження...</div>
               )}
@@ -1071,7 +1076,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
               )}
               {myApplication?.status === 'pending' && !myApplication?.hasApplication && (
                 <div className="db-admin-tip" style={{ margin: 0 }}>
-                  ⏳ Заявка на розгляді — чекайте рішення адміністратора
+                  <IconTime style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 4 }} /> Заявка на розгляді — чекайте рішення адміністратора
                 </div>
               )}
               {myApplication?.status === 'rejected' && (

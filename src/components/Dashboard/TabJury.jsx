@@ -6,6 +6,7 @@ import { EVAL_CRITERIA, StatusBadge } from './db.shared.jsx';
 import IconGithub       from '@images/dashboard_components/icon_github.svg?react';
 import IconPlay         from '@images/dashboard_components/icon_play.svg?react';
 import IconExternalLink from '@images/dashboard_components/icon_external_link.svg?react';
+import IconChatBubble   from '@images/dashboard_components/chat.svg?react';
 
 export default function TabJury({ user, toast }) {
   const [tournaments, setTournaments] = useState([]);
@@ -225,7 +226,7 @@ export default function TabJury({ user, toast }) {
                                     </div>
                                   )}
 
-                                  {sub.my_comment && <p className="db-jury-sub-comment">💬 {sub.my_comment}</p>}
+                                  {sub.my_comment && <p className="db-jury-sub-comment"><IconChatBubble style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 4 }} /> {sub.my_comment}</p>}
 
                                   <div className="db-jury-sub-foot">
                                     <button className="db-jury-eval-btn" onClick={() => openReview(sub)}>

@@ -2,10 +2,16 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 
-import IconChat    from '@images/dashboard_components/icon_chat.svg?react';
-import IconEmoji   from '@images/dashboard_components/icon_emoji.svg?react';
-import IconAttach  from '@images/dashboard_components/icon_attach.svg?react';
-import IconSticker from '@images/dashboard_components/icon_sticker.svg?react';
+import IconChat       from '@images/dashboard_components/icon_chat.svg?react';
+import IconEmoji      from '@images/dashboard_components/icon_emoji.svg?react';
+import IconAttach     from '@images/dashboard_components/icon_attach.svg?react';
+import IconSticker    from '@images/dashboard_components/icon_sticker.svg?react';
+import IconPensil     from '@images/dashboard_components/pensil.svg?react';
+import IconChatBubble from '@images/dashboard_components/chat.svg?react';
+import IconAdd        from '@images/dashboard_components/add.svg?react';
+import IconTime       from '@images/dashboard_components/time.svg?react';
+import IconLock       from '@images/dashboard_components/icon_lock_shield.svg?react';
+import IconTrash      from '@images/dashboard_components/icon_trash_bin.svg?react';
 
 import {
   getMyTeams, getCustomChatRooms, getChatHistory, getChatReactions,
@@ -138,7 +144,7 @@ export default function TabChat({
   const ROOMS = useMemo(() => [
     ...BASE_ROOMS,
     ...customRooms.map(r => ({ id: r.name, label: `# ${r.label}`, locked: false, customId: r.id })),
-    ...myTeams.map(t => ({ id: `team_${t.id}`, label: `🔒 ${t.name}`, locked: true })),
+    ...myTeams.map(t => ({ id: `team_${t.id}`, label: t.name, locked: true })),
   ], [myTeams, customRooms]);
 
   useEffect(() => {
@@ -629,18 +635,20 @@ export default function TabChat({
     return Array.from(byId.values());
   }, [messages, currentTeam]);
 
-  // Heuristic: treat any non-offline status as stale → offline if last_seen_at older than 3 minutes.
-  // Reason: the DB `status` column can be left at 'online'/'away'/'do_not_disturb' if the socket
-  // disconnect handler didn't fire (browser killed, network drop). last_seen_at is updated on every
-  // socket ping, so it's the reliable freshness signal.
-  const STALE_PRESENCE_MS = 3 * 60 * 1000;
+  // Derive effective presence from DB status + last_seen_at freshness.
+  // DB status alone can be stale if the socket disconnect handler didn't fire
+  // (browser killed, network drop). last_seen_at is updated on every heartbeat
+  // so it is the reliable freshness signal.
+  const AWAY_MS    =  5 * 60 * 1000;  // idle > 5 min  → away
+  const OFFLINE_MS = 20 * 60 * 1000;  // idle > 20 min → offline
   const computeEffectivePresence = (m) => {
     if (m.id === meId) return online ? 'online' : 'offline';
     if (!m.status) return null; // unknown — non-team room derived member
     if (m.status === 'offline') return 'offline';
     if (m.last_seen_at) {
       const seenAgo = Date.now() - new Date(m.last_seen_at).getTime();
-      if (seenAgo > STALE_PRESENCE_MS) return 'offline';
+      if (seenAgo > OFFLINE_MS) return 'offline';
+      if (seenAgo > AWAY_MS)    return 'away';
     }
     return m.status;
   };
@@ -856,7 +864,7 @@ export default function TabChat({
           </button>
           {ctxMenu.msg.user_id === meId && !(ctxMenu.msg.text || '').startsWith(STICKER_PREFIX) && (
             <button className="db-ctx-btn" onClick={() => startEdit(ctxMenu.msg)}>
-              <span className="db-ctx-icon">✏️</span> Редагувати
+              <span className="db-ctx-icon"><IconPensil style={{ width: 14, height: 14 }} /></span> Редагувати
             </button>
           )}
           {isAdmin && (
@@ -876,7 +884,7 @@ export default function TabChat({
             <>
               <div className="db-ctx-sep" />
               <button className="db-ctx-btn danger" onClick={() => deleteMsg(ctxMenu.msg)}>
-                <span className="db-ctx-icon">🗑</span> Видалити
+                <span className="db-ctx-icon"><IconTrash style={{ width: 14, height: 14 }} /></span> Видалити
               </button>
             </>
           )}
@@ -889,7 +897,7 @@ export default function TabChat({
           <div className="db-rooms-drawer-backdrop" onClick={() => setRoomsOpen(false)} />
           <div className="db-rooms-drawer" onClick={e => e.stopPropagation()}>
             <div className="db-rooms-drawer-header">
-              <span className="db-rooms-drawer-title">💬 Кімнати чату</span>
+              <span className="db-rooms-drawer-title"><IconChatBubble style={{ width: 16, height: 16, verticalAlign: -3, marginRight: 6 }} /> Кімнати чату</span>
               <button className="db-rooms-drawer-close" onClick={() => setRoomsOpen(false)}>✕</button>
             </div>
             <div className="db-rooms-drawer-body">
@@ -928,7 +936,7 @@ export default function TabChat({
                     <button key={t.id}
                       className={`db-chat-room-btn team${room === `team_${t.id}` ? ' active' : ''}${unreadCounts[`team_${t.id}`] > 0 && room !== `team_${t.id}` ? ' has-unread' : ''}`}
                       onClick={() => { setRoom(`team_${t.id}`); setRoomsOpen(false); }}>
-                      <span>🔒 {t.name}</span>
+                      <span><IconLock style={{ width: 12, height: 12, verticalAlign: -1, marginRight: 4 }} />{t.name}</span>
                       {unreadCounts[`team_${t.id}`] > 0 && room !== `team_${t.id}` && (
                         <span className="db-room-unread">{unreadCounts[`team_${t.id}`] > 99 ? '99+' : unreadCounts[`team_${t.id}`]}</span>
                       )}
@@ -969,7 +977,7 @@ export default function TabChat({
         {/* Custom rooms */}
         {customRooms.length > 0 && (
           <div className="db-chat-rooms-group">
-            <div className="db-chat-rooms-group-label">Категорії</div>
+            <div className="db-chat-rooms-group-label">Чати команд</div>
             {customRooms.map(r => (
               <button key={r.id} className={`db-chat-room-btn${room === r.name ? ' active' : ''}${unreadCounts[r.name] > 0 && room !== r.name ? ' has-unread' : ''}`}
                 onClick={() => setRoom(r.name)}>
@@ -985,11 +993,11 @@ export default function TabChat({
         {/* Team rooms */}
         {myTeams.length > 0 && (
           <div className="db-chat-rooms-group">
-            <div className="db-chat-rooms-group-label">Команди</div>
+            <div className="db-chat-rooms-group-label">Ваші Команди</div>
             {myTeams.map(t => (
               <button key={t.id} className={`db-chat-room-btn team${room === `team_${t.id}` ? ' active' : ''}${unreadCounts[`team_${t.id}`] > 0 && room !== `team_${t.id}` ? ' has-unread' : ''}`}
                 onClick={() => setRoom(`team_${t.id}`)}>
-                <span>🔒 {t.name}</span>
+                <span><IconLock style={{ width: 12, height: 12, verticalAlign: -1, marginRight: 4 }} />{t.name}</span>
                 {unreadCounts[`team_${t.id}`] > 0 && room !== `team_${t.id}` && (
                   <span className="db-room-unread">{unreadCounts[`team_${t.id}`] > 99 ? '99+' : unreadCounts[`team_${t.id}`]}</span>
                 )}
@@ -1024,7 +1032,7 @@ export default function TabChat({
             <div className="db-chat-header-room-title">
               <strong>{currentRoom?.label ?? room}</strong>
               {currentRoom?.locked && <span className="db-chat-locked-tag">приватна</span>}
-              {roomLocked && <span className="db-chat-locked-tag locked">🔒 заблоковано</span>}
+              {roomLocked && <span className="db-chat-locked-tag locked"><IconLock style={{ width: 11, height: 11, verticalAlign: -1, marginRight: 3 }} /> заблоковано</span>}
             </div>
             <svg className="db-chat-header-room-chev" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
               <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -1047,7 +1055,7 @@ export default function TabChat({
             </button>
             {currentTeam && (
               <button className="db-chat-add-member-btn" onClick={() => setAddMemberOpen(true)} title="Додати учасника до чату">
-                ➕
+                <IconAdd style={{ width: 18, height: 18 }} />
               </button>
             )}
           </div>
@@ -1208,7 +1216,7 @@ export default function TabChat({
                 : oText;
             return (
               <div className="db-chat-reply-bar db-chat-edit-bar">
-                <span>✏️ <strong>Змінити повідомлення</strong>: {oPreview.slice(0, 60)}{oPreview.length > 60 ? '…' : ''}</span>
+                <span><IconPensil style={{ width: 13, height: 13, verticalAlign: -2, marginRight: 4 }} /> <strong>Змінити повідомлення</strong>: {oPreview.slice(0, 60)}{oPreview.length > 60 ? '…' : ''}</span>
                 <button className="db-chat-reply-cancel" onClick={cancelEdit} title="Скасувати редагування">✕</button>
               </div>
             );
@@ -1291,7 +1299,7 @@ export default function TabChat({
                 <span>Вам відключено можливість писати повідомлення в даний момент</span>
               </div>
             ) : roomLocked && !isAdmin ? (
-              <div className="db-chat-locked-input">🔒 Чат заблоковано адміністратором</div>
+              <div className="db-chat-locked-input"><IconLock style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Чат заблоковано адміністратором</div>
             ) : (
               <>
                 <textarea ref={inputRef}
@@ -1324,7 +1332,7 @@ export default function TabChat({
                 <button type="submit" className="db-btn db-btn-primary db-btn-sm db-send-btn"
                   disabled={!online || (editingId ? !editText.trim() : (!text.trim() && !imgFiles.length)) || uploading}>
                   {uploading ? (
-                    '⏳'
+                    <IconTime style={{ width: 16, height: 16 }} />
                   ) : editingId ? (
                     <>
                       <svg className="db-send-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -1473,123 +1481,141 @@ export default function TabChat({
         const regDate = chatProfile.created_at
           ? new Date(chatProfile.created_at).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' })
           : null;
+        const pinnedBadgeMeta = chatProfile.pinned_badge
+          ? ALL_BADGES.find(b => b.id === chatProfile.pinned_badge)
+          : null;
+        const roleLabel = chatProfile.role === 'admin' ? '⚙ Адмін'
+          : chatProfile.role === 'organizer' ? '🎯 Організатор'
+          : chatProfile.role === 'jury' ? '⚖ Журі'
+          : chatProfile.role && chatProfile.role !== 'user' ? chatProfile.role
+          : null;
+        const bannerStyle = chatProfile.banner_url
+          ? { backgroundImage: `url(${API_BASE + chatProfile.banner_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+          : { background: chatProfile.banner_color
+              ? `linear-gradient(135deg, ${chatProfile.banner_color} 0%, rgba(0,0,0,.4) 100%)`
+              : 'linear-gradient(135deg, #2c2540 0%, #191A23 100%)' };
+
         return (
           <div className="db-chat-profile-overlay" onClick={() => setChatProfile(null)}>
             <div className="db-chat-profile-card db-mp" onClick={e => e.stopPropagation()}>
-              <div className="db-mp-banner"
-                style={chatProfile.banner_url
-                  ? { backgroundImage: `url(${API_BASE + chatProfile.banner_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-                  : { background: chatProfile.banner_color
-                      ? `linear-gradient(135deg, ${chatProfile.banner_color} 0%, rgba(0,0,0,.35) 100%)`
-                      : 'linear-gradient(135deg, #2c2540 0%, #191A23 100%)' }
-                }>
+
+              {/* ══ BANNER ══ */}
+              <div className="db-mp-banner" style={bannerStyle}>
+                <div className="db-mp-banner-noise" />
+                <div className="db-mp-banner-fade" />
+                {roleLabel && <span className="db-mp-role-pill">{roleLabel}</span>}
                 <button className="db-mp-close" onClick={() => setChatProfile(null)} aria-label="Закрити">✕</button>
               </div>
 
-              <div className="db-mp-avatar-wrap">
-                {chatProfile.user_avatar_url ? (
-                  <img src={resolveAvatarUrl(chatProfile.user_avatar_url)}
-                    alt={chatProfile.username}
-                    referrerPolicy="no-referrer"
-                    className="db-mp-avatar"
-                    onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextElementSibling && (e.currentTarget.nextElementSibling.style.removeProperty('display')); }}
-                  />
-                ) : null}
-                <div className="db-mp-avatar db-mp-avatar--initials"
-                  style={{ display: chatProfile.user_avatar_url ? 'none' : undefined }}>
-                  {(chatProfile.username || '?').slice(0, 2).toUpperCase()}
+              {/* ══ IDENTITY ZONE ══ */}
+              <div className="db-mp-identity">
+
+                {/* Avatar */}
+                <div className={`db-mp-avatar-wrap db-mp-presence-ring--${presence || 'offline'}`}>
+                  {chatProfile.user_avatar_url
+                    ? <img src={resolveAvatarUrl(chatProfile.user_avatar_url)}
+                        alt={chatProfile.username} referrerPolicy="no-referrer"
+                        className="db-mp-avatar"
+                        onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextSibling && (e.currentTarget.nextSibling.style.removeProperty('display')); }}
+                      />
+                    : null}
+                  <div className="db-mp-avatar db-mp-avatar--initials"
+                    style={{ display: chatProfile.user_avatar_url ? 'none' : undefined }}>
+                    {(chatProfile.username || '?').slice(0, 2).toUpperCase()}
+                  </div>
+                  <span className={`db-mp-dot db-mp-dot--${presence || 'offline'}`} title={presenceLabel} />
                 </div>
-                {presence && (
-                  <span className={`db-mp-presence db-mp-presence--${presence}`}
-                        title={presenceLabel} />
-                )}
+
+                {/* Name + badges */}
+                <div className="db-mp-id-info">
+                  <div className="db-mp-id-top">
+                    <span className="db-mp-display-name">{displayName}</span>
+                    {(isAdmin || isOrg || isJury) && (
+                      <span className={`db-mp-role-tag ${isAdmin ? 'admin' : isOrg ? 'org' : 'jury'}`}>
+                        {isAdmin ? '⚙ Адмін' : isOrg ? '🎯 Орг.' : '⚖ Журі'}
+                      </span>
+                    )}
+                  </div>
+                  {chatProfile.username && (
+                    <div className="db-mp-handle">@{chatProfile.username}</div>
+                  )}
+                  <div className={`db-mp-status-line db-mp-status-line--${presence || 'offline'}`}>
+                    <span className="db-mp-status-dot" />
+                    {presenceLabel || 'Невідомо'}
+                  </div>
+                </div>
               </div>
 
+              {/* ══ BODY ══ */}
               <div className="db-mp-body">
+
+                {/* Loading */}
                 {chatProfile.loading && (
-                  <div className="db-mp-loading">Завантаження…</div>
+                  <div className="db-mp-loading">
+                    <div className="db-mp-loading-dot" />
+                    <div className="db-mp-loading-dot" />
+                    <div className="db-mp-loading-dot" />
+                  </div>
                 )}
 
-                <div className="db-mp-name-block">
-                  <div className="db-mp-display-name">{displayName}</div>
-                  {chatProfile.username && fullName && (
-                    <div className="db-mp-handle">@{chatProfile.username}</div>
-                  )}
-                  {!fullName && chatProfile.username && (
-                    <div className="db-mp-handle">@{chatProfile.username}</div>
-                  )}
-                </div>
-
-                {(() => {
-                  const pinnedBadgeMeta = chatProfile.pinned_badge
-                    ? ALL_BADGES.find(b => b.id === chatProfile.pinned_badge)
-                    : null;
-                  if (!isAdmin && !isOrg && !isJury && !pinnedBadgeMeta) return null;
-                  return (
-                    <div className="db-mp-badges">
-                      {isAdmin && <span className="db-mp-badge admin">⚙ Адмін</span>}
-                      {isOrg   && <span className="db-mp-badge org">🎯 Організатор</span>}
-                      {isJury  && <span className="db-mp-badge jury">⚖ Журі</span>}
-                      {pinnedBadgeMeta && (
-                        <span className="db-mp-badge pinned"
-                              title={pinnedBadgeMeta.description}>
-                          {pinnedBadgeMeta.image
-                            ? <img src={pinnedBadgeMeta.image} alt="" className="db-mp-badge-icon" />
-                            : '🏅'}
-                          {pinnedBadgeMeta.name}
-                        </span>
-                      )}
+                {/* Pinned badge */}
+                {pinnedBadgeMeta && (
+                  <div className="db-mp-pinned-badge">
+                    {pinnedBadgeMeta.image
+                      ? <img src={pinnedBadgeMeta.image} alt="" className="db-mp-pinned-ico" />
+                      : <span className="db-mp-pinned-ico">🏅</span>}
+                    <div>
+                      <div className="db-mp-pinned-name">{pinnedBadgeMeta.name}</div>
+                      <div className="db-mp-pinned-desc">{pinnedBadgeMeta.description}</div>
                     </div>
-                  );
-                })()}
-
-                {chatProfile.user_description && !chatProfile.loading && (
-                  <div className="db-mp-section">
-                    <div className="db-mp-section-label">Про себе</div>
-                    <p className="db-mp-desc">{chatProfile.user_description}</p>
                   </div>
                 )}
 
-                <div className="db-mp-section">
-                  <div className="db-mp-section-label">Дані</div>
-                  <div className="db-mp-data">
-                    {regDate && (
-                      <div className="db-mp-data-row">
-                        <span className="db-mp-data-label">📅 На платформі з</span>
-                        <span className="db-mp-data-value">{regDate}</span>
-                      </div>
-                    )}
-                    {typeof chatProfile.elo === 'number' && (
-                      <div className="db-mp-data-row">
-                        <span className="db-mp-data-label">⭐ ELO</span>
-                        <span className="db-mp-data-value">{chatProfile.elo}</span>
-                      </div>
-                    )}
-                    {presence && (
-                      <div className="db-mp-data-row">
-                        <span className="db-mp-data-label">Статус</span>
-                        <span className="db-mp-data-value">
-                          <span className={`db-mp-presence-mini db-mp-presence--${presence}`} />
-                          {presenceLabel}
-                        </span>
-                      </div>
-                    )}
+                {/* Bio */}
+                {chatProfile.user_description && !chatProfile.loading && (
+                  <div className="db-mp-bio">
+                    <span className="db-mp-section-label">Про себе</span>
+                    <p className="db-mp-bio-text">{chatProfile.user_description}</p>
                   </div>
+                )}
+
+                {/* Stats — 3 compact tiles */}
+                <div className="db-mp-tiles">
+                  {regDate && (
+                    <div className="db-mp-tile db-mp-tile--date">
+                      <span className="db-mp-tile-ico">📅</span>
+                      <div className="db-mp-tile-text">
+                        <span className="db-mp-tile-lbl">На платформі з</span>
+                        <span className="db-mp-tile-val">{regDate}</span>
+                      </div>
+                    </div>
+                  )}
+                  {typeof chatProfile.elo === 'number' && (
+                    <div className="db-mp-tile db-mp-tile--elo">
+                      <span className="db-mp-tile-ico">⭐</span>
+                      <span className="db-mp-tile-lbl">ELO</span>
+                      <span className="db-mp-tile-val db-mp-tile-val--big">{chatProfile.elo}</span>
+                    </div>
+                  )}
+                  {presence && (
+                    <div className="db-mp-tile db-mp-tile--status">
+                      <span className={`db-mp-tile-ico db-mp-tile-status-dot db-mp-dot--${presence}`} />
+                      <span className="db-mp-tile-lbl">Статус</span>
+                      <span className={`db-mp-tile-val db-mp-tile-status--${presence}`}>{presenceLabel}</span>
+                    </div>
+                  )}
                 </div>
 
+                {/* Actions */}
                 <div className="db-mp-actions">
                   {isSelf ? (
                     <button className="db-mp-btn primary" onClick={() => { setChatProfile(null); setTab('profile'); }}>
-                      ✏ Редагувати профіль
+                      ✏ Мій профіль
                     </button>
                   ) : (
                     <>
                       <button className="db-mp-btn primary"
-                        onClick={() => {
-                          const u = chatProfile.username;
-                          setChatProfile(null);
-                          if (u) navigate(`/dashboard/profile/${u}`);
-                        }}
+                        onClick={() => { const u = chatProfile.username; setChatProfile(null); if (u) navigate(`/dashboard/profile/${u}`); }}
                         disabled={!chatProfile.username}
                       >
                         Повний профіль →
@@ -1600,6 +1626,7 @@ export default function TabChat({
                     </>
                   )}
                 </div>
+
               </div>
             </div>
           </div>
@@ -1618,7 +1645,7 @@ export default function TabChat({
       {deletePending && createPortal(
         <div className="modal-overlay" style={{ zIndex: 9999 }} onClick={cancelDelete}>
           <div className="db-confirm-modal" onClick={e => e.stopPropagation()}>
-            <div className="db-confirm-icon">🗑️</div>
+            <div className="db-confirm-icon"><IconTrash style={{ width: 32, height: 32 }} /></div>
             <p className="db-confirm-message">Видалити повідомлення від <strong>{deletePending.username}</strong>?</p>
             {deletePending.text && (
               <p className="db-delete-msg-preview">"{(deletePending.text).slice(0, 100)}{deletePending.text.length > 100 ? '…' : ''}"</p>

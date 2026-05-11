@@ -6,6 +6,11 @@ import { searchUsers, getUserProfile, API_BASE, CHECK_BACKEND, getToken } from '
 import IconGithubSm  from '@images/dashboard_components/icon_github.svg?react';
 import IconLogoutSm  from '@images/dashboard_components/icon_logout.svg?react';
 import IconProfileSm from '@images/dashboard_components/icon_profile.svg?react';
+import IconChatBubble from '@images/dashboard_components/chat.svg?react';
+import IconUserSvg    from '@images/dashboard_components/icon_user.svg?react';
+import IconOglad      from '@images/dashboard_components/oglad.svg?react';
+import IconTime       from '@images/dashboard_components/time.svg?react';
+import IconSave       from '@images/dashboard_components/save.svg?react';
 
 import emote1 from '@images/emote/emote.png';
 import emote2 from '@images/emote/emote2.png';
@@ -170,9 +175,9 @@ export const EVAL_CRITERIA = [
 export const TAB_TIPS = {
   overview:    { icon: '🏠', title: 'Головна',     text: 'Тут зібрана вся важлива інформація: ваші турніри, команди та навігація.' },
   tournaments: { icon: '🏆', title: 'Турніри',   text: 'Переглядайте актуальні змагання, турніри та реєструйтесь!.' },
-  teams:       { icon: '👥', title: 'Команди',   text: 'Усі ваші команди в одному місці. Команди прив\'язані до конкретних турнірів.' },
-  leaderboard: { icon: '📊', title: 'Лідерборд', text: 'Рейтинг команд по кожному турніру. Оберіть турнір щоб побачити результати.' },
-  chat:        { icon: '💬', title: 'Чат',       text: 'Загальний чат та приватні кімнати для вашої команди. ПКМ на повідомлення — дії.' },
+  teams:       { icon: <IconUserSvg style={{ width: 20, height: 20, color: '#7c5ff5' }} />, title: 'Команди',   text: 'Усі ваші команди в одному місці. Команди прив\'язані до конкретних турнірів.' },
+  leaderboard: { icon: <IconOglad style={{ width: 20, height: 20 }} />, title: 'Лідерборд', text: 'Рейтинг команд по кожному турніру. Оберіть турнір щоб побачити результати.' },
+  chat:        { icon: <IconChatBubble style={{ width: 20, height: 20 }} />, title: 'Чат',       text: 'Загальний чат та приватні кімнати для вашої команди. ПКМ на повідомлення — дії.' },
   profile:     { icon: '👤', title: 'Профіль',   text: 'Налаштуйте нікнейм, аватар, банер та опис профілю.' },
   organizer:   { icon: '🗂️', title: 'Організатор', text: 'Створюйте турніри, керуйте раундами та переглядайте команди.' },
   admin:       { icon: '⚙️', title: 'Адмін',        text: 'Керуйте усіма аспектами платформи. :)' },
@@ -851,7 +856,7 @@ function JurySearchSelector({ selectedJury, onChange }) {
           value={query}
           onChange={e => setQuery(e.target.value)}
         />
-        {loading && <span className="db-jury-search-loading">⏳</span>}
+        {loading && <span className="db-jury-search-loading"><IconTime style={{ width: 16, height: 16 }} /></span>}
         
         {/* Результати пошуку */}
         {results.length > 0 && (
@@ -994,7 +999,7 @@ export function TournamentForm({
 
   const ac = ACCENT[isCreate ? status : t.status] || ACCENT.draft;
   const formTitle = isCreate ? 'Створення турніру' : (t.name || 'Редагування');
-  const btnText = submitLabel || (isCreate ? 'Створити турнір' : (loading ? 'Збереження...' : '💾 Зберегти'));
+  const btnText = submitLabel || (isCreate ? 'Створити турнір' : (loading ? 'Збереження...' : <><IconSave style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Зберегти</>));
 
   return (
     <form className="db-edit-tournament-form" onSubmit={handleSubmit}>

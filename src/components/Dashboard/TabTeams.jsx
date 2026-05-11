@@ -1,8 +1,15 @@
 ﻿import { useState, useEffect, useCallback, useRef } from "react";
 
-import IconTeams from "@images/dashboard_components/icon_teams.svg?react";
+import IconTeams       from "@images/dashboard_components/icon_teams.svg?react";
+import IconPensil      from "@images/dashboard_components/pensil.svg?react";
+import IconChatBubble  from "@images/dashboard_components/chat.svg?react";
+import IconAdd         from "@images/dashboard_components/add.svg?react";
+import IconRemove      from "@images/dashboard_components/remove.svg?react";
+import IconTime        from "@images/dashboard_components/time.svg?react";
+import IconUserSvg     from "@images/dashboard_components/icon_user.svg?react";
+import IconSave        from "@images/dashboard_components/save.svg?react";
 
-import { getMyTeams, getTeamById, updateTeam, searchUsers, getTournamentRounds, getTeamSubmissions, createSubmission, updateSubmission } from "@utils/authApi";
+import { getMyTeams, getTeamById, updateTeam, searchUsers, getTournamentRounds, getTeamSubmissions, createSubmission, updateSubmission, API_BASE } from "@utils/authApi";
 import { StatusBadge, UserAvatar } from "./db.shared.jsx";
 
 const AVATAR_GRADIENTS = [
@@ -111,7 +118,7 @@ function SubmitWorkModal({ team, toast, onClose }) {
       <div className="modal-box modal-box--light" onClick={e => e.stopPropagation()} style={{ maxWidth: 540 }}>
         <button className="modal-close" onClick={onClose}>✕</button>
         <h2 style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 700 }}>
-          {existing ? '✏️ Оновити роботу' : '📤 Подати роботу'}
+          {existing ? <><IconPensil style={{ width: 16, height: 16, verticalAlign: -3, marginRight: 6 }} /> Оновити роботу</> : '📤 Подати роботу'}
         </h2>
         <p style={{ margin: '0 0 20px', fontSize: 13, color: '#aaa' }}>{team.name} · {team.tournament_name}</p>
 
@@ -137,7 +144,7 @@ function SubmitWorkModal({ team, toast, onClose }) {
               />
               <button type="button" className="db-btn db-btn-ghost db-btn-sm"
                 onClick={fetchBranches} disabled={loadingB || !repoUrl.trim()}>
-                {loadingB ? '⏳' : '🔍 Гілки'}
+                {loadingB ? <IconTime style={{ width: 14, height: 14 }} /> : '🔍 Гілки'}
               </button>
             </div>
           </div>
@@ -185,7 +192,7 @@ function SubmitWorkModal({ team, toast, onClose }) {
           <div className="db-form-actions">
             <button type="button" className="db-btn db-btn-ghost" onClick={onClose}>Скасувати</button>
             <button type="submit" className="db-btn db-btn-primary" disabled={saving}>
-              {saving ? 'Збереження...' : (existing ? '💾 Оновити' : '📤 Подати роботу')}
+              {saving ? 'Збереження...' : (existing ? <><IconSave style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Оновити</> : '📤 Подати роботу')}
             </button>
           </div>
         </form>
@@ -208,9 +215,22 @@ function EditTeamModal({ team, toast, onClose, onSuccess }) {
 
   useEffect(() => {
     getTeamById(team.id).then(t => {
+      if (t.city)               setCity(t.city);
+      if (t.school)             setSchool(t.school);
+      if (t.telegram_username)  setTelegram(t.telegram_username);
       setMembers((t.members || []).map(m => ({
-        full_name: m.full_name, email: m.email,
-        linkedUser: null, platformQuery: "", platformUser: null, searching: false,
+        linkedUser: m.user_id ? {
+          id: m.user_id,
+          username: m.username || m.full_name,
+          email: m.email || '',
+          user_avatar_url: m.user_avatar_url || null,
+          identity_confirmed: true,
+        } : null,
+        full_name: m.full_name || '',
+        email: m.email || '',
+        platformQuery: '',
+        platformUser: null,
+        searching: false,
       })));
       setLoading(false);
     }).catch(() => setLoading(false));
@@ -239,23 +259,37 @@ function EditTeamModal({ team, toast, onClose, onSuccess }) {
       toast.error("⚠️ Цей учасник ще не підтвердив своє ПІБ у профілі. Він повинен заповнити Прізвище, Ім'я та По батькові.");
       return;
     }
+    // Prevent the same platform user from being added twice.
+    if (members.some((row, idx) => idx !== i && row.linkedUser?.id === m.platformUser.id)) {
+      toast.error('Цей користувач вже доданий до команди');
+      return;
+    }
     updateMember(i, {
-      linkedUser: { id: m.platformUser.id, username: m.platformUser.username, email: m.platformUser.email || "", identity_confirmed: true },
-      platformUser: null, platformQuery: "", onPlatform: true,
+      linkedUser: {
+        id: m.platformUser.id,
+        username: m.platformUser.username,
+        email: m.platformUser.email || '',
+        user_avatar_url: m.platformUser.user_avatar_url || null,
+        identity_confirmed: true,
+      },
+      platformUser: null, platformQuery: '',
     });
   };
-
-  const unlinkPlatformUser = (i) =>
-    updateMember(i, { linkedUser: null, full_name: "", email: "" });
 
   const handleSave = async e => {
     e.preventDefault();
     if (!name.trim()) { toast.error("Введіть назву команди"); return; }
+    // Drop any empty search-only rows the user opened but didn't fill in.
+    const filled = members.filter(m => m.linkedUser);
+    if (filled.length < min) {
+      toast.error(`Мінімум ${min} учасника(-ів) у команді`);
+      return;
+    }
     setSaving(true);
-    const cleanMembers = members.map(m => ({
-      full_name: m.linkedUser ? m.linkedUser.username : m.full_name,
-      email:     m.linkedUser ? m.linkedUser.email     : m.email,
-      user_id:   m.linkedUser ? (m.linkedUser.id ?? null) : null,
+    const cleanMembers = filled.map(m => ({
+      full_name: m.linkedUser.username,
+      email:     m.linkedUser.email,
+      user_id:   m.linkedUser.id,
     }));
     try {
       await updateTeam(team.id, { name: name.trim(), city, school, telegram_username: telegram, members: cleanMembers });
@@ -282,7 +316,11 @@ function EditTeamModal({ team, toast, onClose, onSuccess }) {
                 <h5>Учасники ({members.length}/{max})</h5>
                 {members.length < max && (
                   <button type="button" className="db-btn db-btn-ghost db-btn-sm"
-                    onClick={() => setMembers(m => [...m, { full_name: "", email: "", linkedUser: null, platformQuery: "", platformUser: null, searching: false }])}>+ Додати</button>
+                    onClick={() => setMembers(m => [...m, {
+                      linkedUser: null,
+                      full_name: '', email: '',
+                      platformQuery: '', platformUser: null, searching: false,
+                    }])}>+ Додати</button>
                 )}
               </div>
               {members.map((m, i) => (
@@ -290,43 +328,71 @@ function EditTeamModal({ team, toast, onClose, onSuccess }) {
                   {m.linkedUser ? (
                     <div className="db-member-linked-card">
                       <span className="db-member-num">{i + 1}</span>
-                      <div className="db-member-linked-avatar">{m.linkedUser.username.slice(0,2).toUpperCase()}</div>
+                      {m.linkedUser.user_avatar_url ? (
+                        <img
+                          src={m.linkedUser.user_avatar_url.startsWith('http')
+                            ? m.linkedUser.user_avatar_url
+                            : `${API_BASE}${m.linkedUser.user_avatar_url}`}
+                          alt={m.linkedUser.username}
+                          referrerPolicy="no-referrer"
+                          className="db-member-linked-avatar db-member-linked-avatar--img"
+                        />
+                      ) : (
+                        <div className="db-member-linked-avatar">{(m.linkedUser.username || '?').slice(0,2).toUpperCase()}</div>
+                      )}
                       <div className="db-member-linked-info">
                         <span className="db-member-linked-name">{m.linkedUser.username}</span>
                         {m.linkedUser.email && <span className="db-member-linked-email">{m.linkedUser.email}</span>}
                       </div>
                       <span className="db-member-linked-badge">На платформі</span>
-                      <button type="button" className="db-member-remove" onClick={() => unlinkPlatformUser(i)}>✕</button>
+                      {members.length > min && (
+                        <button type="button" className="db-member-remove"
+                          title="Прибрати учасника"
+                          onClick={() => setMembers(ms => ms.filter((_, idx) => idx !== i))}><IconRemove style={{ width: 14, height: 14 }} /></button>
+                      )}
                     </div>
                   ) : (
-                    <>
-                      <div className="db-member-row">
+                    <div className="db-member-search-card">
+                      <div className="db-member-search-head">
                         <span className="db-member-num">{i + 1}</span>
-                        <input className="db-input" value={m.full_name}
-                          onChange={e => updateMember(i, { full_name: e.target.value })}
-                          placeholder="ПІБ" required />
-                        <input className="db-input" type="email" value={m.email}
-                          onChange={e => updateMember(i, { email: e.target.value })}
-                          placeholder="Email" required />
+                        <span className="db-member-search-hint">Знайдіть учасника на платформі</span>
                         {members.length > min && (
                           <button type="button" className="db-member-remove"
-                            onClick={() => setMembers(ms => ms.filter((_,idx) => idx !== i))}>✕</button>
+                            onClick={() => setMembers(ms => ms.filter((_,idx) => idx !== i))}><IconRemove style={{ width: 14, height: 14 }} /></button>
                         )}
                       </div>
                       <div className="db-member-platform-wrap">
-                        <input className="db-input db-input-sm" value={m.platformQuery}
+                        <input className="db-input" value={m.platformQuery}
                           onChange={e => handlePlatformSearch(i, e.target.value)}
-                          placeholder="🔍 Знайти на платформі" />
-                        {m.searching && <span className="db-member-searching">...</span>}
+                          placeholder="🔍 Введіть нік або email" />
+                        {m.searching && <span className="db-member-searching">Пошук…</span>}
                         {m.platformUser && !m.searching && (
                           <div className="db-platform-suggestion" onClick={() => addPlatformUser(i)}>
-                            <span className="db-ps-avatar">{m.platformUser.username.slice(0,2).toUpperCase()}</span>
-                            <span className="db-ps-name">{m.platformUser.username}</span>
+                            {m.platformUser.user_avatar_url ? (
+                              <img
+                                src={m.platformUser.user_avatar_url.startsWith('http')
+                                  ? m.platformUser.user_avatar_url
+                                  : `${API_BASE}${m.platformUser.user_avatar_url}`}
+                                alt={m.platformUser.username}
+                                referrerPolicy="no-referrer"
+                                className="db-ps-avatar db-ps-avatar--img" />
+                            ) : (
+                              <span className="db-ps-avatar">{(m.platformUser.username || '?').slice(0,2).toUpperCase()}</span>
+                            )}
+                            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                              <span className="db-ps-name">{m.platformUser.username}</span>
+                              {!m.platformUser.identity_confirmed && (
+                                <span style={{ fontSize: 11, color: '#e05fa0' }}>⚠️ ПІБ не підтверджено</span>
+                              )}
+                            </div>
                             <span className="db-ps-add">+ Додати</span>
                           </div>
                         )}
+                        {m.platformQuery.length >= 2 && !m.searching && !m.platformUser && (
+                          <div className="db-member-search-empty">Користувача не знайдено</div>
+                        )}
                       </div>
-                    </>
+                    </div>
                   )}
                 </div>
               ))}
@@ -418,7 +484,7 @@ export default function TabTeams({ toast, setTab }) {
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" style={{ verticalAlign: "middle", marginRight: 2, opacity: .7 }}>
                               <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 13.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.828.942z" />
                             </svg>
-                            {t.telegram_username}
+                            @{String(t.telegram_username).replace(/^@+/, '')}
                           </span>
                         )}
                       </div>
@@ -432,7 +498,7 @@ export default function TabTeams({ toast, setTab }) {
                     </div>
                     {canEdit && (
                       <button className="db-btn db-btn-ghost db-btn-sm" onClick={e => { e.stopPropagation(); setEditTeam(t); }}>
-                        ✏️ Редагувати
+                        <IconPensil style={{ width: 13, height: 13, verticalAlign: -2, marginRight: 4 }} /> Редагувати
                       </button>
                     )}
                     {canSubmit && (
@@ -448,79 +514,114 @@ export default function TabTeams({ toast, setTab }) {
                   <div className="db-team-details">
                     {detailLoading[t.id] ? (
                       <div className="db-team-detail-loading">Завантаження учасників...</div>
-                    ) : (
-                      <>
-                        <div className="db-team-detail-section">
-                          <p className="db-team-detail-title">Учасники команди</p>
-                          {members.length > 0 ? (
-                            <div className="db-team-members-grid">
-                              {members.map((m, i) => {
-                                const userObj = m.user_id ? {
-                                  id: m.user_id,
-                                  username: m.username,
-                                  user_avatar_url: m.user_avatar_url,
-                                  status: m.presence,
-                                } : null;
-                                return (
-                                  <div key={i} className="db-team-member-row">
-                                    {userObj ? (
-                                      <UserAvatar user={userObj} size={36} showStatus={true} />
-                                    ) : (
-                                      <div className="db-team-member-avatar" style={{ background: AVATAR_GRADIENTS[i % AVATAR_GRADIENTS.length] }}>
-                                        {(m.full_name || m.username || "?").slice(0,2).toUpperCase()}
-                                      </div>
-                                    )}
-                                    <div className="db-team-member-info">
-                                      <span className="db-team-member-name">{m.full_name || m.username}</span>
-                                      {m.email && <span className="db-team-member-email">{m.email}</span>}
-                                    </div>
-                                    {m.username && (
-                                      <span className="db-team-member-platform-badge">На платформі</span>
-                                    )}
-                                  </div>
-                                );
-                              })}
+                    ) : (() => {
+                      const captainId = detail?.captain_id ?? t.captain_id ?? null;
+                      const onlineCount = members.filter(m => m.presence === 'online').length;
+                      const maxSize = 5; // matches edit modal max
+                      const slotsLeft = Math.max(0, maxSize - members.length);
+                      return (
+                        <>
+                          {/* Inline summary: counts + online + tournament + status */}
+                          <div className="db-team-summary">
+                            <div className="db-team-summary-item">
+                              <span className="db-team-summary-icon"><IconUserSvg style={{ width: 14, height: 14, color: '#7c5ff5' }} /></span>
+                              <span className="db-team-summary-text">
+                                <b>{members.length}/{maxSize}</b> учасників
+                              </span>
                             </div>
-                          ) : (
-                            <p className="db-team-no-members">Немає даних про учасників</p>
-                          )}
-                        </div>
-
-                        <div className="db-team-chat-action">
-                          <button
-                            className="db-btn db-btn-primary db-btn-sm"
-                            onClick={() => setTab?.('chat')}
-                          >
-                            💬 Відкрити чат команди
-                          </button>
-                        </div>
-
-                        <div className="db-team-detail-info-row">
-                          <div className="db-team-detail-info-item">
-                            <span className="db-team-detail-info-label">Турнір</span>
-                            <span className="db-team-detail-info-value">{t.tournament_name}</span>
+                            <span className="db-team-summary-sep" />
+                            <div className="db-team-summary-item">
+                              <span className={`db-team-summary-dot${onlineCount > 0 ? ' on' : ''}`} />
+                              <span className="db-team-summary-text">
+                                <b>{onlineCount}</b> в мережі
+                              </span>
+                            </div>
+                            {slotsLeft > 0 && canEdit && (
+                              <>
+                                <span className="db-team-summary-sep" />
+                                <div className="db-team-summary-item db-team-summary-item--hint">
+                                  <span className="db-team-summary-icon"><IconAdd style={{ width: 13, height: 13 }} /></span>
+                                  <span className="db-team-summary-text">Вільно місць: <b>{slotsLeft}</b></span>
+                                </div>
+                              </>
+                            )}
                           </div>
-                          {t.city && (
-                            <div className="db-team-detail-info-item">
-                              <span className="db-team-detail-info-label">Місто</span>
-                              <span className="db-team-detail-info-value">{t.city}</span>
+
+                          {/* Roster */}
+                          <div className="db-team-detail-section">
+                            <div className="db-team-detail-section-head">
+                              <p className="db-team-detail-title">Склад команди</p>
+                              <span className="db-team-detail-count">{members.length}</span>
                             </div>
-                          )}
-                          {t.school && (
-                            <div className="db-team-detail-info-item">
-                              <span className="db-team-detail-info-label">Школа</span>
-                              <span className="db-team-detail-info-value">{t.school}</span>
-                            </div>
-                          )}
-                          {t.telegram_username && (
-                            <div className="db-team-detail-info-item">
-                              <span className="db-team-detail-info-label">Telegram</span>
-                              <span className="db-team-detail-info-value">@{t.telegram_username}</span>
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    )}
+                            {members.length > 0 ? (
+                              <div className="db-team-members-grid">
+                                {members.map((m, i) => {
+                                  const isCaptain = captainId != null && m.user_id === captainId;
+                                  const userObj = m.user_id ? {
+                                    id: m.user_id,
+                                    username: m.username,
+                                    user_avatar_url: m.user_avatar_url,
+                                    status: m.presence,
+                                  } : null;
+                                  return (
+                                    <div key={i} className={`db-team-member-row${isCaptain ? ' is-captain' : ''}`}>
+                                      {userObj ? (
+                                        <UserAvatar user={userObj} size={36} showStatus={true} />
+                                      ) : (
+                                        <div className="db-team-member-avatar" style={{ background: AVATAR_GRADIENTS[i % AVATAR_GRADIENTS.length] }}>
+                                          {(m.full_name || m.username || "?").slice(0,2).toUpperCase()}
+                                        </div>
+                                      )}
+                                      <div className="db-team-member-info">
+                                        <span className="db-team-member-name">
+                                          {m.full_name || m.username}
+                                          {isCaptain && <span className="db-team-member-captain-icon" title="Капітан">👑</span>}
+                                        </span>
+                                        {m.email && <span className="db-team-member-email">{m.email}</span>}
+                                      </div>
+                                      <div className="db-team-member-tags">
+                                        {isCaptain && <span className="db-team-member-captain-badge">Капітан</span>}
+                                        {m.username && !isCaptain && (
+                                          <span className="db-team-member-platform-badge">На платформі</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <p className="db-team-no-members">Немає даних про учасників</p>
+                            )}
+                          </div>
+
+                          {/* Action bar */}
+                          <div className="db-team-action-bar">
+                            <button
+                              className="db-btn db-btn-primary db-btn-sm"
+                              onClick={() => setTab?.('chat')}
+                            >
+                              <IconChatBubble style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Відкрити чат команди
+                            </button>
+                            {canSubmit && (
+                              <button
+                                className="db-btn db-btn-ghost db-btn-sm"
+                                onClick={e => { e.stopPropagation(); setSubmitTeam(t); }}
+                              >
+                                📤 Подати роботу
+                              </button>
+                            )}
+                            {canEdit && (
+                              <button
+                                className="db-btn db-btn-ghost db-btn-sm"
+                                onClick={e => { e.stopPropagation(); setEditTeam(t); }}
+                              >
+                                <IconPensil style={{ width: 13, height: 13, verticalAlign: -2, marginRight: 4 }} /> Редагувати склад
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

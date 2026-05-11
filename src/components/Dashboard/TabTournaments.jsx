@@ -2,6 +2,10 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 
 import IconTournaments from '@images/dashboard_components/icon_tournaments.svg?react';
 import IconSearch      from '@images/dashboard_components/icon_search.svg?react';
+import IconPensil      from '@images/dashboard_components/pensil.svg?react';
+import IconRemove      from '@images/dashboard_components/remove.svg?react';
+import IconTime        from '@images/dashboard_components/time.svg?react';
+import IconUserSvg     from '@images/dashboard_components/icon_user.svg?react';
 import logoImg         from '@images/logos/logo.png';
 
 import { getTournaments, getMyTeams, registerTeam, updateTeam, searchUsers, updateTournament } from '@utils/authApi';
@@ -17,7 +21,8 @@ function TeamRegForm({ tournament, toast, onSuccess, onCancel, user }) {
   const [teamName, setTeamName] = useState('');
   const [city,     setCity]     = useState('');
   const [school,   setSchool]   = useState('');
-  const [telegram, setTelegram] = useState('');
+  const [telegram, setTelegram] = useState(''); // stored without the @ prefix
+  const [leaderEmail, setLeaderEmail] = useState(user?.email || '');
 
   const selfSlot = user ? {
     full_name: '', email: user.email || '',
@@ -66,6 +71,12 @@ function TeamRegForm({ tournament, toast, onSuccess, onCancel, user }) {
   const handleSubmit = async e => {
     e.preventDefault();
     if (!teamName.trim()) { toast.error('Введіть назву команди'); return; }
+    const emailTrim = leaderEmail.trim();
+    if (!emailTrim) { toast.error('Вкажіть email лідера'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) {
+      toast.error('Невірний формат email');
+      return;
+    }
     for (let i = 0; i < members.length; i++) {
       const m = members[i];
       if (!m.linkedUser) {
@@ -89,7 +100,8 @@ function TeamRegForm({ tournament, toast, onSuccess, onCancel, user }) {
         tournament_id: tournament.id,
         city: city.trim(),
         school: school.trim(),
-        telegram_username: telegram.trim(),
+        telegram_username: telegram.trim() ? `@${telegram.trim().replace(/^@+/, '')}` : '',
+        leader_email: emailTrim,
         members: cleanMembers,
       };
       await registerTeam(teamPayload);
@@ -111,11 +123,27 @@ function TeamRegForm({ tournament, toast, onSuccess, onCancel, user }) {
           <div className="db-form-row"><label>Місто</label><input className="db-input" value={city} onChange={e => setCity(e.target.value)} placeholder="Київ" /></div>
           <div className="db-form-row"><label>Навчальний заклад</label><input className="db-input" value={school} onChange={e => setSchool(e.target.value)} placeholder="ОМФК..." /></div>
         </div>
-        <div className="db-form-row"><label>Telegram</label><input className="db-input" value={telegram} onChange={e => setTelegram(e.target.value)} placeholder="@username" /></div>
+        <div className="db-form-row-2">
+          <div className="db-form-row">
+            <label>Email <span className="db-required">*</span></label>
+            <input className="db-input" type="email" required
+              value={leaderEmail} onChange={e => setLeaderEmail(e.target.value)}
+              placeholder="leader@example.com" />
+          </div>
+          <div className="db-form-row">
+            <label>Telegram</label>
+            <div className="db-input-prefix">
+              <span className="db-input-prefix-tag">@</span>
+              <input className="db-input db-input--with-prefix" value={telegram}
+                onChange={e => setTelegram(e.target.value.replace(/^@+/, ''))}
+                placeholder="username" />
+            </div>
+          </div>
+        </div>
       </div>
       <div className="db-reg-card">
         <div className="db-members-header">
-          <h5 className="db-reg-card-title">👥 Учасники ({members.length}/{max})</h5>
+          <h5 className="db-reg-card-title"><IconUserSvg style={{ width: 15, height: 15, verticalAlign: -2, marginRight: 5, color: '#7c5ff5' }} /> Учасники ({members.length}/{max})</h5>
           {members.length < max && <button type="button" className="db-btn db-btn-ghost db-btn-sm" onClick={() => setMembers(m => [...m, { full_name:'', email:'', onPlatform:false, platformQuery:'', platformUser:null, platformResults:[], searching:false, linkedUser: null }])}>+ Додати</button>}
         </div>
         {members.map((m, i) => (
@@ -141,7 +169,7 @@ function TeamRegForm({ tournament, toast, onSuccess, onCancel, user }) {
                   </div>
                   <span className="db-member-linked-badge">{m.isSelf ? 'Це ви' : 'На платформі'}</span>
                   {!m.isSelf && (
-                    <button type="button" className="db-member-remove" onClick={() => unlinkPlatformUser(i)}>✕</button>
+                    <button type="button" className="db-member-remove" onClick={() => unlinkPlatformUser(i)}><IconRemove style={{ width: 14, height: 14 }} /></button>
                   )}
                 </div>
                 {m.linkedUser.missingEmail && (
@@ -181,7 +209,7 @@ function TeamRegForm({ tournament, toast, onSuccess, onCancel, user }) {
                   </div>
                   {members.length > min && (
                     <button type="button" className="db-member-remove"
-                            onClick={() => setMembers(ms => ms.filter((_, idx) => idx !== i))}>✕</button>
+                            onClick={() => setMembers(ms => ms.filter((_, idx) => idx !== i))}><IconRemove style={{ width: 14, height: 14 }} /></button>
                   )}
                 </div>
                 {(m.platformResults?.length > 0) && (
@@ -311,7 +339,7 @@ function TournamentModal({ tournament: t, user, toast, initReg, isRegistered, on
 
           {canEdit && (
             <button className="db-btn db-btn-ghost db-btn-edit-tournament" onClick={() => { setShowEdit(true); setShowReg(false); }}>
-              ✏️ Редагувати турнір
+              <IconPensil style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Редагувати турнір
             </button>
           )}
 
@@ -412,7 +440,7 @@ export default function TabTournaments({ user, toast }) {
                       <span className="db-tc-meta-text">{formatDate(t.start_date)} — {formatDate(t.end_date)}</span>
                     </div>
                     <div className="db-tc-meta-item">
-                      <span className="db-tc-meta-icon">👥</span>
+                      <span className="db-tc-meta-icon"><IconUserSvg style={{ width: 14, height: 14, color: '#7c5ff5' }} /></span>
                       <span className="db-tc-meta-text">{t.min_team_size}–{t.max_team_size} осіб</span>
                     </div>
                     {t.rounds_count > 0 && (
@@ -437,7 +465,7 @@ export default function TabTournaments({ user, toast }) {
                   <div className="db-tournament-footer">
                     {t.status === 'registration' && dl !== null && (
                       <span className={`db-deadline${dl <= 3 ? ' urgent' : ''}`}>
-                        {dl > 0 ? `⏳ ${dl} дн.` : '🔴 Закрита'}
+                        {dl > 0 ? <><IconTime style={{ width: 13, height: 13, verticalAlign: -2, marginRight: 3 }} /> {dl} дн.</> : '🔴 Закрита'}
                       </span>
                     )}
                     {t.status === 'registration' && (
