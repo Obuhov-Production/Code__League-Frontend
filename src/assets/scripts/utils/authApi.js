@@ -295,6 +295,20 @@ export async function createAnnouncement(tournamentId, title, message) {
   });
 }
 
+export async function uploadTournamentFile(tournamentId, type, file) {
+  const token = getToken();
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch(`${BASE}/tournaments/${tournamentId}/upload-file?type=${encodeURIComponent(type)}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: fd,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || data.error || 'Upload failed');
+  return data;
+}
+
 /* ── Teams ───────────────────────────────────────── */
 
 export async function getMyTeams() {

@@ -9,13 +9,15 @@ import IconZaiavki from '@images/dashboard_components/zaiavki.svg?react';
 import IconUser    from '@images/dashboard_components/icon_user.svg?react';
 import IconTeams   from '@images/dashboard_components/icon_teams.svg?react';
 import IconSave    from '@images/dashboard_components/save.svg?react';
+import IconSend    from '@images/dashboard_components/send.svg?react';
 import IconBroom   from '@images/dashboard_components/broom.svg?react';
 import IconLock    from '@images/dashboard_components/icon_lock_shield.svg?react';
 import IconTrash   from '@images/dashboard_components/icon_trash_bin.svg?react';
+import IconGithub  from '@images/dashboard_components/icon_github.svg?react';
 
 import {
   getTournaments, getAdminUsers, getAdminStats, getAdminTeams,
-  createTournament, updateTournament,
+  createTournament, updateTournament, uploadTournamentFile,
   updateTournamentStatus, deleteTournament,
   setUserRole, deleteAdminUser, setUserPassword, adminDeleteTeam,
   clearChatRoom, getCustomChatRooms, createChatRoom, deleteChatRoom,
@@ -708,6 +710,7 @@ export default function TabAdmin({ toast }) {
   const [stats,       setStats]       = useState(null);
   const [loading,     setLoading]     = useState(true);
   const [showCreate,     setShowCreate]     = useState(false);
+  const [creating,       setCreating]       = useState(false);
   const [roleLoading,    setRoleLoading]    = useState(null);
   const [manageUser,     setManageUser]     = useState(null);
   const [filterTour,     setFilterTour]     = useState('');
@@ -987,7 +990,7 @@ export default function TabAdmin({ toast }) {
   // Новые карточки статистики - расширенный набор
   const adminStats = stats ? [
     { 
-      label: 'Live Tournaments', 
+      label: 'Активні Турніри', 
       value: tournaments.filter(t => t.status === 'running').length, 
       color: '#7c5ff5', 
       icon: '🏆',
@@ -995,7 +998,7 @@ export default function TabAdmin({ toast }) {
       trend: '+12%'
     },
     {
-      label: 'Registered Teams',
+      label: 'Зареєстровані Команди',
       value: stats.teams,
       color: '#0ea5e9',
       icon: <IconUser style={{ width: 20, height: 20, color: '#0ea5e9' }} />,
@@ -1003,15 +1006,23 @@ export default function TabAdmin({ toast }) {
       trend: null
     },
     { 
-      label: 'Total Submissions', 
+      label: 'Відкриті Реєстрації', 
+      value: tournaments.filter(t => t.status === 'registration').length, 
+      color: '#f97316', 
+      icon: '📝',
+      badge: { text: 'OPEN', color: '#f97316', bg: 'rgba(249,115,22,.15)' },
+      trend: null
+    },
+    { 
+      label: 'Загальні Подачі', 
       value: stats.submissions || tournaments.reduce((s, t) => s + (t.submission_count || 0), 0), 
       color: '#f59e0b', 
-      icon: '📤',
+      icon: <IconSend style={{ width: 18, height: 18 }} />,
       badge: { text: 'This Week', color: '#888', bg: 'rgba(136,136,136,.1)' },
       trend: null
     },
     { 
-      label: 'Judges Assigned', 
+      label: 'Судді', 
       value: users.filter(u => (u.role || '').includes('jury')).length, 
       color: '#ec4899', 
       icon: '⚖️',
@@ -1020,7 +1031,7 @@ export default function TabAdmin({ toast }) {
     },
     // Дополнительные карточки
     { 
-      label: 'Total Users', 
+      label: 'Всього Користувачів', 
       value: stats.users, 
       color: '#8b5cf6', 
       icon: '👤',
@@ -1028,7 +1039,7 @@ export default function TabAdmin({ toast }) {
       trend: '+8%'
     },
     { 
-      label: 'Active Now', 
+      label: 'Активні Зараз', 
       value: stats.active_users || Math.round(stats.users * 0.15), 
       color: '#22c55e', 
       icon: '🟢',
@@ -1036,20 +1047,12 @@ export default function TabAdmin({ toast }) {
       trend: null
     },
     {
-      label: 'Total Messages',
+      label: 'Всього Повідомлень',
       value: stats.messages,
       color: '#06b6d4',
       icon: <IconChat style={{ width: 20, height: 20 }} />,
       badge: { text: 'CHAT', color: '#06b6d4', bg: 'rgba(6,182,212,.1)' },
       trend: '+23%'
-    },
-    { 
-      label: 'Open Registration', 
-      value: tournaments.filter(t => t.status === 'registration').length, 
-      color: '#f97316', 
-      icon: '📝',
-      badge: { text: 'OPEN', color: '#f97316', bg: 'rgba(249,115,22,.15)' },
-      trend: null
     },
   ] : [];
 
@@ -1273,8 +1276,8 @@ export default function TabAdmin({ toast }) {
                             </div>
                           </td>
                           <td style={{ fontSize: 13, color: '#888' }}>{a.email}</td>
-                          <td style={{ maxWidth: 220 }}>
-                            <span style={{ fontSize: 13, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                          <td style={{ maxWidth: 220, overflow: 'hidden' }}>
+                            <span style={{ fontSize: 13, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', wordBreak: 'break-all' }}>
                               {a.motivation}
                             </span>
                           </td>
@@ -1308,9 +1311,26 @@ export default function TabAdmin({ toast }) {
               {showCreate && (
                 <TournamentForm
                   mode="create"
-                  onSubmit={async (payload) => {
-                    await createTournament(payload);
-                    setShowCreate(false); load(); loadAll(); toast.success('Турнір створено!');
+                  loading={creating}
+                  onSubmit={async (payload, files) => {
+                    setCreating(true);
+                    try {
+                      const result = await createTournament(payload);
+                      const id = result?.id ?? result;
+                      if (id && files?.rules) {
+                        await uploadTournamentFile(id, 'rules', files.rules).catch(() => {});
+                      }
+                      if (id && files?.tz?.length) {
+                        for (const f of files.tz) await uploadTournamentFile(id, 'tz', f).catch(() => {});
+                      }
+                      setShowCreate(false);
+                      await load();
+                      toast.success('Турнір створено!');
+                    } catch (err) {
+                      toast.error(err.message || 'Помилка створення турніру');
+                    } finally {
+                      setCreating(false);
+                    }
                   }}
                   onCancel={() => setShowCreate(false)}
                 />
@@ -1449,7 +1469,7 @@ export default function TabAdmin({ toast }) {
                           <td>
                             <div className="db-admin-user-info">
                               <strong>{u.username}</strong>
-                              {u.github_username && <span className="db-admin-user-github">🐙 {u.github_username}</span>}
+                              {u.github_username && <span className="db-admin-user-github"><IconGithub style={{ width: 12, height: 12, verticalAlign: -1, marginRight: 4 }} />{u.github_username}</span>}
                             </div>
                           </td>
                           <td style={{ fontSize: 13, color: '#666' }}>{u.email}</td>

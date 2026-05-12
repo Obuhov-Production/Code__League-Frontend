@@ -921,48 +921,103 @@ function MarkdownRenderer({ text }) {
 }
 
 /* ══════════════════════════════════════════════════
-   UNIFIED TOURNAMENT FORM (Create / Edit)
+   UNIFIED TOURNAMENT FORM (Create / Edit) — Wizard
 ══════════════════════════════════════════════════ */
 
+const WIZARD_STEPS = [
+  { id: 1, icon: '📋', label: 'Основне' },
+  { id: 2, icon: '📜', label: 'Правила' },
+  { id: 3, icon: '🗂️', label: 'ТЗ' },
+  { id: 4, icon: '⚖️', label: 'Журі' },
+  { id: 5, icon: '📅', label: 'Налаштування' },
+  { id: 6, icon: '🏆', label: 'Нагороди' },
+];
+
+const RULES_ACCEPTED = '.doc,.docx,.pdf,.txt,.md,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown';
+const TZ_ACCEPTED = '.zip,.txt,.md,.pdf,.doc,.docx,.png,.jpg,.jpeg,.gif';
+
+function insertMd(textareaId, before, after, setFn, currentVal) {
+  const ta = document.getElementById(textareaId);
+  if (!ta) return;
+  const start = ta.selectionStart;
+  const end = ta.selectionEnd;
+  const selected = currentVal.substring(start, end);
+  const newVal = currentVal.substring(0, start) + before + (selected || 'текст') + after + currentVal.substring(end);
+  setFn(newVal);
+  setTimeout(() => {
+    ta.focus();
+    const cur = start + before.length;
+    ta.setSelectionRange(cur, cur + (selected || 'текст').length);
+  }, 0);
+}
+
 export function TournamentForm({
-  mode = 'edit', // 'create' | 'edit'
+  mode = 'edit',
   tournament = null,
   onSubmit,
   onCancel,
   submitLabel = null,
   loading = false,
-  extraFields = null, // дополнительные поля для админа/организатора
 }) {
   const isCreate = mode === 'create';
   const t = tournament || {};
 
-  // Form state
+  const [step, setStep] = useState(1);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  // Step 1 — Основне
+  const [emoji, setEmoji] = useState(t.emoji || '🏆');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [status, setStatus] = useState(t.status || 'draft');
   const [name, setName] = useState(t.name || '');
   const [description, setDescription] = useState(t.description || '');
-  const [rules, setRules] = useState(t.rules || '');
-  const [startDate, setStartDate] = useState(toDateInput(t.start_date));
-  const [endDate, setEndDate] = useState(toDateInput(t.end_date));
-  const [regStart, setRegStart] = useState(toDateInput(t.registration_start));
-  const [regEnd, setRegEnd] = useState(toDateInput(t.registration_end));
+
+  // Step 2 — Правила
+  const [rulesMode, setRulesMode] = useState(t.rules_mode || (t.rules_file_url ? 'file' : 'file'));
+  const [rulesText, setRulesText] = useState(t.rules || '');
+  const [rulesFile, setRulesFile] = useState(null);
+  const [rulesFileName, setRulesFileName] = useState(
+    t.rules_file_url ? decodeURIComponent(t.rules_file_url.split('/').pop()) : ''
+  );
+
+  // Step 3 — ТЗ
+  const [tzMode, setTzMode] = useState('text');
+  const [tz, setTz] = useState(t.tz || '');
+  const [tzMainFile, setTzMainFile] = useState(null);
+  const [tzFiles, setTzFiles] = useState([]);
+  const [showTzPreview, setShowTzPreview] = useState(false);
+
+  // Step 4 — Журі
+  const [selectedJury, setSelectedJury] = useState(t.jury_ids || []);
+
+  // Step 5 — Налаштування
+  const [startDate, setStartDate] = useState(toDateTimeInput(t.start_date));
+  const [endDate, setEndDate] = useState(toDateTimeInput(t.end_date));
+  const [regStart, setRegStart] = useState(toDateTimeInput(t.registration_start));
+  const [regEnd, setRegEnd] = useState(toDateTimeInput(t.registration_end));
   const [teamsLimit, setTeamsLimit] = useState(t.teams_limit ?? '');
   const [minSize, setMinSize] = useState(t.min_team_size ?? 2);
   const [maxSize, setMaxSize] = useState(t.max_team_size ?? 5);
   const [roundsCount, setRoundsCount] = useState(t.rounds_count ?? 1);
-  const [emoji, setEmoji] = useState(t.emoji || '🏆');
-  const [status, setStatus] = useState(t.status || 'draft');
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  
-  // ELO/EXP rewards
+
+  // Step 6 — Нагороди
   const [eloParticipation, setEloParticipation] = useState(t.elo_participation ?? 10);
   const [eloPerRound, setEloPerRound] = useState(t.elo_per_round ?? 20);
   const [eloWinner, setEloWinner] = useState(t.elo_winner ?? 100);
-  
-  // TZ / Technical task
-  const [tz, setTz] = useState(t.tz || t.technical_task || '');
-  const [showPreview, setShowPreview] = useState(false);
-  
-  // Jury selection (for admin/organizer)
-  const [selectedJury, setSelectedJury] = useState(t.jury_ids || []);
+  const [hasAdditionalPrizes, setHasAdditionalPrizes] = useState(() => {
+    if (!t.additional_prizes) return false;
+    try { return JSON.parse(t.additional_prizes).length > 0; } catch { return false; }
+  });
+  const [additionalPrizes, setAdditionalPrizes] = useState(() => {
+    if (!t.additional_prizes) return [{ place: 1, description: '' }, { place: 2, description: '' }, { place: 3, description: '' }];
+    try { const p = JSON.parse(t.additional_prizes); return p.length ? p : [{ place: 1, description: '' }, { place: 2, description: '' }, { place: 3, description: '' }]; }
+    catch { return [{ place: 1, description: '' }, { place: 2, description: '' }, { place: 3, description: '' }]; }
+  });
+
+  const canNext = () => {
+    if (step === 1) return name.trim().length > 0;
+    return true;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -971,7 +1026,8 @@ export function TournamentForm({
     const payload = {
       name: name.trim(),
       description: description.trim() || null,
-      rules: rules.trim() || null,
+      rules: rulesMode === 'text' ? (rulesText.trim() || null) : null,
+      rules_mode: rulesMode,
       start_date: startDate || null,
       end_date: endDate || null,
       registration_start: regStart || null,
@@ -985,380 +1041,635 @@ export function TournamentForm({
       elo_per_round: Number(eloPerRound),
       elo_winner: Number(eloWinner),
       tz: tz.trim() || null,
+      additional_prizes: hasAdditionalPrizes
+        ? JSON.stringify(additionalPrizes.filter(p => p.description.trim()))
+        : null,
     };
 
     if (selectedJury.length > 0) payload.jury_ids = selectedJury;
+    if (isCreate) payload.status = status;
 
-    // Для создания добавляем статус
-    if (isCreate) {
-      payload.status = status;
-    }
-
-    await onSubmit(payload);
+    const files = {
+      rules: rulesMode === 'file' ? rulesFile : null,
+      tz: tzMode === 'file' && tzMainFile ? [tzMainFile, ...tzFiles] : tzFiles,
+    };
+    await onSubmit(payload, files);
   };
 
-  const ac = ACCENT[isCreate ? status : t.status] || ACCENT.draft;
-  const formTitle = isCreate ? 'Створення турніру' : (t.name || 'Редагування');
-  const btnText = submitLabel || (isCreate ? 'Створити турнір' : (loading ? 'Збереження...' : <><IconSave style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Зберегти</>));
+  const ac = ACCENT[isCreate ? status : (t.status || 'draft')] || ACCENT.draft;
 
   return (
-    <form className="db-edit-tournament-form" onSubmit={handleSubmit}>
-      <div className="db-edit-header">
-        <h3 className="db-edit-title">{formTitle}</h3>
-        {!isCreate && <span className="db-edit-id">id #{t.id}</span>}
+    <div className="db-wizard-wrap">
+      {/* Header */}
+      <div className="db-wizard-header" style={{ background: `linear-gradient(135deg,${ac[0]},${ac[1]})` }}>
+        <div className="db-wizard-header-left">
+          <span className="db-wizard-emoji">{emoji}</span>
+          <div>
+            <h3 className="db-wizard-title">{name.trim() || (isCreate ? 'Новий турнір' : 'Редагування')}</h3>
+            {!isCreate && <span className="db-wizard-id">id #{t.id}</span>}
+          </div>
+        </div>
+        <button type="button" className="db-wizard-cancel" onClick={onCancel}>✕</button>
       </div>
 
-      {/* Іконка турніру (emoji) - показываем всегда */}
-      <div className="db-edit-field">
-        <label className="db-edit-label">Іконка турніру</label>
-        <div className="db-emoji-preview" style={{ background: ac[0] }}>
-          <span className="db-emoji-preview-icon">{emoji}</span>
-        </div>
-        <div className="db-emoji-picker-toggle">
+      {/* Step indicators */}
+      <div className="db-wizard-steps">
+        {WIZARD_STEPS.map(s => (
           <button
+            key={s.id}
             type="button"
-            className="db-btn db-btn-ghost db-btn-sm"
-            onClick={() => setShowEmojiPicker(v => !v)}
+            className={`db-wizard-step${step === s.id ? ' active' : ''}${step > s.id ? ' done' : ''}`}
+            onClick={() => step > s.id && setStep(s.id)}
+            title={s.label}
           >
-            {showEmojiPicker ? 'Сховати емоджі' : 'Обрати емоджі 🎨'}
+            <span className="db-wizard-step-icon">{step > s.id ? '✓' : s.icon}</span>
+            <span className="db-wizard-step-label">{s.label}</span>
           </button>
-        </div>
-        {showEmojiPicker && (
-          <div className="db-emoji-grid">
-            {TOURNAMENT_EMOJIS.map(e => (
-              <button
-                key={e}
-                type="button"
-                className={`db-emoji-item${emoji === e ? ' active' : ''}`}
-                onClick={() => setEmoji(e)}
-              >
-                {e}
-              </button>
-            ))}
+        ))}
+      </div>
+
+      <form className="db-wizard-body" onSubmit={handleSubmit}>
+
+        {/* ── КРОК 1: Основна інформація ─────────────── */}
+        {step === 1 && (
+          <div className="db-wizard-step-content">
+            <h4 className="db-wizard-step-title">📋 Основна інформація</h4>
+
+            {/* Emoji */}
+            <div className="db-edit-field">
+              <label className="db-edit-label">Іконка турніру</label>
+              <div className="db-emoji-row">
+                <div className="db-emoji-preview" style={{ background: ac[0] }}>
+                  <span className="db-emoji-preview-icon">{emoji}</span>
+                </div>
+                <button
+                  type="button"
+                  className="db-btn db-wizard-emoji-btn"
+                  onClick={() => setShowEmojiPicker(v => !v)}
+                >
+                  {showEmojiPicker ? '✕ Сховати' : '🎨 Обрати'}
+                </button>
+              </div>
+              {showEmojiPicker && (
+                <div className="db-emoji-grid">
+                  {TOURNAMENT_EMOJIS.map(e => (
+                    <button
+                      key={e}
+                      type="button"
+                      className={`db-emoji-item${emoji === e ? ' active' : ''}`}
+                      onClick={() => { setEmoji(e); setShowEmojiPicker(false); }}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Status — only draft/registration on create */}
+            {isCreate && (
+              <div className="db-edit-field">
+                <label className="db-edit-label">Початковий статус <span className="db-required">*</span></label>
+                <div className="db-status-radio-group">
+                  {[
+                    { v: 'draft', label: 'Draft', desc: 'Чернетка — не видна учасникам', color: '#888' },
+                    { v: 'registration', label: 'Registration', desc: 'Відразу відкрити реєстрацію', color: '#7c5ff5' },
+                  ].map(opt => (
+                    <label
+                      key={opt.v}
+                      className={`db-status-radio${status === opt.v ? ' selected' : ''}`}
+                      style={{ '--radio-color': opt.color }}
+                    >
+                      <input
+                        type="radio"
+                        name="status"
+                        value={opt.v}
+                        checked={status === opt.v}
+                        onChange={() => setStatus(opt.v)}
+                      />
+                      <span className="db-status-radio-dot" style={{ background: opt.color }} />
+                      <span className="db-status-radio-label" style={{ color: opt.color }}>{opt.label}</span>
+                      <span className="db-status-radio-desc">{opt.desc}</span>
+                    </label>
+                  ))}
+                </div>
+                <small className="db-field-hint">
+                  ⚙️ Статус турніру автоматично змінится з "Registration" → "Running" в вказаний вами день.
+                </small>
+              </div>
+            )}
+
+            <div className="db-edit-field">
+              <label className="db-edit-label">Назва <span className="db-required">*</span></label>
+              <input
+                className="db-input"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Наприклад: Code League 2025"
+                required
+                autoFocus
+              />
+            </div>
+
+            <div className="db-edit-field">
+              <label className="db-edit-label">Опис</label>
+              <textarea
+                className="db-input db-textarea"
+                rows={4}
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                placeholder="Загальний опис турніру, теми, цільова аудиторія..."
+              />
+            </div>
           </div>
         )}
-      </div>
 
-      {/* Статус - только при создании */}
-      {isCreate && (
-        <div className="db-edit-field">
-          <label className="db-edit-label">Статус <span className="db-required">*</span></label>
-          <CustomSelect
-            value={status}
-            onChange={setStatus}
-            options={[
-              { value: 'draft', label: 'Draft (чернетка)' },
-              { value: 'registration', label: 'Registration (реєстрація)' },
-              { value: 'running', label: 'Running (активний)' },
-              { value: 'finished', label: 'Finished (завершений)' },
-            ]}
-          />
-        </div>
-      )}
+        {/* ── КРОК 2: Правила ────────────────────────── */}
+        {step === 2 && (
+          <div className="db-wizard-step-content">
+            <h4 className="db-wizard-step-title">📜 Правила турніру</h4>
 
-      <div className="db-edit-field">
-        <label className="db-edit-label">Назва <span className="db-required">*</span></label>
-        <input
-          className="db-input"
-          value={name}
-          onChange={e => setName(e.target.value)}
-          placeholder="Назва турніру"
-          required
-        />
-      </div>
-
-      <div className="db-edit-field">
-        <label className="db-edit-label">Опис</label>
-        <textarea
-          className="db-input db-textarea"
-          rows={3}
-          value={description}
-          onChange={e => setDescription(e.target.value)}
-          placeholder="Опис турніру..."
-        />
-      </div>
-
-      <div className="db-edit-field">
-        <label className="db-edit-label">Правила</label>
-        <textarea
-          className="db-input db-textarea"
-          rows={3}
-          value={rules}
-          onChange={e => setRules(e.target.value)}
-          placeholder="Правила турніру..."
-        />
-      </div>
-
-      {/* TZ Section - Technical Task */}
-      <div className="db-edit-section db-edit-section-tz">
-        <h4 className="db-edit-section-title">📋 Технічне завдання (ТЗ)</h4>
-        <div className="db-edit-field">
-          <label className="db-edit-label">Опис завдання</label>
-          
-          {/* Rich Text Editor Toolbar */}
-          <div className="db-rt-toolbar">
-            <div className="db-rt-group">
-              <button type="button" className="db-rt-btn" title="Жирний (Ctrl+B)" onClick={() => {
-                const ta = document.getElementById('tz-textarea');
-                if (ta) {
-                  const start = ta.selectionStart;
-                  const end = ta.selectionEnd;
-                  const selected = ta.value.substring(start, end);
-                  if (selected) {
-                    const newVal = ta.value.substring(0, start) + `**${selected}**` + ta.value.substring(end);
-                    setTz(newVal);
-                  }
-                }
-              }}><b>B</b></button>
-              <button type="button" className="db-rt-btn" title="Курсив (Ctrl+I)" onClick={() => {
-                const ta = document.getElementById('tz-textarea');
-                if (ta) {
-                  const start = ta.selectionStart;
-                  const end = ta.selectionEnd;
-                  const selected = ta.value.substring(start, end);
-                  if (selected) {
-                    const newVal = ta.value.substring(0, start) + `*${selected}*` + ta.value.substring(end);
-                    setTz(newVal);
-                  }
-                }
-              }}><i>I</i></button>
-              <button type="button" className="db-rt-btn" title="Підкреслення" onClick={() => {
-                const ta = document.getElementById('tz-textarea');
-                if (ta) {
-                  const start = ta.selectionStart;
-                  const end = ta.selectionEnd;
-                  const selected = ta.value.substring(start, end);
-                  if (selected) {
-                    const newVal = ta.value.substring(0, start) + `__${selected}__` + ta.value.substring(end);
-                    setTz(newVal);
-                  }
-                }
-              }}><u>U</u></button>
-              <button type="button" className="db-rt-btn" title="Закреслення" onClick={() => {
-                const ta = document.getElementById('tz-textarea');
-                if (ta) {
-                  const start = ta.selectionStart;
-                  const end = ta.selectionEnd;
-                  const selected = ta.value.substring(start, end);
-                  if (selected) {
-                    const newVal = ta.value.substring(0, start) + `~~${selected}~~` + ta.value.substring(end);
-                    setTz(newVal);
-                  }
-                }
-              }}><s>S</s></button>
+            <div className="db-rules-mode-toggle">
+              <button
+                type="button"
+                className={`db-rules-mode-btn${rulesMode === 'file' ? ' active' : ''}`}
+                onClick={() => setRulesMode('file')}
+              >
+                📎 Завантажити файл
+              </button>
+              <button
+                type="button"
+                className={`db-rules-mode-btn${rulesMode === 'text' ? ' active' : ''}`}
+                onClick={() => setRulesMode('text')}
+              >
+                ✏️ Текстове поле
+              </button>
             </div>
-            <div className="db-rt-divider" />
-            <div className="db-rt-group">
-              <button type="button" className="db-rt-btn db-rt-btn-small" title="Заголовок" onClick={() => {
-                const ta = document.getElementById('tz-textarea');
-                if (ta) {
-                  const start = ta.selectionStart;
-                  const lineStart = ta.value.lastIndexOf('\n', start - 1) + 1;
-                  const newVal = ta.value.substring(0, lineStart) + '## ' + ta.value.substring(lineStart);
-                  setTz(newVal);
-                }
-              }}>H</button>
-              <button type="button" className="db-rt-btn" title="Список" onClick={() => {
-                const ta = document.getElementById('tz-textarea');
-                if (ta) {
-                  const start = ta.selectionStart;
-                  const lineStart = ta.value.lastIndexOf('\n', start - 1) + 1;
-                  const newVal = ta.value.substring(0, lineStart) + '- ' + ta.value.substring(lineStart);
-                  setTz(newVal);
-                }
-              }}>☰</button>
-              <button type="button" className="db-rt-btn" title="Посилання" onClick={() => {
-                const url = prompt('Введіть URL:');
-                if (url) {
-                  const ta = document.getElementById('tz-textarea');
-                  if (ta) {
-                    const start = ta.selectionStart;
-                    const end = ta.selectionEnd;
-                    const selected = ta.value.substring(start, end) || 'посилання';
-                    const newVal = ta.value.substring(0, start) + `[${selected}](${url})` + ta.value.substring(end);
-                    setTz(newVal);
-                  }
-                }
-              }}>🔗</button>
-              <button type="button" className="db-rt-btn" title="Код" onClick={() => {
-                const ta = document.getElementById('tz-textarea');
-                if (ta) {
-                  const start = ta.selectionStart;
-                  const end = ta.selectionEnd;
-                  const selected = ta.value.substring(start, end);
-                  if (selected) {
-                    const newVal = ta.value.substring(0, start) + `\`\`\`\n${selected}\n\`\`\`` + ta.value.substring(end);
-                    setTz(newVal);
-                  }
-                }
-              }}>{'<>'}</button>
+
+            {rulesMode === 'file' ? (
+              <div className="db-edit-field">
+                <label className="db-edit-label">Файл з правилами</label>
+                <label className="db-file-drop-zone">
+                  <input
+                    type="file"
+                    accept={RULES_ACCEPTED}
+                    style={{ display: 'none' }}
+                    onChange={e => {
+                      const f = e.target.files?.[0];
+                      if (f) { setRulesFile(f); setRulesFileName(f.name); }
+                    }}
+                  />
+                  <span className="db-file-drop-icon">📄</span>
+                  {rulesFileName ? (
+                    <span className="db-file-drop-name">{rulesFileName}</span>
+                  ) : (
+                    <>
+                      <span className="db-file-drop-text">Натисніть або перетягніть файл</span>
+                      <span className="db-file-drop-hint">.doc, .docx, .pdf, .txt, .md — до 20 МБ</span>
+                    </>
+                  )}
+                </label>
+                {rulesFileName && (
+                  <div className="db-file-attached">
+                    <span>📎 {rulesFileName}</span>
+                    <button
+                      type="button"
+                      className="db-file-remove"
+                      onClick={() => { setRulesFile(null); setRulesFileName(''); }}
+                    >✕</button>
+                  </div>
+                )}
+                {t.rules_file_url && !rulesFile && (
+                  <div className="db-file-existing">
+                    <span>📎 Поточний файл:</span>
+                    <a href={t.rules_file_url} target="_blank" rel="noopener noreferrer">
+                      {decodeURIComponent(t.rules_file_url.split('/').pop())}
+                    </a>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="db-edit-field">
+                <label className="db-edit-label">
+                  Текст правил
+                  <span className={`db-char-counter${rulesText.length > 480 ? ' warn' : ''}`}>
+                    {rulesText.length}/512
+                  </span>
+                </label>
+                <textarea
+                  className="db-input db-textarea db-rules-textarea"
+                  value={rulesText}
+                  maxLength={512}
+                  onChange={e => {
+                    setRulesText(e.target.value);
+                    e.target.style.height = 'auto';
+                    e.target.style.height = e.target.scrollHeight + 'px';
+                  }}
+                  placeholder="Опишіть основні правила турніру...&#10;&#10;• Умови участі&#10;• Формат змагань&#10;• Критерії оцінювання&#10;• Заборонені дії"
+                  rows={6}
+                />
+                <small className="db-field-hint">Максимум 512 символів.</small>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── КРОК 3: Технічне завдання ──────────────── */}
+        {step === 3 && (
+          <div className="db-wizard-step-content">
+            <h4 className="db-wizard-step-title">🗂️ Технічне завдання (ТЗ)</h4>
+
+            {/* Mode toggle: text vs file */}
+            <div className="db-rules-mode-toggle">
+              <button type="button" className={`db-rules-mode-btn${tzMode === 'text' ? ' active' : ''}`} onClick={() => setTzMode('text')}>
+                ✏️ Текст
+              </button>
+              <button type="button" className={`db-rules-mode-btn${tzMode === 'file' ? ' active' : ''}`} onClick={() => setTzMode('file')}>
+                📎 Файл
+              </button>
             </div>
-            <div className="db-rt-divider" />
-            <div className="db-rt-group">
-              <button type="button" className="db-rt-btn db-rt-btn-preview" title="Попередній перегляд" onClick={() => setShowPreview(true)}>👁</button>
+
+            {tzMode === 'file' ? (
+              <div className="db-edit-field">
+                <label className="db-edit-label">Файл ТЗ</label>
+                <label className="db-file-drop-zone">
+                  <input type="file" accept={RULES_ACCEPTED} style={{ display: 'none' }}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) setTzMainFile(f); }} />
+                  {tzMainFile ? (
+                    <span className="db-file-drop-name">📄 {tzMainFile.name}</span>
+                  ) : (
+                    <>
+                      <span className="db-file-drop-icon">📂</span>
+                      <span className="db-file-drop-text">Перетягніть або клікніть для вибору</span>
+                      <span className="db-file-drop-hint">.pdf, .doc, .docx, .txt, .md — до 20 МБ</span>
+                    </>
+                  )}
+                </label>
+                {tzMainFile && (
+                  <div className="db-file-attached">
+                    <span>📎 {tzMainFile.name}</span>
+                    <button type="button" className="db-file-remove" onClick={() => setTzMainFile(null)}>✕</button>
+                  </div>
+                )}
+              </div>
+            ) : (
+            <div className="db-edit-field">
+              <label className="db-edit-label">Текст ТЗ</label>
+
+              {/* Toolbar */}
+              <div className="db-rt-toolbar">
+                <div className="db-rt-group">
+                  {[
+                    ['B', () => insertMd('tz-textarea', '**', '**', setTz, tz), 'Жирний', { fontWeight: 700 }],
+                    ['I', () => insertMd('tz-textarea', '*', '*', setTz, tz), 'Курсив', { fontStyle: 'italic' }],
+                    ['U', () => insertMd('tz-textarea', '__', '__', setTz, tz), 'Підкреслення', { textDecoration: 'underline' }],
+                    ['S', () => insertMd('tz-textarea', '~~', '~~', setTz, tz), 'Закреслення', { textDecoration: 'line-through' }],
+                  ].map(([lbl, fn, title, style]) => (
+                    <button key={lbl} type="button" className="db-rt-btn" title={title} onClick={fn}>
+                      <span style={style}>{lbl}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="db-rt-divider" />
+                <div className="db-rt-group">
+                  <button type="button" className="db-rt-btn" title="Заголовок" onClick={() => {
+                    const ta = document.getElementById('tz-textarea');
+                    if (!ta) return;
+                    const s = ta.selectionStart;
+                    const ln = tz.lastIndexOf('\n', s - 1) + 1;
+                    setTz(tz.substring(0, ln) + '## ' + tz.substring(ln));
+                  }}>H</button>
+                  <button type="button" className="db-rt-btn" title="Список" onClick={() => {
+                    const ta = document.getElementById('tz-textarea');
+                    if (!ta) return;
+                    const s = ta.selectionStart;
+                    const ln = tz.lastIndexOf('\n', s - 1) + 1;
+                    setTz(tz.substring(0, ln) + '- ' + tz.substring(ln));
+                  }}>☰</button>
+                  <button type="button" className="db-rt-btn" title="Посилання" onClick={() => {
+                    const url = prompt('URL:');
+                    if (!url) return;
+                    const ta = document.getElementById('tz-textarea');
+                    if (!ta) return;
+                    const s = ta.selectionStart, e2 = ta.selectionEnd;
+                    const sel = tz.substring(s, e2) || 'посилання';
+                    setTz(tz.substring(0, s) + `[${sel}](${url})` + tz.substring(e2));
+                  }}>🔗</button>
+                  <button type="button" className="db-rt-btn" title="Код" onClick={() => insertMd('tz-textarea', '`', '`', setTz, tz)}>{'<>'}</button>
+                </div>
+                <div className="db-rt-divider" />
+                <button type="button" className="db-rt-btn db-rt-btn-preview" title="Попередній перегляд" onClick={() => setShowTzPreview(true)}>Попередній перегляд</button>
+              </div>
+
+              {showTzPreview && (
+                <div className="modal-overlay" onClick={() => setShowTzPreview(false)}>
+                  <div className="db-preview-modal" onClick={e => e.stopPropagation()}>
+                    <div className="db-preview-header">
+                      <h4>Попередній перегляд ТЗ</h4>
+                      <button type="button" className="db-preview-close" onClick={() => setShowTzPreview(false)}>✕</button>
+                    </div>
+                    <div className="db-preview-content">
+                      <MarkdownRenderer text={tz || '*(Технічне завдання порожнє)*'} />
+                    </div>
+                    <div className="db-preview-footer">
+                      <button type="button" className="db-btn db-btn-ghost" onClick={() => setShowTzPreview(false)}>Закрити</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="db-rt-editor">
+                <textarea
+                  id="tz-textarea"
+                  className="db-input db-textarea db-tz-textarea"
+                  rows={8}
+                  value={tz}
+                  onChange={e => setTz(e.target.value)}
+                  placeholder="Опишіть технічне завдання...&#10;&#10;## Завдання&#10;- Що потрібно зробити&#10;&#10;## Must Have&#10;- Обов'язкові вимоги&#10;&#10;## Матеріали&#10;- Посилання на датасети, API..."
+                />
+              </div>
+              <small className="db-field-hint">
+                📝 Підтримує Markdown. ТЗ стає доступним учасникам після старту турніру.
+              </small>
+            </div>
+            )}
+
+            {/* File attachments */}
+            <div className="db-edit-field">
+              <label className="db-edit-label">Матеріали та файли</label>
+              <label className="db-file-drop-zone db-file-drop-zone--multi">
+                <input
+                  type="file"
+                  multiple
+                  accept={TZ_ACCEPTED}
+                  style={{ display: 'none' }}
+                  onChange={e => {
+                    const files = Array.from(e.target.files || []);
+                    setTzFiles(prev => [...prev, ...files]);
+                  }}
+                />
+                <span className="db-file-drop-icon">📎</span>
+                <span className="db-file-drop-text">Додати файли матеріалів</span>
+                <span className="db-file-drop-hint">.zip, .pdf, .txt, .md, .doc, зображення — до 20 МБ кожен</span>
+              </label>
+              {tzFiles.length > 0 && (
+                <div className="db-tz-files-list">
+                  {tzFiles.map((f, i) => (
+                    <div key={i} className="db-file-attached">
+                      <span>📎 {f.name}</span>
+                      <button type="button" className="db-file-remove" onClick={() => setTzFiles(p => p.filter((_, idx) => idx !== i))}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
-          
-          {/* Preview Modal */}
-          {showPreview && (
-            <div className="modal-overlay" onClick={() => setShowPreview(false)}>
-              <div className="db-preview-modal" onClick={e => e.stopPropagation()}>
-                <div className="db-preview-header">
-                  <h4>Попередній перегляд ТЗ</h4>
-                  <button type="button" className="db-preview-close" onClick={() => setShowPreview(false)}>✕</button>
+        )}
+
+        {/* ── КРОК 4: Журі ──────────────────────────── */}
+        {step === 4 && (
+          <div className="db-wizard-step-content">
+            <h4 className="db-wizard-step-title">⚖️ Призначення журі</h4>
+            <div className="db-edit-field">
+              <label className="db-edit-label">Виберіть журі для оцінювання</label>
+              <JurySearchSelector selectedJury={selectedJury} onChange={setSelectedJury} />
+              <small className="db-field-hint">
+                💡 Журі зможуть оцінювати проєкти у всіх раундах цього турніру. Журі доступний окремий розділ зі списком команд та формою оцінювання.
+              </small>
+            </div>
+          </div>
+        )}
+
+        {/* ── КРОК 5: Налаштування ──────────────────── */}
+        {step === 5 && (
+          <div className="db-wizard-step-content">
+            <h4 className="db-wizard-step-title">📅 Налаштування турніру</h4>
+
+            <div className="db-wizard-date-section">
+              <p className="db-wizard-section-subtitle">Часові рамки турніру</p>
+              <div className="db-edit-row-2">
+                <div className="db-edit-field">
+                  <label className="db-edit-label">Початок турніру <span className="db-required">*</span></label>
+                  <input type="datetime-local" className="db-input" value={startDate} onChange={e => setStartDate(e.target.value)} />
                 </div>
-                <div className="db-preview-content">
-                  <MarkdownRenderer text={tz || '*(Технічне завдання порожнє)*'} />
+                <div className="db-edit-field">
+                  <label className="db-edit-label">Кінець турніру <span className="db-required">*</span></label>
+                  <input type="datetime-local" className="db-input" value={endDate} onChange={e => setEndDate(e.target.value)} />
                 </div>
-                <div className="db-preview-footer">
-                  <button type="button" className="db-btn db-btn-ghost" onClick={() => setShowPreview(false)}>Закрити</button>
+              </div>
+
+              <p className="db-wizard-section-subtitle" style={{ marginTop: 16 }}>Реєстрація команд</p>
+              <div className="db-edit-row-2">
+                <div className="db-edit-field">
+                  <label className="db-edit-label">Початок реєстрації <span className="db-required">*</span></label>
+                  <input type="datetime-local" className="db-input" value={regStart} onChange={e => setRegStart(e.target.value)} />
+                </div>
+                <div className="db-edit-field">
+                  <label className="db-edit-label">Кінець реєстрації <span className="db-required">*</span></label>
+                  <input type="datetime-local" className="db-input" value={regEnd} onChange={e => setRegEnd(e.target.value)} />
+                  <small className="db-field-hint">⚙️ Після цього часу статус → Running</small>
                 </div>
               </div>
             </div>
-          )}
-          
-          {/* Resizable Textarea */}
-          <div className="db-rt-editor">
-            <textarea
-              id="tz-textarea"
-              className="db-input db-textarea db-tz-textarea"
-              rows={6}
-              value={tz}
-              onChange={e => setTz(e.target.value)}
-              placeholder="Опишіть технічне завдання для учасників...&#10;&#10;Наприклад:&#10;- Створіть кліматичну модель прогнозування&#10;- Використовуйте наданий датасет&#10;- Результат: робочий прототип + презентація"
-            />
-            <div className="db-rt-resize-handle" title="Потягніть щоб змінити розмір">
-              <svg width="12" height="12" viewBox="0 0 12 12">
-                <path d="M9 9L3 3M9 6L6 3M6 9L3 6" stroke="#999" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
+
+            <div className="db-edit-row-3" style={{ marginTop: 16 }}>
+              <div className="db-edit-field">
+                <label className="db-edit-label">Макс. команд</label>
+                <input type="number" className="db-input" min={0} value={teamsLimit} onChange={e => setTeamsLimit(e.target.value)} placeholder="∞ необмежено" />
+              </div>
+              <div className="db-edit-field">
+                <label className="db-edit-label">Мін. учасників</label>
+                <input type="number" className="db-input" min={2} value={minSize} onChange={e => setMinSize(e.target.value)} />
+              </div>
+              <div className="db-edit-field">
+                <label className="db-edit-label">Макс. учасників</label>
+                <input type="number" className="db-input" min={1} value={maxSize} onChange={e => setMaxSize(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="db-edit-field" style={{ marginTop: 12 }}>
+              <label className="db-edit-label">Кількість раундів</label>
+              <input type="number" className="db-input" min={1} max={10} value={roundsCount} onChange={e => setRoundsCount(e.target.value)} />
+              <small className="db-field-hint">Кожен раунд має свій дедлайн здачі роботи</small>
             </div>
           </div>
-          
-          <small className="db-field-hint">
-            💡 Підтримує Markdown: **жирний**, *курсив*, `код`, ## заголовок<br/>
-            💡 ТЗ буде доступне всім учасникам після старту турніру
-          </small>
-        </div>
-        
-      </div>
+        )}
 
-      {/* Jury Selection */}
-      <div className="db-edit-section db-edit-section-jury">
-        <h4 className="db-edit-section-title">⚖️ Призначення журі</h4>
-        <div className="db-edit-field">
-          <label className="db-edit-label">Виберіть журі для оцінювання</label>
-          <JurySearchSelector 
-            selectedJury={selectedJury}
-            onChange={setSelectedJury}
-          />
-          <small className="db-field-hint">
-            💡 Журі зможуть оцінювати проєкти у всіх раундах цього турніру. Можна призначати користувачів з ролями Організатор або Журі.
-          </small>
-        </div>
-      </div>
+        {/* ── КРОК 6: Нагороди ──────────────────────── */}
+        {step === 6 && (
+          <div className="db-wizard-step-content">
+            <h4 className="db-wizard-step-title">🏆 Нагороди</h4>
 
-      <div className="db-edit-row-2">
-        <div className="db-edit-field">
-          <label className="db-edit-label">Дата старту</label>
-          <input type="date" className="db-input" value={startDate} onChange={e => setStartDate(e.target.value)} />
-        </div>
-        <div className="db-edit-field">
-          <label className="db-edit-label">Дата закінчення</label>
-          <input type="date" className="db-input" value={endDate} onChange={e => setEndDate(e.target.value)} />
-        </div>
-      </div>
+            <div className="db-edit-section">
+              <p className="db-wizard-section-subtitle">ELO / Очки досвіду</p>
+              <div className="db-edit-row-3">
+                <div className="db-edit-field">
+                  <label className="db-edit-label">За участь</label>
+                  <input type="number" className="db-input" min={0} value={eloParticipation}
+                    onChange={e => setEloParticipation(e.target.value)} placeholder="10" />
+                  <small className="db-field-hint">Базові очки</small>
+                </div>
+                <div className="db-edit-field">
+                  <label className="db-edit-label">За раунд</label>
+                  <input type="number" className="db-input" min={0} value={eloPerRound}
+                    onChange={e => setEloPerRound(e.target.value)} placeholder="20" />
+                  <small className="db-field-hint">× номер раунду</small>
+                </div>
+                <div className="db-edit-field">
+                  <label className="db-edit-label">За 1-ше місце</label>
+                  <input type="number" className="db-input" min={0} value={eloWinner}
+                    onChange={e => setEloWinner(e.target.value)} placeholder="100" />
+                  <small className="db-field-hint">Бонус переможцю</small>
+                </div>
+              </div>
+              <div className="db-elo-preview">
+                💡 Формула: <strong>{eloParticipation}</strong> + (раунд × <strong>{eloPerRound}</strong>) + <strong>{eloWinner}</strong> за перемогу
+              </div>
+            </div>
 
-      <div className="db-edit-row-2">
-        <div className="db-edit-field">
-          <label className="db-edit-label">Реєстрація від</label>
-          <input type="date" className="db-input" value={regStart} onChange={e => setRegStart(e.target.value)} />
-        </div>
-        <div className="db-edit-field">
-          <label className="db-edit-label">Реєстрація до</label>
-          <input type="date" className="db-input" value={regEnd} onChange={e => setRegEnd(e.target.value)} />
-        </div>
-      </div>
+            {/* Additional prizes */}
+            <div className="db-edit-section" style={{ marginTop: 20 }}>
+              <label className="db-additional-prizes-toggle">
+                <input
+                  type="checkbox"
+                  checked={hasAdditionalPrizes}
+                  onChange={e => setHasAdditionalPrizes(e.target.checked)}
+                />
+                <span className="db-additional-prizes-toggle-label">🎁 Додаткові призи від організаторів</span>
+              </label>
 
-      <div className="db-edit-row-3">
-        <div className="db-edit-field">
-          <label className="db-edit-label">Макс. команд</label>
-          <input type="number" className="db-input" min={0} value={teamsLimit} onChange={e => setTeamsLimit(e.target.value)} placeholder="∞" />
-        </div>
-        <div className="db-edit-field">
-          <label className="db-edit-label">Мін. осіб</label>
-          <input type="number" className="db-input" min={1} value={minSize} onChange={e => setMinSize(e.target.value)} />
-        </div>
-        <div className="db-edit-field">
-          <label className="db-edit-label">Макс. осіб</label>
-          <input type="number" className="db-input" min={1} value={maxSize} onChange={e => setMaxSize(e.target.value)} />
-        </div>
-      </div>
-
-      <div className="db-edit-field">
-        <label className="db-edit-label">Кількість раундів</label>
-        <input type="number" className="db-input" min={1} value={roundsCount} onChange={e => setRoundsCount(e.target.value)} />
-      </div>
-
-      {/* ELO настройки */}
-      <div className="db-edit-section">
-        <h4 className="db-edit-section-title">🏆 Нагороди ELO</h4>
-        <div className="db-edit-row-3">
-          <div className="db-edit-field">
-            <label className="db-edit-label">За участь</label>
-            <input 
-              type="number" 
-              className="db-input" 
-              min={0} 
-              value={eloParticipation} 
-              onChange={e => setEloParticipation(e.target.value)}
-              placeholder="10"
-            />
-            <small className="db-field-hint">Базові очки</small>
+              {hasAdditionalPrizes && (
+                <div className="db-prizes-list">
+                  {additionalPrizes.map((prize, i) => (
+                    <div key={i} className="db-prize-row">
+                      <div className="db-prize-place">
+                        {['🥇', '🥈', '🥉'][i] || `#${prize.place}`}
+                        <span>{prize.place} місце</span>
+                      </div>
+                      <input
+                        className="db-input"
+                        value={prize.description}
+                        onChange={e => setAdditionalPrizes(prev =>
+                          prev.map((p, idx) => idx === i ? { ...p, description: e.target.value } : p)
+                        )}
+                        placeholder={`Опис призу за ${prize.place}-е місце...`}
+                      />
+                      {additionalPrizes.length > 1 && (
+                        <button type="button" className="db-file-remove"
+                          onClick={() => setAdditionalPrizes(p => p.filter((_, idx) => idx !== i))}>✕</button>
+                      )}
+                    </div>
+                  ))}
+                  {additionalPrizes.length < 10 && (
+                    <button
+                      type="button"
+                      className="db-btn db-btn-ghost db-btn-sm"
+                      onClick={() => setAdditionalPrizes(p => [...p, { place: p.length + 1, description: '' }])}
+                    >
+                      + Додати призове місце
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-          <div className="db-edit-field">
-            <label className="db-edit-label">За раунд</label>
-            <input 
-              type="number" 
-              className="db-input" 
-              min={0} 
-              value={eloPerRound} 
-              onChange={e => setEloPerRound(e.target.value)}
-              placeholder="20"
-            />
-            <small className="db-field-hint">× номер раунду</small>
+        )}
+
+        {/* ── Navigation ────────────────────────────── */}
+        <div className="db-wizard-nav">
+          <button
+            type="button"
+            className="db-btn db-btn-ghost"
+            onClick={() => step === 1 ? onCancel() : setStep(s => s - 1)}
+          >
+            {step === 1 ? 'Скасувати' : '← Назад'}
+          </button>
+
+          <div className="db-wizard-progress-dots">
+            {WIZARD_STEPS.map(s => (
+              <span
+                key={s.id}
+                className={`db-wizard-dot${step === s.id ? ' active' : ''}${step > s.id ? ' done' : ''}`}
+              />
+            ))}
           </div>
-          <div className="db-edit-field">
-            <label className="db-edit-label">За перемогу</label>
-            <input 
-              type="number" 
-              className="db-input" 
-              min={0} 
-              value={eloWinner} 
-              onChange={e => setEloWinner(e.target.value)}
-              placeholder="100"
-            />
-            <small className="db-field-hint">1-ше місце</small>
+
+          {step < WIZARD_STEPS.length ? (
+            <button
+              type="button"
+              className="db-btn db-btn-primary"
+              onClick={() => setStep(s => s + 1)}
+              disabled={!canNext()}
+            >
+              Далі →
+            </button>
+          ) : isCreate ? (
+            <button
+              type="button"
+              className="db-btn db-btn-primary db-btn-submit"
+              disabled={loading || !name.trim()}
+              onClick={() => setShowConfirm(true)}
+            >
+              {loading ? 'Збереження...' : (submitLabel || '🚀 Створити турнір')}
+            </button>
+          ) : (
+            <button
+              type="submit"
+              className="db-btn db-btn-primary db-btn-submit"
+              disabled={loading || !name.trim()}
+            >
+              {loading ? 'Збереження...' : (submitLabel || <><IconSave style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Зберегти</>)}
+            </button>
+          )}
+        </div>
+      </form>
+
+      {/* ── Create confirmation modal */}
+      {showConfirm && (
+        <div className="modal-overlay" onClick={() => !loading && setShowConfirm(false)}>
+          <div className="modal-box modal-box--light db-wizard-confirm-modal" onClick={e => e.stopPropagation()}>
+            <div className="db-wizard-confirm-icon">{emoji}</div>
+            <h3 className="db-wizard-confirm-title">Створити турнір?</h3>
+            <p className="db-wizard-confirm-name">«{name}»</p>
+            <div className="db-wizard-confirm-meta">
+              <span className="db-wizard-confirm-chip">
+                <span className="db-sp-dot" style={{ background: status === 'registration' ? '#7c5ff5' : '#888', width: 7, height: 7, borderRadius: '50%', display: 'inline-block', marginRight: 5 }} />
+                {status === 'registration' ? 'Реєстрація відразу відкрита' : 'Чернетка'}
+              </span>
+              {startDate && <span className="db-wizard-confirm-chip">📅 Старт: {new Date(startDate).toLocaleDateString('uk-UA')}</span>}
+              {regEnd   && <span className="db-wizard-confirm-chip">⏱ Реєстрація до: {new Date(regEnd).toLocaleDateString('uk-UA')}</span>}
+            </div>
+            <div className="db-wizard-confirm-actions">
+              <button className="db-btn db-btn-ghost" onClick={() => setShowConfirm(false)} disabled={loading}>
+                Повернутись
+              </button>
+              <button
+                className="db-btn db-btn-primary"
+                disabled={loading}
+                onClick={e => { setShowConfirm(false); handleSubmit({ preventDefault: () => {} }); }}
+              >
+                {loading ? 'Створення...' : '🚀 Підтвердити'}
+              </button>
+            </div>
           </div>
         </div>
-        <p className="db-elo-preview">
-          💡 Формула: <strong>{eloParticipation}</strong> + (раунд × <strong>{eloPerRound}</strong>) + <strong>{eloWinner}</strong> за 1-ше місце
-        </p>
-      </div>
-
-      {/* Дополнительные поля от родителя (для админа/организатора) */}
-      {extraFields}
-
-      <div className="db-edit-actions">
-        <button type="button" className="db-btn db-btn-ghost" onClick={onCancel}>Скасувати</button>
-        <button type="submit" className="db-btn db-btn-primary db-btn-submit" disabled={loading || !name.trim()}>
-          {btnText}
-        </button>
-      </div>
-    </form>
+      )}
+    </div>
   );
 }
 
-// Helper для конвертации даты в input[type=date]
+// datetime-local helper
+function toDateTimeInput(d) {
+  if (!d) return '';
+  try {
+    const date = new Date(d);
+    if (isNaN(date.getTime())) return '';
+    // format: YYYY-MM-DDTHH:MM
+    return date.toISOString().slice(0, 16);
+  } catch { return ''; }
+}
+
+// Kept for backward compat with any remaining date-only usages
 function toDateInput(d) {
   if (!d) return '';
   try { return new Date(d).toISOString().slice(0, 10); } catch { return ''; }

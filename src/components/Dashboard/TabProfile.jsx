@@ -26,6 +26,7 @@ import IconChatBubble from '@images/dashboard_components/chat.svg?react';
 import IconTime       from '@images/dashboard_components/time.svg?react';
 import IconZaiavki    from '@images/dashboard_components/zaiavki.svg?react';
 import IconSave       from '@images/dashboard_components/save.svg?react';
+import IconSend       from '@images/dashboard_components/send.svg?react';
 import IconWarning  from '@images/dashboard_components/icon_warning_triangle.svg?react';
 import IconPin      from '@images/dashboard_components/icon_pin_marker.svg?react';
 import IconEye      from '@images/dashboard_components/icon_eye_open.svg?react';
@@ -491,7 +492,7 @@ function OrganizerApplyModal({ onClose, onSubmit }) {
             <div className="db-edit-actions">
               <button type="button" className="db-btn db-btn-ghost" onClick={onClose}>Скасувати</button>
               <button type="submit" className="db-btn db-btn-primary db-btn-submit" disabled={saving || !form.motivation.trim() || !hasContact}>
-                {saving ? <><IconTime style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 4 }} /> Надсилання...</> : '📤 Подати заявку'}
+                {saving ? <><IconTime style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 4 }} /> Надсилання...</> : <><IconSend style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Подати заявку</>}
               </button>
             </div>
           </form>
@@ -741,7 +742,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
             {bannerMode === 'image' && (
               <div className="db-bep-photo">
                 <button className="db-bep-upload" onClick={() => bannerInputRef.current?.click()}>
-                  📤 Завантажити <span>до 10 МБ</span>
+                  <IconSend style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Завантажити <span>до 10 МБ</span>
                 </button>
                 {user.banner_url && (
                   <button className="db-bep-del" onClick={handleDeleteBanner}><IconTrash style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 4 }} /> Видалити</button>

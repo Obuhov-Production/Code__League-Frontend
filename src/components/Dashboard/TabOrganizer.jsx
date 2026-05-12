@@ -3,7 +3,7 @@ import {
   getTournaments,
   createTournament, updateTournament,
   updateTournamentStatus, deleteTournament,
-  getAdminTeams,
+  getAdminTeams, uploadTournamentFile,
 } from '@utils/authApi';
 import { StatusBadge, ConfirmModal, formatDate, TournamentForm } from './db.shared.jsx';
 import IconTeams from '@images/dashboard_components/icon_teams.svg?react';
@@ -14,6 +14,7 @@ const TOUR_STATUS_OPTS = [
   { value: 'registration', label: 'Registration', color: '#7c5ff5' },
   { value: 'running',      label: 'Running',      color: '#16a34a' },
   { value: 'finished',     label: 'Finished',     color: '#0ea5e9' },
+  { value: 'cancelled',    label: 'Cancelled',    color: '#ef4444' },
 ];
 
 /* ── StatusPicker ──────────────────────────────────── */
@@ -71,18 +72,33 @@ function StatusPicker({ value, onChange, compact = false }) {
 
 /* ── Edit Tournament Modal ─────────────────────────── */
 function EditTournamentModal({ tournament, toast, onClose, onSuccess }) {
+  const [saving, setSaving] = useState(false);
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box modal-box--light db-tournament-modal" onClick={e => e.stopPropagation()}>
-        <button className="db-tm-close" onClick={onClose}>✕</button>
         <div className="db-modal-scroll-body">
           <TournamentForm
             mode="edit"
             tournament={tournament}
-            onSubmit={async (payload) => {
-              await updateTournament(tournament.id, payload);
-              toast.success('Турнір оновлено!');
-              onSuccess();
+            loading={saving}
+            onSubmit={async (payload, files) => {
+              setSaving(true);
+              try {
+                await updateTournament(tournament.id, payload);
+                if (files?.rules) {
+                  await uploadTournamentFile(tournament.id, 'rules', files.rules);
+                }
+                if (files?.tz?.length) {
+                  for (const f of files.tz) await uploadTournamentFile(tournament.id, 'tz', f);
+                }
+                toast.success('Турнір оновлено!');
+                onSuccess();
+              } catch (err) {
+                toast.error(err.message);
+              } finally {
+                setSaving(false);
+              }
             }}
             onCancel={onClose}
           />
@@ -105,14 +121,16 @@ export default function TabOrganizer({ toast, user }) {
     return !!user?.id && ownerId === user.id;
   };
 
-  const [orgTab,       setOrgTab]       = useState('tournaments');
-  const [tournaments,  setTournaments]  = useState([]);
-  const [teams,        setTeams]        = useState([]);
-  const [loading,      setLoading]      = useState(true);
-  const [showCreate,   setShowCreate]   = useState(false);
+  const [orgTab,         setOrgTab]         = useState('tournaments');
+  const [tournaments,    setTournaments]    = useState([]);
+  const [teams,          setTeams]          = useState([]);
+  const [loading,        setLoading]        = useState(true);
+  const [showCreate,     setShowCreate]     = useState(false);
+  const [creating,       setCreating]       = useState(false);
   const [editTournament, setEditTournament] = useState(null);
   const [confirmModal,   setConfirmModal]   = useState(null);
   const [filterTour,     setFilterTour]     = useState('');
+  const [search,         setSearch]         = useState('');
 
   const confirmAction = (message, onConfirm) => setConfirmModal({ message, onConfirm });
 
@@ -142,21 +160,59 @@ export default function TabOrganizer({ toast, user }) {
     });
   };
 
+  const filteredTournaments = tournaments.filter(t =>
+    !search || t.name.toLowerCase().includes(search.toLowerCase())
+  );
+
   return (
     <div className="db-tab">
       <div className="db-tab-header">
         <h1>Панель організатора</h1>
-        {orgTab === 'tournaments' && (
-          <button className="db-btn db-btn-primary" onClick={() => setShowCreate(p => !p)}>
-            {showCreate ? '✕ Скасувати' : '+ Новий турнір'}
+        {orgTab === 'tournaments' && !showCreate && (
+          <button className="db-btn db-btn-primary" onClick={() => setShowCreate(true)}>
+            + Новий турнір
           </button>
         )}
       </div>
 
-      {/* Access scope notice */}
       <div className="db-admin-tip" style={{ marginBottom: 16 }}>
-        🗂️ Організатор може створювати та керувати турнірами і переглядати команди. Управління користувачами та чатом доступне лише Адміністратору.
+        🗂️ Організатор може створювати та керувати турнірами і переглядати команди.
       </div>
+
+      {/* Create form — full-screen overlay wizard */}
+      {showCreate && (
+        <div className="modal-overlay" onClick={() => !creating && setShowCreate(false)}>
+          <div className="modal-box modal-box--light db-tournament-modal" onClick={e => e.stopPropagation()}>
+            <div className="db-modal-scroll-body">
+              <TournamentForm
+                mode="create"
+                loading={creating}
+                onSubmit={async (payload, files) => {
+                  setCreating(true);
+                  try {
+                    const result = await createTournament(payload);
+                    const id = result?.id ?? result;
+                    if (id && files?.rules) {
+                      await uploadTournamentFile(id, 'rules', files.rules).catch(() => {});
+                    }
+                    if (id && files?.tz?.length) {
+                      for (const f of files.tz) await uploadTournamentFile(id, 'tz', f).catch(() => {});
+                    }
+                    setShowCreate(false);
+                    await loadTournaments();
+                    toast.success('Турнір створено!');
+                  } catch (err) {
+                    toast.error(err.message);
+                  } finally {
+                    setCreating(false);
+                  }
+                }}
+                onCancel={() => setShowCreate(false)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="db-admin-tabs">
         {[['tournaments', '🏆 Турніри'], ['teams', <><IconTeams style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5, color: '#60a5fa' }} /> Команди</>]].map(([id, lbl]) => (
@@ -179,32 +235,36 @@ export default function TabOrganizer({ toast, user }) {
           {/* ─── TOURNAMENTS ─── */}
           {orgTab === 'tournaments' && (
             <>
-              {showCreate && (
-                <TournamentForm
-                  mode="create"
-                  onSubmit={async (payload) => {
-                    await createTournament(payload);
-                    setShowCreate(false); loadTournaments(); toast.success('Турнір створено!');
-                  }}
-                  onCancel={() => setShowCreate(false)}
+              <div className="db-organizer-toolbar">
+                <input
+                  className="db-input db-search-input"
+                  placeholder="🔍 Пошук турнірів..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  style={{ maxWidth: 280 }}
                 />
-              )}
+                <span className="db-organizer-count">{filteredTournaments.length} турнірів</span>
+              </div>
+
               <div className="db-admin-table-wrap">
                 <table className="db-admin-table">
                   <thead>
                     <tr>
                       <th>Назва</th>
                       <th>Статус</th>
-                      <th>Команд</th>
+                      <th>Команди</th>
                       <th>Реєстрація</th>
                       <th>Змінити статус</th>
                       <th></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {tournaments.map(t => (
+                    {filteredTournaments.map(t => (
                       <tr key={t.id}>
-                        <td><strong>{t.name}</strong></td>
+                        <td>
+                          <span style={{ marginRight: 6 }}>{t.emoji || '🏆'}</span>
+                          <strong>{t.name}</strong>
+                        </td>
                         <td><StatusBadge status={t.status} /></td>
                         <td>{t.teams_count || 0}{t.teams_limit ? `/${t.teams_limit}` : ''}</td>
                         <td style={{ fontSize: 13 }}>
@@ -234,6 +294,13 @@ export default function TabOrganizer({ toast, user }) {
                         </td>
                       </tr>
                     ))}
+                    {filteredTournaments.length === 0 && (
+                      <tr>
+                        <td colSpan={6} style={{ textAlign: 'center', color: '#888', padding: '32px 0', fontSize: 14 }}>
+                          {search ? 'Турнірів не знайдено' : 'Ще немає турнірів'}
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -292,7 +359,7 @@ export default function TabOrganizer({ toast, user }) {
           tournament={editTournament}
           toast={toast}
           onClose={() => setEditTournament(null)}
-          onSuccess={() => { setEditTournament(null); loadTournaments(); toast.success('Турнір оновлено!'); }}
+          onSuccess={() => { setEditTournament(null); loadTournaments(); }}
         />
       )}
 

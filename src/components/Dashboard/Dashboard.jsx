@@ -34,7 +34,8 @@ import TabChat        from './TabChat.jsx';
 import TabProfile     from './TabProfile.jsx';
 import TabAdmin       from './TabAdmin.jsx';
 import TabJury        from './TabJury.jsx';
-import TabOrganizer  from './TabOrganizer.jsx';
+import TabOrganizer      from './TabOrganizer.jsx';
+import TabTeamWorkspace  from './TabTeamWorkspace.jsx';
 
 /* Map legacy icon-name strings (e.g. "check-circle") to emoji.
    New backend code emits emoji directly, but old DB rows still hold the names. */
@@ -499,7 +500,9 @@ export default function Dashboard() {
     ...(hasRole(user, 'admin')                           ? [{ id: 'admin',     label: 'Адмін',      Icon: IconAdmin     }] : []),
   ];
 
-  const tabLabel = TABS.find(t => t.id === tab)?.label ?? '';
+  const tabLabel = tab.startsWith('team_')
+    ? (myTeams.find(t => `team_${t.id}` === tab)?.name ?? 'Команда')
+    : TABS.find(t => t.id === tab)?.label ?? '';
 
   const isBanned = user && hasRole(user, 'banned');
   const isMuted  = user && hasRole(user, 'muted');
@@ -548,6 +551,40 @@ export default function Dashboard() {
               )}
             </button>
           ))}
+
+          {/* Team tabs — shown after separator when user is in any teams */}
+          {!loading && myTeams.length > 0 && (
+            <>
+              <div className="db-nav-separator">
+                <span className="db-nav-separator-label">Мої команди</span>
+              </div>
+              {myTeams.slice(0, 5).map((team) => {
+                const teamTabId = `team_${team.id}`;
+                const isActive = tab === teamTabId;
+                const statusColor = team.tournament_status === 'running' ? '#2dba6e'
+                  : team.tournament_status === 'registration' ? '#AC9EF8'
+                  : team.tournament_status === 'finished' ? '#0ea5e9'
+                  : '#888';
+                return (
+                  <button
+                    key={teamTabId}
+                    className={`db-nav-item db-nav-team-item${isActive ? ' active' : ''}`}
+                    onClick={() => setTab(teamTabId)}
+                    title={`${team.name} · ${team.tournament_name}`}
+                  >
+                    <span className="db-nav-team-avatar" style={{ background: `linear-gradient(135deg, ${statusColor}44, ${statusColor}22)`, color: statusColor }}>
+                      {team.name.slice(0, 2).toUpperCase()}
+                    </span>
+                    <span className="db-nav-team-info">
+                      <span className="db-nav-team-name">{team.name}</span>
+                      <span className="db-nav-team-tour">{team.tournament_name}</span>
+                    </span>
+                    <span className="db-nav-team-status-dot" style={{ background: statusColor }} />
+                  </button>
+                );
+              })}
+            </>
+          )}
         </nav>
 
         {!loading && user && (
@@ -694,7 +731,7 @@ export default function Dashboard() {
             <div className="db-loading"><div className="db-spinner" /></div>
           ) : (
             <>
-              {tab !== 'chat' && <TabTip tab={tab} />}
+              {tab !== 'chat' && !tab.startsWith('team_') && <TabTip tab={tab} />}
               {tab === 'overview'    && <TabOverview    user={user} toast={toast} onNavigate={setTab} />}
               {tab === 'tournaments' && <TabTournaments user={user} toast={toast} />}
               {tab === 'teams'       && <TabTeams       toast={toast} setTab={setTab} />}
@@ -711,6 +748,10 @@ export default function Dashboard() {
                 </div>
               )}
               {tab === 'profile'     && <TabProfile     user={user} setUser={setUser} toast={toast} onLogout={handleLogout} setTab={setTab} />}
+              {tab.startsWith('team_') && (() => {
+                const tid = Number(tab.slice(5));
+                return !isNaN(tid) && <TabTeamWorkspace teamId={tid} toast={toast} onBack={() => setTab('teams')} />;
+              })()}
               {tab === 'jury'      && (hasRole(user, 'admin') || hasRole(user, 'jury'))      && <TabJury      user={user} toast={toast} />}
               {tab === 'organizer' && (hasRole(user, 'admin') || hasRole(user, 'organizer')) && <TabOrganizer toast={toast} user={user} />}
               {tab === 'admin'     && hasRole(user, 'admin')                                  && <TabAdmin     toast={toast} />}

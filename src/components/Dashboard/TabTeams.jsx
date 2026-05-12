@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 import IconTeams       from "@images/dashboard_components/icon_teams.svg?react";
 import IconPensil      from "@images/dashboard_components/pensil.svg?react";
@@ -8,6 +8,8 @@ import IconRemove      from "@images/dashboard_components/remove.svg?react";
 import IconTime        from "@images/dashboard_components/time.svg?react";
 import IconUserSvg     from "@images/dashboard_components/icon_user.svg?react";
 import IconSave        from "@images/dashboard_components/save.svg?react";
+import IconGithub      from "@images/dashboard_components/icon_github.svg?react";
+import IconSend        from "@images/dashboard_components/send.svg?react";
 
 import { getMyTeams, getTeamById, updateTeam, searchUsers, getTournamentRounds, getTeamSubmissions, createSubmission, updateSubmission, API_BASE } from "@utils/authApi";
 import { StatusBadge, UserAvatar } from "./db.shared.jsx";
@@ -29,6 +31,43 @@ function TeamStat({ label, value, accent }) {
   );
 }
 
+function deadlineInfo(dateStr) {
+  if (!dateStr) return null;
+  const now = Date.now();
+  const deadline = new Date(dateStr).getTime();
+  const diff = deadline - now;
+  const isPast = diff < 0;
+  const absDiff = Math.abs(diff);
+  const hours = Math.floor(absDiff / 3600000);
+  const days = Math.floor(absDiff / 86400000);
+
+  let text;
+  if (isPast) {
+    text = days > 0 ? `${days}д тому` : hours > 0 ? `${hours}г тому` : 'щойно';
+  } else {
+    text = days > 0 ? `${days}д` : hours > 0 ? `${hours}г` : `${Math.floor(absDiff / 60000)}хв`;
+  }
+
+  return { isPast, text, diff, date: new Date(dateStr) };
+}
+
+function DeadlineBadge({ label, dateStr }) {
+  const info = deadlineInfo(dateStr);
+  if (!info) return null;
+  return (
+    <div className={`db-deadline-badge${info.isPast ? ' past' : info.diff < 86400000 ? ' urgent' : ''}`}>
+      <span className="db-deadline-icon">⏱</span>
+      <span className="db-deadline-label">{label}</span>
+      <span className="db-deadline-value">
+        {info.isPast ? 'Завершено' : `ще ${info.text}`}
+      </span>
+      <span className="db-deadline-date">
+        {info.date.toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+      </span>
+    </div>
+  );
+}
+
 function SubmitWorkModal({ team, toast, onClose }) {
   const [repoUrl,    setRepoUrl]    = useState('');
   const [branches,   setBranches]   = useState([]);
@@ -41,13 +80,19 @@ function SubmitWorkModal({ team, toast, onClose }) {
   const [roundId,    setRoundId]    = useState('');
   const [existing,   setExisting]   = useState(null);
   const [saving,     setSaving]     = useState(false);
+  const [deadline,   setDeadline]   = useState(null);
 
   useEffect(() => {
     getTournamentRounds(team.tournament_id).then(r => {
-      const active = r.filter(rd => rd.status === 'active' || !rd.status);
       setRounds(r);
-      if (active.length) setRoundId(String(active[0].id));
-      else if (r.length) setRoundId(String(r[r.length - 1].id));
+      const active = r.filter(rd => rd.status === 'active' || !rd.status);
+      if (active.length) {
+        setRoundId(String(active[0].id));
+        setDeadline(active[0].end_date || null);
+      } else if (r.length) {
+        setRoundId(String(r[r.length - 1].id));
+        setDeadline(r[r.length - 1]?.end_date || null);
+      }
     }).catch(() => {});
 
     getTeamSubmissions(team.id).then(subs => {
@@ -63,6 +108,9 @@ function SubmitWorkModal({ team, toast, onClose }) {
       }
     }).catch(() => {});
   }, [team.id, team.tournament_id]);
+
+  const deadlineStatus = deadline ? deadlineInfo(deadline) : null;
+  const isDeadlinePast = deadlineStatus?.isPast ?? false;
 
   const parseRepoPath = (url) => {
     try {
@@ -89,6 +137,7 @@ function SubmitWorkModal({ team, toast, onClose }) {
 
   const handleSubmit = async e => {
     e.preventDefault();
+    if (isDeadlinePast) { toast.error('Дедлайн здачі роботи минув'); return; }
     if (!repoUrl.trim()) { toast.error('Вкажіть URL репозиторію'); return; }
     if (!branch.trim())  { toast.error('Оберіть гілку'); return; }
     if (!roundId)        { toast.error('Не знайдено активного раунду'); return; }
@@ -118,84 +167,108 @@ function SubmitWorkModal({ team, toast, onClose }) {
       <div className="modal-box modal-box--light" onClick={e => e.stopPropagation()} style={{ maxWidth: 540 }}>
         <button className="modal-close" onClick={onClose}>✕</button>
         <h2 style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 700 }}>
-          {existing ? <><IconPensil style={{ width: 16, height: 16, verticalAlign: -3, marginRight: 6 }} /> Оновити роботу</> : '📤 Подати роботу'}
+          {existing ? <><IconPensil style={{ width: 16, height: 16, verticalAlign: -3, marginRight: 6 }} /> Оновити роботу</> : <><IconSend style={{ width: 16, height: 16, verticalAlign: -3, marginRight: 6 }} /> Подати роботу</>}
         </h2>
-        <p style={{ margin: '0 0 20px', fontSize: 13, color: '#aaa' }}>{team.name} · {team.tournament_name}</p>
+        <p style={{ margin: '0 0 12px', fontSize: 13, color: '#aaa' }}>{team.name} · {team.tournament_name}</p>
 
-        {rounds.length > 1 && (
-          <div className="db-form-row" style={{ marginBottom: 12 }}>
-            <label>Раунд</label>
-            <select className="db-input" value={roundId} onChange={e => setRoundId(e.target.value)}>
-              {rounds.map(r => <option key={r.id} value={r.id}>{r.title || `Раунд ${r.order_index ?? r.id}`}</option>)}
-            </select>
+        {/* Deadline warning */}
+        {deadline && (
+          <div className={`db-submit-deadline-info${isDeadlinePast ? ' past' : deadlineStatus?.diff < 3600000 ? ' urgent' : ''}`}>
+            <span>{isDeadlinePast ? '🔴' : deadlineStatus?.diff < 3600000 ? '🟠' : '🟢'}</span>
+            <span>
+              {isDeadlinePast
+                ? 'Дедлайн минув — здача заблокована'
+                : `Дедлайн: ${new Date(deadline).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} (ще ${deadlineStatus?.text})`
+              }
+            </span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <label className="db-edit-label">🐙 GitHub репозиторій <span className="db-required">*</span></label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                className="db-input"
-                value={repoUrl}
-                onChange={e => { setRepoUrl(e.target.value); setBranches([]); }}
-                placeholder="https://github.com/username/repo"
-                style={{ flex: 1 }}
-              />
-              <button type="button" className="db-btn db-btn-ghost db-btn-sm"
-                onClick={fetchBranches} disabled={loadingB || !repoUrl.trim()}>
-                {loadingB ? <IconTime style={{ width: 14, height: 14 }} /> : '🔍 Гілки'}
-              </button>
-            </div>
-          </div>
-
-          <div>
-            <label className="db-edit-label">🌿 Гілка <span className="db-required">*</span></label>
-            {branches.length > 0 ? (
-              <select className="db-input" value={branch} onChange={e => setBranch(e.target.value)}>
-                {branches.map(b => <option key={b} value={b}>{b}</option>)}
-              </select>
-            ) : (
-              <input
-                className="db-input"
-                value={branch}
-                onChange={e => setBranch(e.target.value)}
-                placeholder="main"
-              />
-            )}
-            {branches.length > 0 && (
-              <small style={{ color: '#888', fontSize: 12 }}>Знайдено {branches.length} гілок</small>
+        {isDeadlinePast ? (
+          <div style={{ padding: '24px 0', textAlign: 'center', color: '#888' }}>
+            <p style={{ fontSize: 32, margin: '0 0 8px' }}>🔒</p>
+            <p>Термін здачі роботи минув.</p>
+            {existing && (
+              <p style={{ fontSize: 13, color: '#666', marginTop: 8 }}>
+                Остання здана робота: {existing.github_repo_url}
+              </p>
             )}
           </div>
+        ) : (
+          <>
+            {rounds.length > 1 && (
+              <div className="db-form-row" style={{ marginBottom: 12 }}>
+                <label>Раунд</label>
+                <select className="db-input" value={roundId} onChange={e => {
+                  setRoundId(e.target.value);
+                  const r = rounds.find(r => String(r.id) === e.target.value);
+                  setDeadline(r?.end_date || null);
+                }}>
+                  {rounds.map(r => <option key={r.id} value={r.id}>{r.title || `Раунд ${r.order_index ?? r.id}`}</option>)}
+                </select>
+              </div>
+            )}
 
-          <div>
-            <label className="db-edit-label">▶ Pitch Video URL</label>
-            <input className="db-input" type="url" value={videoUrl}
-              onChange={e => setVideoUrl(e.target.value)}
-              placeholder="https://youtube.com/watch?v=..." />
-          </div>
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label className="db-edit-label"><IconGithub style={{ width: 13, height: 13, verticalAlign: -2, marginRight: 5 }} /> GitHub репозиторій <span className="db-required">*</span></label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    className="db-input"
+                    value={repoUrl}
+                    onChange={e => { setRepoUrl(e.target.value); setBranches([]); }}
+                    placeholder="https://github.com/username/repo"
+                    style={{ flex: 1 }}
+                  />
+                  <button type="button" className="db-btn db-btn-ghost db-btn-sm"
+                    onClick={fetchBranches} disabled={loadingB || !repoUrl.trim()}>
+                    {loadingB ? <IconTime style={{ width: 14, height: 14 }} /> : '🔍 Гілки'}
+                  </button>
+                </div>
+              </div>
 
-          <div>
-            <label className="db-edit-label">🌐 Live Demo URL</label>
-            <input className="db-input" type="url" value={demoUrl}
-              onChange={e => setDemoUrl(e.target.value)}
-              placeholder="https://my-project.vercel.app" />
-          </div>
+              <div>
+                <label className="db-edit-label">🌿 Гілка <span className="db-required">*</span></label>
+                {branches.length > 0 ? (
+                  <select className="db-input" value={branch} onChange={e => setBranch(e.target.value)}>
+                    {branches.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                ) : (
+                  <input className="db-input" value={branch} onChange={e => setBranch(e.target.value)} placeholder="main" />
+                )}
+                {branches.length > 0 && <small style={{ color: '#888', fontSize: 12 }}>Знайдено {branches.length} гілок</small>}
+              </div>
 
-          <div>
-            <label className="db-edit-label">📝 Опис проєкту</label>
-            <textarea className="db-input" rows={3} value={desc}
-              onChange={e => setDesc(e.target.value)}
-              placeholder="Коротко опишіть проєкт..." />
-          </div>
+              <div>
+                <label className="db-edit-label">▶ Pitch Video URL</label>
+                <input className="db-input" type="url" value={videoUrl}
+                  onChange={e => setVideoUrl(e.target.value)}
+                  placeholder="https://youtube.com/watch?v=..." />
+              </div>
 
-          <div className="db-form-actions">
-            <button type="button" className="db-btn db-btn-ghost" onClick={onClose}>Скасувати</button>
-            <button type="submit" className="db-btn db-btn-primary" disabled={saving}>
-              {saving ? 'Збереження...' : (existing ? <><IconSave style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Оновити</> : '📤 Подати роботу')}
-            </button>
-          </div>
-        </form>
+              <div>
+                <label className="db-edit-label">🌐 Live Demo URL</label>
+                <input className="db-input" type="url" value={demoUrl}
+                  onChange={e => setDemoUrl(e.target.value)}
+                  placeholder="https://my-project.vercel.app" />
+              </div>
+
+              <div>
+                <label className="db-edit-label">📝 Опис проєкту</label>
+                <textarea className="db-input" rows={3} value={desc}
+                  onChange={e => setDesc(e.target.value)}
+                  placeholder="Коротко опишіть проєкт..." />
+              </div>
+
+              <div className="db-form-actions">
+                <button type="button" className="db-btn db-btn-ghost" onClick={onClose}>Скасувати</button>
+                <button type="submit" className="db-btn db-btn-primary" disabled={saving || isDeadlinePast}>
+                  {saving ? 'Збереження...' : (existing ? <><IconSave style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Оновити</> : <><IconSend style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Подати роботу</>)}
+                </button>
+              </div>
+            </form>
+          </>
+        )}
       </div>
     </div>
   );
@@ -256,10 +329,9 @@ function EditTeamModal({ team, toast, onClose, onSuccess }) {
     const m = members[i];
     if (!m.platformUser) return;
     if (!m.platformUser.identity_confirmed) {
-      toast.error("⚠️ Цей учасник ще не підтвердив своє ПІБ у профілі. Він повинен заповнити Прізвище, Ім'я та По батькові.");
+      toast.error("⚠️ Цей учасник ще не підтвердив своє ПІБ у профілі.");
       return;
     }
-    // Prevent the same platform user from being added twice.
     if (members.some((row, idx) => idx !== i && row.linkedUser?.id === m.platformUser.id)) {
       toast.error('Цей користувач вже доданий до команди');
       return;
@@ -279,12 +351,8 @@ function EditTeamModal({ team, toast, onClose, onSuccess }) {
   const handleSave = async e => {
     e.preventDefault();
     if (!name.trim()) { toast.error("Введіть назву команди"); return; }
-    // Drop any empty search-only rows the user opened but didn't fill in.
     const filled = members.filter(m => m.linkedUser);
-    if (filled.length < min) {
-      toast.error(`Мінімум ${min} учасника(-ів) у команді`);
-      return;
-    }
+    if (filled.length < min) { toast.error(`Мінімум ${min} учасника(-ів) у команді`); return; }
     setSaving(true);
     const cleanMembers = filled.map(m => ({
       full_name: m.linkedUser.username,
@@ -316,11 +384,7 @@ function EditTeamModal({ team, toast, onClose, onSuccess }) {
                 <h5>Учасники ({members.length}/{max})</h5>
                 {members.length < max && (
                   <button type="button" className="db-btn db-btn-ghost db-btn-sm"
-                    onClick={() => setMembers(m => [...m, {
-                      linkedUser: null,
-                      full_name: '', email: '',
-                      platformQuery: '', platformUser: null, searching: false,
-                    }])}>+ Додати</button>
+                    onClick={() => setMembers(m => [...m, { linkedUser: null, full_name: '', email: '', platformQuery: '', platformUser: null, searching: false }])}>+ Додати</button>
                 )}
               </div>
               {members.map((m, i) => (
@@ -330,11 +394,8 @@ function EditTeamModal({ team, toast, onClose, onSuccess }) {
                       <span className="db-member-num">{i + 1}</span>
                       {m.linkedUser.user_avatar_url ? (
                         <img
-                          src={m.linkedUser.user_avatar_url.startsWith('http')
-                            ? m.linkedUser.user_avatar_url
-                            : `${API_BASE}${m.linkedUser.user_avatar_url}`}
-                          alt={m.linkedUser.username}
-                          referrerPolicy="no-referrer"
+                          src={m.linkedUser.user_avatar_url.startsWith('http') ? m.linkedUser.user_avatar_url : `${API_BASE}${m.linkedUser.user_avatar_url}`}
+                          alt={m.linkedUser.username} referrerPolicy="no-referrer"
                           className="db-member-linked-avatar db-member-linked-avatar--img"
                         />
                       ) : (
@@ -346,9 +407,9 @@ function EditTeamModal({ team, toast, onClose, onSuccess }) {
                       </div>
                       <span className="db-member-linked-badge">На платформі</span>
                       {members.length > min && (
-                        <button type="button" className="db-member-remove"
-                          title="Прибрати учасника"
-                          onClick={() => setMembers(ms => ms.filter((_, idx) => idx !== i))}><IconRemove style={{ width: 14, height: 14 }} /></button>
+                        <button type="button" className="db-member-remove" onClick={() => setMembers(ms => ms.filter((_, idx) => idx !== i))}>
+                          <IconRemove style={{ width: 14, height: 14 }} />
+                        </button>
                       )}
                     </div>
                   ) : (
@@ -357,8 +418,9 @@ function EditTeamModal({ team, toast, onClose, onSuccess }) {
                         <span className="db-member-num">{i + 1}</span>
                         <span className="db-member-search-hint">Знайдіть учасника на платформі</span>
                         {members.length > min && (
-                          <button type="button" className="db-member-remove"
-                            onClick={() => setMembers(ms => ms.filter((_,idx) => idx !== i))}><IconRemove style={{ width: 14, height: 14 }} /></button>
+                          <button type="button" className="db-member-remove" onClick={() => setMembers(ms => ms.filter((_,idx) => idx !== i))}>
+                            <IconRemove style={{ width: 14, height: 14 }} />
+                          </button>
                         )}
                       </div>
                       <div className="db-member-platform-wrap">
@@ -369,21 +431,15 @@ function EditTeamModal({ team, toast, onClose, onSuccess }) {
                         {m.platformUser && !m.searching && (
                           <div className="db-platform-suggestion" onClick={() => addPlatformUser(i)}>
                             {m.platformUser.user_avatar_url ? (
-                              <img
-                                src={m.platformUser.user_avatar_url.startsWith('http')
-                                  ? m.platformUser.user_avatar_url
-                                  : `${API_BASE}${m.platformUser.user_avatar_url}`}
-                                alt={m.platformUser.username}
-                                referrerPolicy="no-referrer"
+                              <img src={m.platformUser.user_avatar_url.startsWith('http') ? m.platformUser.user_avatar_url : `${API_BASE}${m.platformUser.user_avatar_url}`}
+                                alt={m.platformUser.username} referrerPolicy="no-referrer"
                                 className="db-ps-avatar db-ps-avatar--img" />
                             ) : (
                               <span className="db-ps-avatar">{(m.platformUser.username || '?').slice(0,2).toUpperCase()}</span>
                             )}
                             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
                               <span className="db-ps-name">{m.platformUser.username}</span>
-                              {!m.platformUser.identity_confirmed && (
-                                <span style={{ fontSize: 11, color: '#e05fa0' }}>⚠️ ПІБ не підтверджено</span>
-                              )}
+                              {!m.platformUser.identity_confirmed && <span style={{ fontSize: 11, color: '#e05fa0' }}>⚠️ ПІБ не підтверджено</span>}
                             </div>
                             <span className="db-ps-add">+ Додати</span>
                           </div>
@@ -431,7 +487,7 @@ export default function TabTeams({ toast, setTab }) {
       try {
         const detail = await getTeamById(id);
         setDetailCache(p => ({ ...p, [id]: detail }));
-      } catch { /* show basic info */ }
+      } catch {}
       finally { setDetailLoading(p => ({ ...p, [id]: false })); }
     }
   };
@@ -464,8 +520,13 @@ export default function TabTeams({ toast, setTab }) {
             const canEdit   = t.tournament_status === "registration";
             const canSubmit = t.tournament_status === "running";
             const detail    = detailCache[t.id];
-            const members  = detail?.members || [];
-            const gradient = AVATAR_GRADIENTS[idx % AVATAR_GRADIENTS.length];
+            const members   = detail?.members || [];
+            const gradient  = AVATAR_GRADIENTS[idx % AVATAR_GRADIENTS.length];
+
+            // Deadline info
+            const regDeadline = t.registration_end ? deadlineInfo(t.registration_end) : null;
+            const tourDeadline = t.end_date ? deadlineInfo(t.end_date) : null;
+            const submitBlocked = canSubmit && tourDeadline?.isPast;
 
             return (
               <div key={t.id} className={`db-team-card${isExp ? " expanded" : ""}`}>
@@ -487,6 +548,17 @@ export default function TabTeams({ toast, setTab }) {
                             @{String(t.telegram_username).replace(/^@+/, '')}
                           </span>
                         )}
+                        {/* Deadline chips */}
+                        {canEdit && regDeadline && !regDeadline.isPast && (
+                          <span className={`db-team-meta-chip db-deadline-chip${regDeadline.diff < 86400000 ? ' urgent' : ''}`}>
+                            ⏱ Реєстрація: {regDeadline.text}
+                          </span>
+                        )}
+                        {canSubmit && tourDeadline && !tourDeadline.isPast && (
+                          <span className={`db-team-meta-chip db-deadline-chip${tourDeadline.diff < 86400000 ? ' urgent' : ''}`}>
+                            ⏱ Здача: {tourDeadline.text}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -502,8 +574,12 @@ export default function TabTeams({ toast, setTab }) {
                       </button>
                     )}
                     {canSubmit && (
-                      <button className="db-btn db-btn-primary db-btn-sm" onClick={e => { e.stopPropagation(); setSubmitTeam(t); }}>
-                        📤 Подати роботу
+                      <button
+                        className={`db-btn db-btn-sm${submitBlocked ? ' db-btn-ghost' : ' db-btn-primary'}`}
+                        onClick={e => { e.stopPropagation(); setSubmitTeam(t); }}
+                        title={submitBlocked ? 'Дедлайн здачі минув' : ''}
+                      >
+                        {submitBlocked ? '🔒 Дедлайн минув' : <><IconSend style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Подати роботу</>}
                       </button>
                     )}
                     <span className={`db-expand-btn${isExp ? " open" : ""}`}>›</span>
@@ -517,24 +593,34 @@ export default function TabTeams({ toast, setTab }) {
                     ) : (() => {
                       const captainId = detail?.captain_id ?? t.captain_id ?? null;
                       const onlineCount = members.filter(m => m.presence === 'online').length;
-                      const maxSize = 5; // matches edit modal max
+                      const maxSize = 5;
                       const slotsLeft = Math.max(0, maxSize - members.length);
                       return (
                         <>
-                          {/* Inline summary: counts + online + tournament + status */}
+                          {/* Deadlines section */}
+                          {(t.registration_end || t.end_date) && (
+                            <div className="db-team-deadlines">
+                              {canEdit && t.registration_end && (
+                                <DeadlineBadge label="Реєстрація до" dateStr={t.registration_end} />
+                              )}
+                              {t.start_date && (
+                                <DeadlineBadge label="Старт турніру" dateStr={t.start_date} />
+                              )}
+                              {t.end_date && (
+                                <DeadlineBadge label="Кінець турніру" dateStr={t.end_date} />
+                              )}
+                            </div>
+                          )}
+
                           <div className="db-team-summary">
                             <div className="db-team-summary-item">
                               <span className="db-team-summary-icon"><IconUserSvg style={{ width: 14, height: 14, color: '#7c5ff5' }} /></span>
-                              <span className="db-team-summary-text">
-                                <b>{members.length}/{maxSize}</b> учасників
-                              </span>
+                              <span className="db-team-summary-text"><b>{members.length}/{maxSize}</b> учасників</span>
                             </div>
                             <span className="db-team-summary-sep" />
                             <div className="db-team-summary-item">
                               <span className={`db-team-summary-dot${onlineCount > 0 ? ' on' : ''}`} />
-                              <span className="db-team-summary-text">
-                                <b>{onlineCount}</b> в мережі
-                              </span>
+                              <span className="db-team-summary-text"><b>{onlineCount}</b> в мережі</span>
                             </div>
                             {slotsLeft > 0 && canEdit && (
                               <>
@@ -547,7 +633,6 @@ export default function TabTeams({ toast, setTab }) {
                             )}
                           </div>
 
-                          {/* Roster */}
                           <div className="db-team-detail-section">
                             <div className="db-team-detail-section-head">
                               <p className="db-team-detail-title">Склад команди</p>
@@ -557,12 +642,7 @@ export default function TabTeams({ toast, setTab }) {
                               <div className="db-team-members-grid">
                                 {members.map((m, i) => {
                                   const isCaptain = captainId != null && m.user_id === captainId;
-                                  const userObj = m.user_id ? {
-                                    id: m.user_id,
-                                    username: m.username,
-                                    user_avatar_url: m.user_avatar_url,
-                                    status: m.presence,
-                                  } : null;
+                                  const userObj = m.user_id ? { id: m.user_id, username: m.username, user_avatar_url: m.user_avatar_url, status: m.presence } : null;
                                   return (
                                     <div key={i} className={`db-team-member-row${isCaptain ? ' is-captain' : ''}`}>
                                       {userObj ? (
@@ -581,9 +661,7 @@ export default function TabTeams({ toast, setTab }) {
                                       </div>
                                       <div className="db-team-member-tags">
                                         {isCaptain && <span className="db-team-member-captain-badge">Капітан</span>}
-                                        {m.username && !isCaptain && (
-                                          <span className="db-team-member-platform-badge">На платформі</span>
-                                        )}
+                                        {m.username && !isCaptain && <span className="db-team-member-platform-badge">На платформі</span>}
                                       </div>
                                     </div>
                                   );
@@ -594,27 +672,20 @@ export default function TabTeams({ toast, setTab }) {
                             )}
                           </div>
 
-                          {/* Action bar */}
                           <div className="db-team-action-bar">
-                            <button
-                              className="db-btn db-btn-primary db-btn-sm"
-                              onClick={() => setTab?.('chat')}
-                            >
+                            <button className="db-btn db-btn-primary db-btn-sm" onClick={() => setTab?.('chat')}>
                               <IconChatBubble style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Відкрити чат команди
                             </button>
                             {canSubmit && (
                               <button
-                                className="db-btn db-btn-ghost db-btn-sm"
+                                className={`db-btn db-btn-sm${submitBlocked ? ' db-btn-ghost' : ' db-btn-ghost'}`}
                                 onClick={e => { e.stopPropagation(); setSubmitTeam(t); }}
                               >
-                                📤 Подати роботу
+                                {submitBlocked ? '🔒 Дедлайн минув' : <><IconSend style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Подати роботу</>}
                               </button>
                             )}
                             {canEdit && (
-                              <button
-                                className="db-btn db-btn-ghost db-btn-sm"
-                                onClick={e => { e.stopPropagation(); setEditTeam(t); }}
-                              >
+                              <button className="db-btn db-btn-ghost db-btn-sm" onClick={e => { e.stopPropagation(); setEditTeam(t); }}>
                                 <IconPensil style={{ width: 13, height: 13, verticalAlign: -2, marginRight: 4 }} /> Редагувати склад
                               </button>
                             )}
