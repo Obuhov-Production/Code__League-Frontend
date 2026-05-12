@@ -256,7 +256,11 @@ function TeamRegForm({ tournament, toast, onSuccess, onCancel, user }) {
 function TournamentModal({ tournament: t, user, toast, initReg, isRegistered, onClose, onRegistered }) {
   const [showReg, setShowReg] = useState(initReg && !isRegistered);
   const [showEdit, setShowEdit] = useState(false);
-  const canEdit = user && (hasRole(user, 'admin') || hasRole(user, 'organizer'));
+  const ownerId = t.created_by_id ?? t.created_by?.id ?? null;
+  const canEdit = user && (
+    hasRole(user, 'admin') ||
+    (hasRole(user, 'organizer') && ownerId !== null && ownerId === user.id)
+  );
   useEffect(() => {
     if (isRegistered) setShowReg(false);
   }, [isRegistered]);

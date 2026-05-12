@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { PublicProfileModal } from './PublicProfilePage.jsx';
 
 import IconChat       from '@images/dashboard_components/icon_chat.svg?react';
 import IconEmoji      from '@images/dashboard_components/icon_emoji.svg?react';
@@ -18,7 +18,7 @@ import {
   getPinnedMessages, uploadChatFile, getUserProfile,
   getMutedChatUsers, toggleChatMute,
   pinChatMessage, unpinChatMessage,
-  searchUsers, addTeamChatMember, getTeamChatMembers,
+  searchUsers, addTeamChatMember, getTeamChatMembers, getAllChatUsers,
   API_BASE,
 } from '@utils/authApi';
 import {
@@ -56,7 +56,6 @@ export default function TabChat({
   setActiveChatRoom,
   soundOn, setSoundOn,
 }) {
-  const navigate = useNavigate();
   const [myTeams,     setMyTeams]     = useState([]);
   const [room,        setRoom]        = useState('general');
   const [messages,    setMessages]    = useState([]);
@@ -82,9 +81,10 @@ export default function TabChat({
   const [loadingOlder, setLoadingOlder] = useState(false);
   const unreadCounts = chatUnreadByRoom || {};
   const [deletePending,setDeletePending]=useState(null);
-  const [chatProfile, setChatProfile] = useState(null);
-  const [hoveredMsg,  setHoveredMsg]  = useState(null);
-  const [viewProfile, setViewProfile] = useState(null);
+  const [chatProfile,    setChatProfile]    = useState(null);
+  const [hoveredMsg,     setHoveredMsg]     = useState(null);
+  const [viewProfile,    setViewProfile]    = useState(null);
+  const [publicProfile,  setPublicProfile]  = useState(null);
   const [mutedUsers,  setMutedUsers]  = useState(new Set());
   const [lightboxImg, setLightboxImg] = useState(null);
   const [pinnedMsgs,  setPinnedMsgs]  = useState([]);
@@ -100,9 +100,11 @@ export default function TabChat({
   const [addMemberSearching, setAddMemberSearching] = useState(false);
   const [addMemberAdding, setAddMemberAdding] = useState(false);
   const addMemberTimer = useRef(null);
-  const [membersPanelOpen, setMembersPanelOpen] = useState(false);
+  const [membersPanelOpen, setMembersPanelOpen] = useState(() => window.innerWidth >= 768);
   const [teamMembers, setTeamMembers] = useState([]);
   const [teamMembersLoading, setTeamMembersLoading] = useState(false);
+  const [allUsers, setAllUsers] = useState([]);
+  const [allUsersLoading, setAllUsersLoading] = useState(false);
 
   async function openChatProfile(basic) {
     setChatProfile({ ...basic, loading: true });
@@ -618,32 +620,23 @@ export default function TabChat({
     return () => { alive = false; };
   }, [membersPanelOpen, currentTeam?.id]);
 
-  // For non-team rooms: derive unique participants from loaded messages.
-  const derivedRoomMembers = useMemo(() => {
-    if (currentTeam) return null;
-    const byId = new Map();
-    for (const m of messages) {
-      if (!m.user_id || byId.has(m.user_id)) continue;
-      byId.set(m.user_id, {
-        id: m.user_id,
-        username: m.username,
-        user_avatar_url: m.user_avatar_url ?? null,
-        status: null, // unknown presence in non-team rooms
-        is_captain: false,
-      });
-    }
-    return Array.from(byId.values());
-  }, [messages, currentTeam]);
+  // For non-team rooms: fetch ALL platform users for the members panel.
+  useEffect(() => {
+    if (!membersPanelOpen || currentTeam) return;
+    let alive = true;
+    setAllUsersLoading(true);
+    getAllChatUsers()
+      .then(list => { if (alive) setAllUsers(Array.isArray(list) ? list : []); })
+      .catch(() => { if (alive) setAllUsers([]); })
+      .finally(() => { if (alive) setAllUsersLoading(false); });
+    return () => { alive = false; };
+  }, [membersPanelOpen, currentTeam?.id]);
 
-  // Derive effective presence from DB status + last_seen_at freshness.
-  // DB status alone can be stale if the socket disconnect handler didn't fire
-  // (browser killed, network drop). last_seen_at is updated on every heartbeat
-  // so it is the reliable freshness signal.
-  const AWAY_MS    =  5 * 60 * 1000;  // idle > 5 min  → away
-  const OFFLINE_MS = 20 * 60 * 1000;  // idle > 20 min → offline
+  const AWAY_MS    =  5 * 60 * 1000;
+  const OFFLINE_MS = 20 * 60 * 1000;
   const computeEffectivePresence = (m) => {
     if (m.id === meId) return online ? 'online' : 'offline';
-    if (!m.status) return null; // unknown — non-team room derived member
+    if (!m.status) return 'offline';
     if (m.status === 'offline') return 'offline';
     if (m.last_seen_at) {
       const seenAgo = Date.now() - new Date(m.last_seen_at).getTime();
@@ -654,28 +647,27 @@ export default function TabChat({
   };
 
   const groupedTeamMembers = useMemo(() => {
-    const source = currentTeam ? teamMembers : (derivedRoomMembers || []);
-    const online = [];
-    const offline = [];
+    const source = currentTeam ? teamMembers : allUsers;
+    const onlineList = [];
+    const offlineList = [];
     for (const m of source) {
       const ep = computeEffectivePresence(m);
       const decorated = { ...m, effective_status: ep };
-      // 'away'/'do_not_disturb' are treated as still online (they're connected).
       const isOnline = ep === 'online' || ep === 'do_not_disturb' || ep === 'away';
-      (isOnline ? online : offline).push(decorated);
+      (isOnline ? onlineList : offlineList).push(decorated);
     }
-    const byCaptainThenName = (a, b) => {
+    const byName = (a, b) => {
       if (a.is_captain !== b.is_captain) return a.is_captain ? -1 : 1;
       return (a.username || '').localeCompare(b.username || '');
     };
-    online.sort(byCaptainThenName);
-    offline.sort(byCaptainThenName);
-    return { online, offline };
+    onlineList.sort(byName);
+    offlineList.sort(byName);
+    return { online: onlineList, offline: offlineList };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teamMembers, derivedRoomMembers, currentTeam, meId, online]);
+  }, [teamMembers, allUsers, currentTeam, meId, online]);
 
-  const visibleMembersList = currentTeam ? teamMembers : (derivedRoomMembers || []);
-  const isMembersLoading = currentTeam ? teamMembersLoading : false;
+  const visibleMembersList = currentTeam ? teamMembers : allUsers;
+  const isMembersLoading = currentTeam ? teamMembersLoading : allUsersLoading;
 
   const handleAddMemberSearch = (q) => {
     setAddMemberQuery(q);
@@ -821,7 +813,7 @@ export default function TabChat({
             {time}
             {isMe && (
               <span className={`db-chat-read-status${msg.is_read ? ' read' : ''}`} title={msg.is_read ? 'Прочитано' : 'Надіслано'}>
-                {msg.is_read ? '✓✓' : '✓'}
+                {msg.is_read ? '✓' : '✕'}
               </span>
             )}
           </span>
@@ -1020,12 +1012,13 @@ export default function TabChat({
       {/* Main area */}
       <div className="db-chat-main">
         <div className="db-chat-header">
-          <div className="db-chat-header-room"
-            onClick={e => { e.stopPropagation(); setRoomsOpen(true); }}
-            role="button" tabIndex={0}
-            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setRoomsOpen(true); } }}
-            title="Кімнати чату" aria-label="Відкрити список кімнат">
-            <button className="db-chat-rooms-toggle" tabIndex={-1} aria-hidden="true">
+
+          {/* Header room: desktop = static label, mobile = ☰ button opens drawer */}
+          <div className="db-chat-header-room">
+            {/* ☰ burger — mobile only via CSS display:none on desktop */}
+            <button className="db-chat-rooms-toggle"
+              onClick={e => { e.stopPropagation(); setRoomsOpen(true); }}
+              aria-label="Відкрити список кімнат">
               ☰
               {Object.values(unreadCounts).some(v => v > 0) && <span className="db-rooms-toggle-badge" />}
             </button>
@@ -1034,9 +1027,6 @@ export default function TabChat({
               {currentRoom?.locked && <span className="db-chat-locked-tag">приватна</span>}
               {roomLocked && <span className="db-chat-locked-tag locked"><IconLock style={{ width: 11, height: 11, verticalAlign: -1, marginRight: 3 }} /> заблоковано</span>}
             </div>
-            <svg className="db-chat-header-room-chev" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-              <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
           </div>
           {online && onlineCount > 0 && <span className="db-chat-online-count">⚫ {onlineCount} онлайн</span>}
           <div className="db-chat-header-actions">
@@ -1379,7 +1369,7 @@ export default function TabChat({
 
               {!isMembersLoading && visibleMembersList.length === 0 && (
                 <div className="db-chat-members-empty">
-                  {currentTeam ? 'Учасників ще немає' : 'Поки що ніхто не писав у цій кімнаті'}
+                  {currentTeam ? 'Учасників ще немає' : 'Не вдалося завантажити список'}
                 </div>
               )}
 
@@ -1419,7 +1409,7 @@ export default function TabChat({
               {!isMembersLoading && groupedTeamMembers.offline.length > 0 && (
                 <div className="db-chat-members-group">
                   <div className="db-chat-members-group-label">
-                    {currentTeam ? `Не в мережі — ${groupedTeamMembers.offline.length}` : `Учасники — ${groupedTeamMembers.offline.length}`}
+                    Не в мережі — {groupedTeamMembers.offline.length}
                   </div>
                   {groupedTeamMembers.offline.map(m => (
                     <div key={m.id} className="db-chat-members-row db-chat-members-row--offline"
@@ -1615,7 +1605,7 @@ export default function TabChat({
                   ) : (
                     <>
                       <button className="db-mp-btn primary"
-                        onClick={() => { const u = chatProfile.username; setChatProfile(null); if (u) navigate(`/dashboard/profile/${u}`); }}
+                        onClick={() => { const u = chatProfile.username; setChatProfile(null); if (u) setPublicProfile(u); }}
                         disabled={!chatProfile.username}
                       >
                         Повний профіль →
@@ -1640,6 +1630,10 @@ export default function TabChat({
           onClose={() => setViewProfile(null)}
           onGoOwnProfile={() => { setViewProfile(null); setTab('profile'); }}
         />
+      )}
+
+      {publicProfile && (
+        <PublicProfileModal username={publicProfile} onClose={() => setPublicProfile(null)} />
       )}
 
       {deletePending && createPortal(

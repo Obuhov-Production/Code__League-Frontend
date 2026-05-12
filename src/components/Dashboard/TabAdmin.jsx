@@ -393,6 +393,7 @@ function ManageUserModal({ user, toast, onClose, onRoleChange, onDelete }) {
   );
   const [userBadges,   setUserBadges]   = useState([]);
   const [badgeLoading, setBadgeLoading] = useState(false);
+  const [confirmRevoke, setConfirmRevoke] = useState(null); // badge object to confirm revoke
 
   useEffect(() => {
     setBadgeLoading(true);
@@ -402,17 +403,26 @@ function ManageUserModal({ user, toast, onClose, onRoleChange, onDelete }) {
   const hasBadge = (id) => userBadges.some(b => b.badge_id === id);
 
   const handleToggleBadge = async (badgeId) => {
+    if (hasBadge(badgeId)) {
+      const badge = ALL_BADGES.find(b => b.id === badgeId);
+      setConfirmRevoke(badge);
+      return;
+    }
     try {
-      if (hasBadge(badgeId)) {
-        await adminRevokeBadge(user.id, badgeId);
-        setUserBadges(prev => prev.filter(b => b.badge_id !== badgeId));
-        toast.success('Досягнення відкликано');
-      } else {
-        await adminGrantBadge(user.id, badgeId);
-        setUserBadges(prev => [...prev, { badge_id: badgeId }]);
-        toast.success('Досягнення видано');
-      }
+      await adminGrantBadge(user.id, badgeId);
+      setUserBadges(prev => [...prev, { badge_id: badgeId }]);
+      toast.success('Досягнення видано');
     } catch (err) { toast.error(err.message); }
+  };
+
+  const handleConfirmRevoke = async () => {
+    if (!confirmRevoke) return;
+    try {
+      await adminRevokeBadge(user.id, confirmRevoke.id);
+      setUserBadges(prev => prev.filter(b => b.badge_id !== confirmRevoke.id));
+      toast.success('Досягнення відкликано');
+    } catch (err) { toast.error(err.message); }
+    finally { setConfirmRevoke(null); }
   };
 
   const ROLE_OPTIONS_FULL = [
@@ -527,6 +537,24 @@ function ManageUserModal({ user, toast, onClose, onRoleChange, onDelete }) {
           </div>
         </div>
       </div>
+
+      {confirmRevoke && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }} onClick={() => setConfirmRevoke(null)}>
+          <div className="modal-box" style={{ maxWidth: 360, padding: 28, textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+            <img src={confirmRevoke.image} alt={confirmRevoke.name}
+              style={{ width: 52, height: 52, objectFit: 'contain', marginBottom: 12 }} />
+            <h3 style={{ margin: '0 0 8px', fontSize: 16 }}>Відкликати досягнення?</h3>
+            <p style={{ margin: '0 0 20px', fontSize: 13, color: '#aaa' }}>
+              «{confirmRevoke.name}» буде видалено у <strong style={{ color: '#fff' }}>@{user.username}</strong>.
+              Це незворотна дія.
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button className="db-btn db-btn-ghost db-btn-sm" onClick={() => setConfirmRevoke(null)}>Скасувати</button>
+              <button className="db-btn db-btn-danger db-btn-sm" onClick={handleConfirmRevoke}>Відкликати</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1048,11 +1076,19 @@ export default function TabAdmin({ toast }) {
     },
     {
       label: 'Всього Повідомлень',
-      value: stats.messages,
+      value: stats.messages ?? '—',
       color: '#06b6d4',
       icon: <IconChat style={{ width: 20, height: 20 }} />,
       badge: { text: 'CHAT', color: '#06b6d4', bg: 'rgba(6,182,212,.1)' },
-      trend: '+23%'
+      trend: stats.messages_trend != null
+        ? `${stats.messages_trend >= 0 ? '+' : ''}${stats.messages_trend}%`
+        : null,
+      trendColor: stats.messages_trend != null
+        ? (stats.messages_trend >= 0 ? '#22c55e' : '#ef4444')
+        : '#22c55e',
+      trendIcon: stats.messages_trend != null
+        ? (stats.messages_trend >= 0 ? '↗' : '↘')
+        : '↗',
     },
   ] : [];
 
@@ -1106,8 +1142,8 @@ export default function TabAdmin({ toast }) {
                       <div className="db-admin-stat-card-icon" style={{ background: `${s.color}15` }}>{s.icon}</div>
                       <div className="db-admin-stat-card-meta">
                         {s.trend && (
-                          <span className="db-admin-stat-card-trend" style={{ color: '#22c55e' }}>
-                            ↗ {s.trend}
+                          <span className="db-admin-stat-card-trend" style={{ color: s.trendColor || '#22c55e' }}>
+                            {s.trendIcon || '↗'} {s.trend}
                           </span>
                         )}
                         {s.badge && (

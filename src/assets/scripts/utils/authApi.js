@@ -390,6 +390,20 @@ export async function searchUsers(query) {
   return data;
 }
 
+export async function getAllChatUsers() {
+  if (!CHECK_BACKEND) return [];
+  const res = await fetch(`${BASE}/users`, { headers: authHeaders() });
+  const data = await res.json().catch(() => []);
+  if (!res.ok) return [];
+  const list = Array.isArray(data) ? data : (data?.users || []);
+  // Normalize field names to match team-member shape used in the members panel
+  return list.map(u => ({
+    ...u,
+    user_avatar_url: u.user_avatar_url ?? u.avatar ?? null,
+    is_captain: false,
+  }));
+}
+
 export async function getUserProfileByUsername(username) {
   const res = await fetch(`${BASE}/users/by-username/${encodeURIComponent(username)}`, { headers: authHeaders() });
   const data = await res.json().catch(() => ({}));

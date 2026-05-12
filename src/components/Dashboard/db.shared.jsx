@@ -1,5 +1,8 @@
 /* Дашборд - спільні константи, хелпери та компоненти для всього дашборду */
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
+const PublicProfileModal = lazy(() =>
+  import('./PublicProfilePage.jsx').then(m => ({ default: m.PublicProfileModal }))
+);
 import { io } from 'socket.io-client';
 import { searchUsers, getUserProfile, API_BASE, CHECK_BACKEND, getToken } from '@utils/authApi';
 
@@ -450,23 +453,12 @@ export function MiniProfileModal({ user, onClose, onGoProfile, onLogout }) {
   return (
     <div className="db-mini-profile" ref={ref} onClick={e => e.stopPropagation()}>
 
-      {/* ── Banner + avatar ── */}
+      {/* ── Banner ── */}
       <div className="db-mp-banner" style={bannerStyle}
         onMouseMove={!user.banner_url ? handleBannerMouseMove : undefined}
         onMouseLeave={!user.banner_url ? () => setGlowPos({ x: 50, y: 50 }) : undefined}>
-
-        {/* Animated effects — тільки для кольорового банера */}
         {!user.banner_url && (
           <div className="db-mp-effects">
-            <div className="db-mp-dots">
-              {dotPositions.map((d, i) => (
-                <span key={i} className="db-welcome-dot" style={{
-                  left: d.left, top: d.top,
-                  width: d.size, height: d.size,
-                  animationDelay: d.delay,
-                }} />
-              ))}
-            </div>
             <div className="db-mp-glow" style={{
               top:   `${-60 + (glowPos.y / 100) * 50}px`,
               right: `${-20 + ((100 - glowPos.x) / 100) * 50}px`,
@@ -479,26 +471,29 @@ export function MiniProfileModal({ user, onClose, onGoProfile, onLogout }) {
             }} />
           </div>
         )}
-
         <button className="db-mp-banner-edit" onClick={onGoProfile} title="Редагувати профіль">
           ✏ Змінити
         </button>
-        <div className="db-mp-avatar-wrap">
-          <UserAvatar user={user} size={62} showStatus={true} />
-        </div>
       </div>
 
-      {/* ── Identity ── */}
+      {/* ── Identity zone (avatar overflows banner) ── */}
       <div className="db-mp-identity">
-        <strong className="db-mp-name">{name}</strong>
-        {user.username && (
-          <button className={`db-mp-at${copied ? ' copied' : ''}`} onClick={handleCopyUsername} title="Натисни щоб скопіювати">
-            {copied ? '✓ Скопійовано' : `@${user.username}`}
-          </button>
-        )}
-        <span className="db-mp-role-badge" style={{ color: roleConf.color, background: roleConf.bg }}>
-          {roleConf.label}
-        </span>
+        <div className="db-mp-avatar-wrap">
+          <UserAvatar user={user} size={66} showStatus={true} />
+        </div>
+        <div className="db-mp-id-info">
+          <div className="db-mp-id-top">
+            <strong className="db-mp-name">{name}</strong>
+            <span className="db-mp-role-tag" style={{ color: roleConf.color, background: roleConf.bg }}>
+              {roleConf.label}
+            </span>
+          </div>
+          {user.username && (
+            <button className={`db-mp-at${copied ? ' copied' : ''}`} onClick={handleCopyUsername} title="Натисни щоб скопіювати">
+              {copied ? '✓ Скопійовано' : `@${user.username}`}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── Bio ── */}
@@ -629,6 +624,8 @@ export function UserSearchModal({ onClose }) {
 }
 
 export function UserProfileModal({ profile, meId, onClose, onGoOwnProfile }) {
+  const [showPublic, setShowPublic] = useState(false);
+
   useEffect(() => {
     const fn = e => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', fn);
@@ -641,6 +638,7 @@ export function UserProfileModal({ profile, meId, onClose, onGoOwnProfile }) {
   const isAdmin = profile.role === 'admin';
 
   return (
+    <>
     <div className="modal-overlay db-upm-overlay" style={{ zIndex: 10000 }} onClick={onClose}>
       <div className="db-upm-card" onClick={e => e.stopPropagation()}>
         <div className="db-upm-banner" style={bannerStyle}>
@@ -672,9 +670,9 @@ export function UserProfileModal({ profile, meId, onClose, onGoOwnProfile }) {
               <button className="db-upm-btn primary" onClick={onGoOwnProfile}>✏ Редагувати профіль</button>
             ) : (
               <>
-                <a className="db-upm-btn primary" href={`/dashboard/profile/${profile.username}`}>
+                <button className="db-upm-btn primary" onClick={() => setShowPublic(true)}>
                   Повний профіль →
-                </a>
+                </button>
                 <button className="db-upm-btn ghost" onClick={onClose}>Закрити</button>
               </>
             )}
@@ -682,6 +680,12 @@ export function UserProfileModal({ profile, meId, onClose, onGoOwnProfile }) {
         </div>
       </div>
     </div>
+    {showPublic && profile.username && (
+      <Suspense fallback={null}>
+        <PublicProfileModal username={profile.username} onClose={() => setShowPublic(false)} />
+      </Suspense>
+    )}
+    </>
   );
 }
 
