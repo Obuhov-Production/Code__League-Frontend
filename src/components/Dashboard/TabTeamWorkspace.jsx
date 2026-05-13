@@ -332,11 +332,11 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
         <div className="sub-hero-left">
           <span className="sub-status-badge" style={{ background: `${statusColor}22`, color: statusColor, borderColor: `${statusColor}55` }}>
             <span className="sub-status-dot" style={{ background: statusColor }} />
-            SUBMISSION STATUS: {statusText}
+            Статус: {statusText}
           </span>
-          <h2 className="sub-hero-title">Final Project Submission</h2>
+          <h2 className="sub-hero-title">Підготуйте проект до здачі</h2>
           <p className="sub-hero-desc">
-            {team.name} · {rounds.length > 1 ? `${rounds.length} раундів` : 'Global AI Hackathon 2024'}. Ensure all required links and documentation are provided before locking your submission.
+            {team.name} · {rounds.length > 1 ? `${rounds.length} раундів` : team.tournament_name}. Тут ви можете завантажити роботу над своїм проектом.
             {existing && <span className="sub-hero-saved"> · Збережено ✓</span>}
           </p>
           {rounds.length > 0 && (
@@ -380,7 +380,7 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
               <label className="sub-label">Branch or Tag <span className="sub-optional">(Optional)</span></label>
               {branches.length > 0 ? (
                 <div className="sub-input-row">
-                  <span className="sub-input-icon">⑂</span>
+                  <span className="sub-input-icon">⇄</span>
                   <select value={branch} onChange={e => setBranch(e.target.value)}>
                     {branches.map(b => <option key={b} value={b}>{b}</option>)}
                   </select>
@@ -413,15 +413,10 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
             <div className="sub-input-row">
               <span className="sub-input-icon">▶</span>
               <input
-                className={touched.video && !videoUrl.trim() ? 'sub-input--error' : ''}
+                
                 type="url" value={videoUrl}
-                onChange={e => setVideoUrl(e.target.value)}
-                onBlur={() => setTouched(t => ({...t, video: true}))}
-                placeholder="YouTube or Vimeo unlisted link" />
+                placeholder="YouTube Video" />
             </div>
-            {touched.video && !videoUrl.trim() && (
-              <p className="sub-field-hint sub-field-hint--err">🔴 Video URL is required for final evaluation.</p>
-            )}
           </div>
         </div>
 
@@ -737,126 +732,6 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
           </div>
         </div>
       )}
-
-      {/* ── Main content ── */}
-      <div className="tw-content">
-        {/* Left: task + submission + docs */}
-        <div className="tw-main-col">
-          {/* Work Task */}
-          <WorkTaskSection rounds={rounds} submission={submission} canSubmit={canSubmit} tournStatus={tournStatus} />
-
-          {/* Notes & Docs */}
-          <NotesSection
-            notes={notes}      setNotes={setNotes}
-            docUrl={docUrl}    setDocUrl={setDocUrl}
-            docFile={docFile}  setDocFile={setDocFile}
-          />
-        </div>
-
-        {/* Right: quick info */}
-        <div className="tw-side-col">
-          {/* Members list */}
-          <div className="tw-section tw-section--compact">
-            <div className="tw-section-head">
-              <span className="tw-section-icon">👥</span>
-              <h3 className="tw-section-title">Учасники</h3>
-              <span className="tw-section-count">{members.length}/5</span>
-            </div>
-            <div className="tw-members-list">
-              {members.map((m, i) => {
-                const isCaptain = captainId != null && m.user_id === captainId;
-                const userObj = m.user_id
-                  ? { id: m.user_id, username: m.username, user_avatar_url: m.user_avatar_url, status: m.presence }
-                  : null;
-                return (
-                  <div key={i} className={`tw-member-item${isCaptain ? ' captain' : ''}`}>
-                    {userObj
-                      ? <UserAvatar user={userObj} size={32} showStatus={true} />
-                      : (
-                        <div className="tw-member-initials-sm" style={{ background: AVATAR_GRADIENTS[i % AVATAR_GRADIENTS.length] }}>
-                          {(m.full_name || m.username || '?').slice(0, 2).toUpperCase()}
-                        </div>
-                      )
-                    }
-                    <div className="tw-member-item-info">
-                      <span className="tw-member-item-name">
-                        {m.full_name || m.username}
-                        {isCaptain && <span title="Капітан"> 👑</span>}
-                      </span>
-                      {m.email && <span className="tw-member-item-email">{m.email}</span>}
-                    </div>
-                    <span className={`tw-presence-dot${m.presence === 'online' ? ' online' : ''}`} title={m.presence === 'online' ? 'Online' : 'Offline'} />
-                  </div>
-                );
-              })}
-              {members.length === 0 && <p className="tw-section-note">Немає даних</p>}
-            </div>
-          </div>
-
-          {/* Quick links */}
-          {(team.telegram_username || docUrl || (submission?.live_demo_url) || (submission?.pitch_video_url)) && (
-            <div className="tw-section tw-section--compact">
-              <div className="tw-section-head">
-                <span className="tw-section-icon">🔗</span>
-                <h3 className="tw-section-title">Корисні посилання</h3>
-              </div>
-              <div className="tw-links-list">
-                {team.telegram_username && (
-                  <a href={`https://t.me/${team.telegram_username.replace(/^@/, '')}`} target="_blank" rel="noreferrer" className="tw-link-item">
-                    <span className="tw-link-icon">✈</span> Telegram команди
-                  </a>
-                )}
-                {docUrl && (
-                  <a href={docUrl} target="_blank" rel="noreferrer" className="tw-link-item">
-                    <span className="tw-link-icon">📄</span> Документація
-                  </a>
-                )}
-                {submission?.live_demo_url && (
-                  <a href={submission.live_demo_url} target="_blank" rel="noreferrer" className="tw-link-item">
-                    <span className="tw-link-icon">🌐</span> Live Demo
-                  </a>
-                )}
-                {submission?.pitch_video_url && (
-                  <a href={submission.pitch_video_url} target="_blank" rel="noreferrer" className="tw-link-item">
-                    <span className="tw-link-icon">▶</span> Pitch Video
-                  </a>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Submission status card */}
-          <div className="tw-section tw-section--compact">
-            <div className="tw-section-head">
-              <span className="tw-section-icon">📊</span>
-              <h3 className="tw-section-title">Статус здачі</h3>
-            </div>
-            <div className="tw-status-card">
-              {submission ? (
-                <>
-                  <div className="tw-status-row">
-                    <span className="tw-status-dot submitted" />
-                    <span>Роботу подано</span>
-                  </div>
-                  {submission.github_repo_url && (
-                    <div className="tw-status-row">
-                      <IconGithub style={{ width: 13, height: 13, flexShrink: 0 }} />
-                      <a href={submission.github_repo_url} target="_blank" rel="noreferrer" className="tw-repo-link-sm" title={submission.github_repo_url}>
-                        {submission.github_repo_url.replace('https://github.com/', '')}
-                      </a>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="tw-status-row">
-                  <span className="tw-status-dot pending" />
-                  <span>{canSubmit ? 'Ще не подано' : 'Здача недоступна'}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
       </div>
-    </div>
   );
 }

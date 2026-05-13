@@ -11390,10 +11390,11 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  background-image: radial-gradient(circle, #e5e7eb 1px, transparent 1px);
+  background-image: radial-gradient(circle, #e5e7eb 2px, transparent 2px);
   background-size: 24px 24px;
   gap: 0;
-  max-width: 1100px;
+  max-width: 110%;
+  max-height: 110%;
 }
 
 /* ── Loading ── */
@@ -11410,8 +11411,10 @@
 
 /* ── Header ── */
 .tw-header {
+  position: absolute;
+  left: 300px;
   display: flex;
-  align-items: center;
+  align-items: left;
   gap: 16px;
   padding: 0 0 20px;
   border-bottom: 1px solid #ebebf5;
@@ -11421,13 +11424,17 @@
 .tw-back-btn {
   background: none;
   border: 1px solid #e2e2ee;
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 6px 12px;
   font-size: 13px;
   color: #666;
   cursor: pointer;
   transition: background .15s, color .15s;
   flex-shrink: 0;
+  width: 100px;
+  height: 40px;
+  position: relative;
+  top: 5px;
 }
 .tw-back-btn:hover { background: #f0f0f8; color: #333; }
 .tw-header-avatar {
@@ -11473,11 +11480,15 @@
 
 /* ── Members bar ── */
 .tw-members-bar {
+  position: absolute;
+  left: 325px;
+  top: 175px;
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
   background: #f8f8fd;
+  border: 1px solid #ebebf5;
   border-radius: 12px;
   margin-bottom: 16px;
   flex-wrap: wrap;
