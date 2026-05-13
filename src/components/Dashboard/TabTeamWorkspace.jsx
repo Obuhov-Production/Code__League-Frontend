@@ -1,16 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   getTeamById, getTournamentRounds, getTeamSubmissions,
-  createSubmission, updateSubmission, API_BASE,
+  createSubmission, updateSubmission
 } from '@utils/authApi';
 import { StatusBadge, UserAvatar, pickCurrentRound } from './db.shared.jsx';
 
-import IconPensil    from '@images/dashboard_components/pensil.svg?react';
-import IconTime      from '@images/dashboard_components/time.svg?react';
 import IconSave      from '@images/dashboard_components/save.svg?react';
 import IconTeams     from '@images/dashboard_components/icon_teams.svg?react';
 import IconGithub    from '@images/dashboard_components/icon_github.svg?react';
-import IconSend      from '@images/dashboard_components/send.svg?react';
 
 const AVATAR_GRADIENTS = [
   'linear-gradient(135deg,#AC9EF8,#7c5ff5)',
@@ -42,7 +39,6 @@ function deadlineInfo(dateStr) {
    WorkTaskSection — round/task display
 ═══════════════════════════════════════════════════ */
 function WorkTaskSection({ rounds, submission, canSubmit, tournStatus }) {
-  // Determine the round to display
   let currentRound = null;
   if (submission?.round_id) {
     currentRound = rounds.find(r => r.id === submission.round_id || String(r.id) === String(submission.round_id));
@@ -291,7 +287,6 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
 
   const handleSave = async (e, draft = false) => {
     e?.preventDefault();
-    // Auto-select best round if none selected
     let finalRoundId = roundId;
     if (!finalRoundId && rounds.length > 0) {
       const best = pickCurrentRound(rounds);
@@ -301,6 +296,7 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
     if (!repoUrl.trim()) { toast.error('Вкажіть URL репозиторію'); setTouched(t => ({...t, repo: true})); return; }
     if (!branch.trim())  { toast.error('Оберіть гілку'); return; }
     if (!finalRoundId)   { toast.error('Не знайдено жодного раунду'); return; }
+    
     setSaving(true);
     const payload = {
       github_repo_url: repoUrl.trim(),
@@ -323,7 +319,7 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
   };
 
   const statusColor = isDeadlinePast ? '#ef4444' : (deadlineStatus?.diff < 3600000 ? '#f59e0b' : '#10b981');
-  const statusText  = isDeadlinePast ? 'CLOSED' : 'OPEN';
+  const statusText  = isDeadlinePast ? 'ЗАКРИТО' : 'ВІДКРИТО';
 
   return (
     <div className="sub-wrap">
@@ -355,12 +351,12 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
         {/* ── Repository & Core Links ── */}
         <div className="sub-card">
           <div className="sub-card-accent" style={{ background: '#10b981' }} />
-          <h3 className="sub-card-title">Repository & Core Links</h3>
+          <h3 className="sub-card-title">Репозиторій та гілки</h3>
 
           <div className="sub-field">
             <label className="sub-label">
               <IconGithub style={{ width: 14, height: 14 }} />
-              GitHub Repository URL <span className="db-required">*</span>
+              URL репозиторію GitHub <span className="db-required">*</span>
             </label>
             <div className="sub-input-row">
               <span className="sub-input-icon">🔗</span>
@@ -371,13 +367,13 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
                 placeholder="https://github.com/username/repo"
               />
             </div>
-            {repoValid === true  && <p className="sub-field-hint sub-field-hint--ok">🟢 Repository verified and accessible</p>}
-            {repoValid === false && <p className="sub-field-hint sub-field-hint--err">🔴 Repository not found or private</p>}
+            {repoValid === true  && <p className="sub-field-hint sub-field-hint--ok">🟢 Репозиторій перевірено та він доступний</p>}
+            {repoValid === false && <p className="sub-field-hint sub-field-hint--err">🔴 Репозиторій не знайдено або він приватний</p>}
           </div>
 
           <div className="sub-row-2">
             <div className="sub-field">
-              <label className="sub-label">Branch or Tag <span className="sub-optional">(Optional)</span></label>
+              <label className="sub-label">Гілка або тег <span className="sub-optional">(Необов'язково)</span></label>
               {branches.length > 0 ? (
                 <div className="sub-input-row">
                   <span className="sub-input-icon">⇄</span>
@@ -395,7 +391,7 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
             <div className="sub-field">
               <label className="sub-label">
                 <span style={{ fontSize: 14 }}>🌐</span>
-                Live Demo URL <span className="db-required">*</span>
+                URL живого демо <span className="db-required">*</span>
               </label>
               <div className="sub-input-row">
                 <span className="sub-input-icon">🌐</span>
@@ -408,14 +404,14 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
           <div className="sub-field">
             <label className="sub-label">
               <span style={{ fontSize: 14 }}>▶</span>
-              Pitch Video URL <span className="db-required">*</span>
+              URL пітч-відео <span className="db-required">*</span>
             </label>
             <div className="sub-input-row">
               <span className="sub-input-icon">▶</span>
               <input
-                
                 type="url" value={videoUrl}
-                placeholder="YouTube Video" />
+                onChange={e => setVideoUrl(e.target.value)}
+                placeholder="Відео на YouTube" />
             </div>
           </div>
         </div>
@@ -423,20 +419,20 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
         {/* ── Documentation & Notes ── */}
         <div className="sub-card">
           <div className="sub-card-accent" style={{ background: '#3b82f6' }} />
-          <h3 className="sub-card-title">Documentation & Notes</h3>
+          <h3 className="sub-card-title">Документація та підказки</h3>
 
           {/* File upload */}
           <div className="sub-field">
             <label className="sub-file-drop">
               <input type="file" style={{ display: 'none' }} />
               <div className="sub-file-drop-icon">☁️</div>
-              <p className="sub-file-drop-title">Click to upload or drag and drop</p>
-              <p className="sub-file-drop-hint">Architecture diagrams, pitch decks (PDF, PNG, JPG up to 10MB)</p>
+              <p className="sub-file-drop-title">Клікніть, щоб завантажити</p>
+              <p className="sub-file-drop-hint">Схеми архітектури, презентації (PDF, PNG, JPG до 10МБ)</p>
             </label>
           </div>
 
           <div className="sub-field">
-            <label className="sub-label">Additional Notes for Judges</label>
+            <label className="sub-label">Додаткові нотатки для суддів</label>
             <div className="sub-notes-toolbar">
               {[['B','**','**',{fontWeight:700}],['I','*','*',{fontStyle:'italic'}],['≡','- ','',{}],['🔗','[','](url)',{}]].map(([l,p,s,st]) => (
                 <button key={l} type="button" className="sub-notes-btn" style={st} onClick={() => {
@@ -444,9 +440,9 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
                   if (!ta) return;
                   const start = ta.selectionStart, end = ta.selectionEnd;
                   const sel = desc.substring(start, end);
-                  const newVal = desc.substring(0, start) + p + (sel || 'text') + s + desc.substring(end);
+                  const newVal = desc.substring(0, start) + p + (sel || 'текст') + s + desc.substring(end);
                   setDesc(newVal);
-                  setTimeout(() => { ta.focus(); ta.setSelectionRange(start + p.length, start + p.length + (sel || 'text').length); }, 0);
+                  setTimeout(() => { ta.focus(); ta.setSelectionRange(start + p.length, start + p.length + (sel || 'текст').length); }, 0);
                 }}>{l}</button>
               ))}
             </div>
@@ -456,7 +452,7 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
               rows={5}
               value={desc}
               onChange={e => setDesc(e.target.value)}
-              placeholder="Provide any specific instructions for running the demo, test credentials, or constraints..."
+              placeholder="Надайте будь-які специфічні інструкції для запуску демо, тестові облікові дані або обмеження..."
               style={{ resize: 'vertical' }}
             />
           </div>
@@ -467,17 +463,17 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
           <label className="sub-lock-label">
             <input type="checkbox" className="sub-lock-checkbox" checked={locked} onChange={e => setLocked(e.target.checked)} disabled={isDeadlinePast} />
             <span className="sub-lock-text">
-              <strong>Lock submission for judging</strong>
-              <span>Checking this indicates your project is final. You will not be able to edit these details after the deadline passes.</span>
+              <strong>Заблокувати роботу для оцінювання</strong>
+              <span>Позначивши це, ви підтверджуєте, що проект є фінальним. Ви не зможете редагувати ці дані після дедлайну.</span>
             </span>
           </label>
           <div className="sub-footer-actions">
             <button type="submit" className="sub-submit-btn" disabled={saving || isDeadlinePast}>
-              {saving ? 'Saving...' : (existing ? <><IconSave style={{ width: 14, height: 14 }} /> Update</> : <>Submit Entry →</>)}
+              {saving ? 'Збереження...' : (existing ? <><IconSave style={{ width: 14, height: 14 }} /> Оновити</> : <>Подати роботу →</>)}
             </button>
             {!isDeadlinePast && (
               <button type="button" className="sub-draft-btn" onClick={e => handleSave(null, true)} disabled={saving}>
-                Save as Draft
+                Зберегти чернетку
               </button>
             )}
           </div>
@@ -628,7 +624,7 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
   const subEnd   = team.tournament_submission_end   ? new Date(team.tournament_submission_end).getTime()   : null;
   const inSubmissionWindow = subStart && subEnd
     ? (now >= subStart && now <= subEnd)
-    : tournStatus === 'running'; // fallback: use running status if no explicit period
+    : tournStatus === 'running';
 
   const canSubmit = inSubmissionWindow;
   const canEdit   = tournStatus === 'registration';
@@ -693,12 +689,12 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
               <a href={submission.github_repo_url} target="_blank" rel="noreferrer" className="tw-repo-link">
                 <IconGithub style={{ width: 13, height: 13, verticalAlign: -2, marginRight: 5 }} />{submission.github_repo_url}
               </a>
-              <span className="tw-repo-branch">гілка: {submission.github_branch}</span>
+              <span className="tw-repo-branch">Гілка: {submission.github_branch}</span>
               {submission.live_demo_url && (
-                <a href={submission.live_demo_url} target="_blank" rel="noreferrer" className="tw-demo-link">🌐 Live demo</a>
+                <a href={submission.live_demo_url} target="_blank" rel="noreferrer" className="tw-demo-link">🌐 Живе демо</a>
               )}
               {submission.pitch_video_url && (
-                <a href={submission.pitch_video_url} target="_blank" rel="noreferrer" className="tw-demo-link">▶ Pitch video</a>
+                <a href={submission.pitch_video_url} target="_blank" rel="noreferrer" className="tw-demo-link">▶ Пітч-відео</a>
               )}
               {submission.description && (
                 <p className="tw-submitted-desc">{submission.description}</p>
@@ -732,6 +728,6 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
           </div>
         </div>
       )}
-      </div>
+    </div>
   );
 }
