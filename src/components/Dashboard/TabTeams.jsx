@@ -12,7 +12,7 @@ import IconGithub      from "@images/dashboard_components/icon_github.svg?react"
 import IconSend        from "@images/dashboard_components/send.svg?react";
 
 import { getMyTeams, getTeamById, updateTeam, searchUsers, getTournamentRounds, getTeamSubmissions, createSubmission, updateSubmission, API_BASE } from "@utils/authApi";
-import { StatusBadge, UserAvatar } from "./db.shared.jsx";
+import { StatusBadge, UserAvatar, pickCurrentRound } from "./db.shared.jsx";
 
 const AVATAR_GRADIENTS = [
   "linear-gradient(135deg,#AC9EF8,#7c5ff5)",
@@ -84,14 +84,12 @@ function SubmitWorkModal({ team, toast, onClose }) {
 
   useEffect(() => {
     getTournamentRounds(team.tournament_id).then(r => {
-      setRounds(r);
-      const active = r.filter(rd => rd.status === 'active' || !rd.status);
-      if (active.length) {
-        setRoundId(String(active[0].id));
-        setDeadline(active[0].end_date || null);
-      } else if (r.length) {
-        setRoundId(String(r[r.length - 1].id));
-        setDeadline(r[r.length - 1]?.end_date || null);
+      const list = Array.isArray(r) ? r : [];
+      setRounds(list);
+      const best = pickCurrentRound(list);
+      if (best) {
+        setRoundId(String(best.id));
+        setDeadline(best.end_date || null);
       }
     }).catch(() => {});
 
@@ -111,6 +109,23 @@ function SubmitWorkModal({ team, toast, onClose }) {
 
   const deadlineStatus = deadline ? deadlineInfo(deadline) : null;
   const isDeadlinePast = deadlineStatus?.isPast ?? false;
+
+  const now = Date.now();
+  const subStart = team.tournament_submission_start ? new Date(team.tournament_submission_start).getTime() : null;
+  const subEnd   = team.tournament_submission_end   ? new Date(team.tournament_submission_end).getTime()   : null;
+  const inSubmissionWindow = subStart && subEnd
+    ? (now >= subStart && now <= subEnd)
+    : team.tournament_status === 'running';
+  const isSubmissionBlocked = !inSubmissionWindow;
+  const blockReason = subStart && subEnd
+    ? (now < subStart
+      ? `Здача відкриється ${new Date(subStart).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+      : now > subEnd
+      ? 'Період здачі завершено'
+      : '')
+    : (team.tournament_status === 'registration' ? 'Здача відкриється після старту турніру'
+    : team.tournament_status === 'finished' ? 'Турнір завершено'
+    : '');
 
   const parseRepoPath = (url) => {
     try {
@@ -137,10 +152,17 @@ function SubmitWorkModal({ team, toast, onClose }) {
 
   const handleSubmit = async e => {
     e.preventDefault();
+    // Auto-select best round if none selected
+    let finalRoundId = roundId;
+    if (!finalRoundId && rounds.length > 0) {
+      const best = pickCurrentRound(rounds);
+      if (best) finalRoundId = String(best.id);
+    }
+    if (isSubmissionBlocked) { toast.error(blockReason || 'Здача наразі недоступна'); return; }
     if (isDeadlinePast) { toast.error('Дедлайн здачі роботи минув'); return; }
     if (!repoUrl.trim()) { toast.error('Вкажіть URL репозиторію'); return; }
     if (!branch.trim())  { toast.error('Оберіть гілку'); return; }
-    if (!roundId)        { toast.error('Не знайдено активного раунду'); return; }
+    if (!finalRoundId)   { toast.error('Не знайдено жодного раунду'); return; }
     setSaving(true);
     const payload = {
       github_repo_url: repoUrl.trim(),
@@ -154,7 +176,7 @@ function SubmitWorkModal({ team, toast, onClose }) {
         await updateSubmission(existing.id, payload);
         toast.success('Роботу оновлено!');
       } else {
-        await createSubmission(Number(roundId), { ...payload, team_id: team.id });
+        await createSubmission(Number(finalRoundId), { ...payload, team_id: team.id });
         toast.success('Роботу подано!');
       }
       onClose();
@@ -171,20 +193,12 @@ function SubmitWorkModal({ team, toast, onClose }) {
         </h2>
         <p style={{ margin: '0 0 12px', fontSize: 13, color: '#aaa' }}>{team.name} · {team.tournament_name}</p>
 
-        {/* Deadline warning */}
-        {deadline && (
-          <div className={`db-submit-deadline-info${isDeadlinePast ? ' past' : deadlineStatus?.diff < 3600000 ? ' urgent' : ''}`}>
-            <span>{isDeadlinePast ? '🔴' : deadlineStatus?.diff < 3600000 ? '🟠' : '🟢'}</span>
-            <span>
-              {isDeadlinePast
-                ? 'Дедлайн минув — здача заблокована'
-                : `Дедлайн: ${new Date(deadline).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} (ще ${deadlineStatus?.text})`
-              }
-            </span>
+        {isSubmissionBlocked ? (
+          <div style={{ padding: '24px 0', textAlign: 'center', color: '#888' }}>
+            <p style={{ fontSize: 32, margin: '0 0 8px' }}>�</p>
+            <p>{blockReason || 'Здача наразі недоступна'}</p>
           </div>
-        )}
-
-        {isDeadlinePast ? (
+        ) : isDeadlinePast ? (
           <div style={{ padding: '24px 0', textAlign: 'center', color: '#888' }}>
             <p style={{ fontSize: 32, margin: '0 0 8px' }}>🔒</p>
             <p>Термін здачі роботи минув.</p>
@@ -196,7 +210,7 @@ function SubmitWorkModal({ team, toast, onClose }) {
           </div>
         ) : (
           <>
-            {rounds.length > 1 && (
+            {rounds.length > 0 && (
               <div className="db-form-row" style={{ marginBottom: 12 }}>
                 <label>Раунд</label>
                 <select className="db-input" value={roundId} onChange={e => {
@@ -257,12 +271,13 @@ function SubmitWorkModal({ team, toast, onClose }) {
                 <label className="db-edit-label">📝 Опис проєкту</label>
                 <textarea className="db-input" rows={3} value={desc}
                   onChange={e => setDesc(e.target.value)}
-                  placeholder="Коротко опишіть проєкт..." />
+                  placeholder="Коротко опишіть проєкт..."
+                  style={{ resize: 'vertical' }} />
               </div>
 
               <div className="db-form-actions">
                 <button type="button" className="db-btn db-btn-ghost" onClick={onClose}>Скасувати</button>
-                <button type="submit" className="db-btn db-btn-primary" disabled={saving || isDeadlinePast}>
+                <button type="submit" className="db-btn db-btn-primary" disabled={saving || isDeadlinePast || isSubmissionBlocked}>
                   {saving ? 'Збереження...' : (existing ? <><IconSave style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Оновити</> : <><IconSend style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Подати роботу</>)}
                 </button>
               </div>
@@ -518,7 +533,13 @@ export default function TabTeams({ toast, setTab }) {
           {teams.map((t, idx) => {
             const isExp     = expanded === t.id;
             const canEdit   = t.tournament_status === "registration";
-            const canSubmit = t.tournament_status === "running";
+            const tNow = Date.now();
+            const tSubStart = t.tournament_submission_start ? new Date(t.tournament_submission_start).getTime() : null;
+            const tSubEnd   = t.tournament_submission_end   ? new Date(t.tournament_submission_end).getTime()   : null;
+            const inSubWindow = tSubStart && tSubEnd
+              ? (tNow >= tSubStart && tNow <= tSubEnd)
+              : t.tournament_status === 'running';
+            const canSubmit = inSubWindow;
             const detail    = detailCache[t.id];
             const members   = detail?.members || [];
             const gradient  = AVATAR_GRADIENTS[idx % AVATAR_GRADIENTS.length];

@@ -3,7 +3,7 @@ import {
   getTeamById, getTournamentRounds, getTeamSubmissions,
   createSubmission, updateSubmission, API_BASE,
 } from '@utils/authApi';
-import { StatusBadge, UserAvatar } from './db.shared.jsx';
+import { StatusBadge, UserAvatar, pickCurrentRound } from './db.shared.jsx';
 
 import IconPensil    from '@images/dashboard_components/pensil.svg?react';
 import IconTime      from '@images/dashboard_components/time.svg?react';
@@ -48,10 +48,7 @@ function WorkTaskSection({ rounds, submission, canSubmit, tournStatus }) {
     currentRound = rounds.find(r => r.id === submission.round_id || String(r.id) === String(submission.round_id));
   }
   if (!currentRound) {
-    currentRound = rounds.find(r => r.status === 'active');
-  }
-  if (!currentRound && rounds.length > 0) {
-    currentRound = rounds[0];
+    currentRound = pickCurrentRound(rounds);
   }
 
   if (!currentRound) {
@@ -242,9 +239,11 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
 
   useEffect(() => {
     if (!roundId && rounds.length > 0) {
-      const active = rounds.find(r => r.status === 'active' || !r.status) ?? rounds[rounds.length - 1];
-      setRoundId(String(active.id));
-      setDeadline(active.end_date || null);
+      const best = pickCurrentRound(rounds);
+      if (best) {
+        setRoundId(String(best.id));
+        setDeadline(best.end_date || null);
+      }
     }
   }, [rounds]);
 
@@ -292,10 +291,16 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
 
   const handleSave = async (e, draft = false) => {
     e?.preventDefault();
+    // Auto-select best round if none selected
+    let finalRoundId = roundId;
+    if (!finalRoundId && rounds.length > 0) {
+      const best = pickCurrentRound(rounds);
+      if (best) finalRoundId = String(best.id);
+    }
     if (isDeadlinePast) { toast.error('Дедлайн здачі роботи минув'); return; }
     if (!repoUrl.trim()) { toast.error('Вкажіть URL репозиторію'); setTouched(t => ({...t, repo: true})); return; }
     if (!branch.trim())  { toast.error('Оберіть гілку'); return; }
-    if (!roundId)        { toast.error('Не знайдено активного раунду'); return; }
+    if (!finalRoundId)   { toast.error('Не знайдено жодного раунду'); return; }
     setSaving(true);
     const payload = {
       github_repo_url: repoUrl.trim(),
@@ -309,7 +314,7 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
         await updateSubmission(existing.id, payload);
         toast.success(draft ? 'Чернетку збережено!' : 'Роботу оновлено!');
       } else {
-        await createSubmission(Number(roundId), { ...payload, team_id: team.id });
+        await createSubmission(Number(finalRoundId), { ...payload, team_id: team.id });
         toast.success(draft ? 'Чернетку збережено!' : 'Роботу подано!');
       }
       onSaved?.();
@@ -329,12 +334,12 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
             <span className="sub-status-dot" style={{ background: statusColor }} />
             SUBMISSION STATUS: {statusText}
           </span>
-          <h2 className="sub-hero-title">Здача проєкту</h2>
+          <h2 className="sub-hero-title">Final Project Submission</h2>
           <p className="sub-hero-desc">
-            {team.name} · {rounds.length > 1 ? `${rounds.length} раундів` : 'Фінальна здача'}
+            {team.name} · {rounds.length > 1 ? `${rounds.length} раундів` : 'Global AI Hackathon 2024'}. Ensure all required links and documentation are provided before locking your submission.
             {existing && <span className="sub-hero-saved"> · Збережено ✓</span>}
           </p>
-          {rounds.length > 1 && (
+          {rounds.length > 0 && (
             <select className="sub-round-select" value={roundId} onChange={e => setRoundId(e.target.value)}>
               {rounds.map(r => <option key={r.id} value={r.id}>{r.title || `Раунд ${r.order_index ?? r.id}`}</option>)}
             </select>
@@ -350,66 +355,72 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
         {/* ── Repository & Core Links ── */}
         <div className="sub-card">
           <div className="sub-card-accent" style={{ background: '#10b981' }} />
-          <h3 className="sub-card-title">Репозиторій та основні посилання</h3>
+          <h3 className="sub-card-title">Repository & Core Links</h3>
 
           <div className="sub-field">
             <label className="sub-label">
-              <IconGithub style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 6 }} />
-              GitHub репозиторій <span className="db-required">*</span>
+              <IconGithub style={{ width: 14, height: 14 }} />
+              GitHub Repository URL <span className="db-required">*</span>
             </label>
             <div className="sub-input-row">
+              <span className="sub-input-icon">🔗</span>
               <input
-                className={`db-input sub-input${touched.repo && !repoUrl.trim() ? ' sub-input--error' : ''}`}
                 value={repoUrl}
                 onChange={e => { setRepoUrl(e.target.value); setRepoValid(null); setBranches([]); }}
                 onBlur={e => { setTouched(t => ({...t, repo: true})); if (e.target.value.trim()) verifyRepo(e.target.value); }}
                 placeholder="https://github.com/username/repo"
               />
-              <button type="button" className="sub-verify-btn" onClick={fetchBranches} disabled={loadingB || !repoUrl.trim()}>
-                {loadingB ? '...' : '🔍'}
-              </button>
             </div>
-            {repoValid === true  && <p className="sub-field-hint sub-field-hint--ok">✔ Репозиторій знайдено та доступний</p>}
-            {repoValid === false && <p className="sub-field-hint sub-field-hint--err">✖ Репозиторій не знайдено або приватний</p>}
+            {repoValid === true  && <p className="sub-field-hint sub-field-hint--ok">🟢 Repository verified and accessible</p>}
+            {repoValid === false && <p className="sub-field-hint sub-field-hint--err">🔴 Repository not found or private</p>}
           </div>
 
           <div className="sub-row-2">
             <div className="sub-field">
-              <label className="sub-label">Гілка / Тег <span className="sub-optional">(Необов'язково)</span></label>
+              <label className="sub-label">Branch or Tag <span className="sub-optional">(Optional)</span></label>
               {branches.length > 0 ? (
-                <select className="db-input sub-input" value={branch} onChange={e => setBranch(e.target.value)}>
-                  {branches.map(b => <option key={b} value={b}>{b}</option>)}
-                </select>
+                <div className="sub-input-row">
+                  <span className="sub-input-icon">⑂</span>
+                  <select value={branch} onChange={e => setBranch(e.target.value)}>
+                    {branches.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                </div>
               ) : (
                 <div className="sub-input-row">
                   <span className="sub-input-icon">⑂</span>
-                  <input className="db-input sub-input sub-input--icon" value={branch} onChange={e => setBranch(e.target.value)} placeholder="main" />
+                  <input value={branch} onChange={e => setBranch(e.target.value)} placeholder="main" />
                 </div>
               )}
             </div>
             <div className="sub-field">
-              <label className="sub-label">🌐 Live Demo URL <span className="db-required">*</span></label>
+              <label className="sub-label">
+                <span style={{ fontSize: 14 }}>🌐</span>
+                Live Demo URL <span className="db-required">*</span>
+              </label>
               <div className="sub-input-row">
                 <span className="sub-input-icon">🌐</span>
-                <input className="db-input sub-input sub-input--icon" type="url" value={demoUrl}
-                  onChange={e => setDemoUrl(e.target.value)} placeholder="https://my-project.vercel.app" />
+                <input type="url" value={demoUrl}
+                  onChange={e => setDemoUrl(e.target.value)} placeholder="https://demo.my-project.app" />
               </div>
             </div>
           </div>
 
           <div className="sub-field">
-            <label className="sub-label">▶ Pitch Video URL <span className="db-required">*</span></label>
+            <label className="sub-label">
+              <span style={{ fontSize: 14 }}>▶</span>
+              Pitch Video URL <span className="db-required">*</span>
+            </label>
             <div className="sub-input-row">
               <span className="sub-input-icon">▶</span>
               <input
-                className={`db-input sub-input sub-input--icon${touched.video && !videoUrl.trim() ? ' sub-input--error' : ''}`}
+                className={touched.video && !videoUrl.trim() ? 'sub-input--error' : ''}
                 type="url" value={videoUrl}
                 onChange={e => setVideoUrl(e.target.value)}
                 onBlur={() => setTouched(t => ({...t, video: true}))}
-                placeholder="YouTube або Vimeo посилання (unlisted)" />
+                placeholder="YouTube or Vimeo unlisted link" />
             </div>
             {touched.video && !videoUrl.trim() && (
-              <p className="sub-field-hint sub-field-hint--err">✖ Відео URL необхідне для оцінювання</p>
+              <p className="sub-field-hint sub-field-hint--err">🔴 Video URL is required for final evaluation.</p>
             )}
           </div>
         </div>
@@ -417,10 +428,20 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
         {/* ── Documentation & Notes ── */}
         <div className="sub-card">
           <div className="sub-card-accent" style={{ background: '#3b82f6' }} />
-          <h3 className="sub-card-title">Документація та нотатки</h3>
+          <h3 className="sub-card-title">Documentation & Notes</h3>
+
+          {/* File upload */}
+          <div className="sub-field">
+            <label className="sub-file-drop">
+              <input type="file" style={{ display: 'none' }} />
+              <div className="sub-file-drop-icon">☁️</div>
+              <p className="sub-file-drop-title">Click to upload or drag and drop</p>
+              <p className="sub-file-drop-hint">Architecture diagrams, pitch decks (PDF, PNG, JPG up to 10MB)</p>
+            </label>
+          </div>
 
           <div className="sub-field">
-            <label className="sub-label">📝 Додаткові нотатки для журі</label>
+            <label className="sub-label">Additional Notes for Judges</label>
             <div className="sub-notes-toolbar">
               {[['B','**','**',{fontWeight:700}],['I','*','*',{fontStyle:'italic'}],['≡','- ','',{}],['🔗','[','](url)',{}]].map(([l,p,s,st]) => (
                 <button key={l} type="button" className="sub-notes-btn" style={st} onClick={() => {
@@ -428,19 +449,20 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
                   if (!ta) return;
                   const start = ta.selectionStart, end = ta.selectionEnd;
                   const sel = desc.substring(start, end);
-                  const newVal = desc.substring(0, start) + p + (sel || 'текст') + s + desc.substring(end);
+                  const newVal = desc.substring(0, start) + p + (sel || 'text') + s + desc.substring(end);
                   setDesc(newVal);
-                  setTimeout(() => { ta.focus(); ta.setSelectionRange(start + p.length, start + p.length + (sel || 'текст').length); }, 0);
+                  setTimeout(() => { ta.focus(); ta.setSelectionRange(start + p.length, start + p.length + (sel || 'text').length); }, 0);
                 }}>{l}</button>
               ))}
             </div>
             <textarea
               id="sub-desc-ta"
-              className="db-input sub-textarea"
+              className="sub-textarea"
               rows={5}
               value={desc}
               onChange={e => setDesc(e.target.value)}
-              placeholder="Вкажіть інструкції для запуску демо, тестові дані, відомі обмеження..."
+              placeholder="Provide any specific instructions for running the demo, test credentials, or constraints..."
+              style={{ resize: 'vertical' }}
             />
           </div>
         </div>
@@ -450,17 +472,17 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
           <label className="sub-lock-label">
             <input type="checkbox" className="sub-lock-checkbox" checked={locked} onChange={e => setLocked(e.target.checked)} disabled={isDeadlinePast} />
             <span className="sub-lock-text">
-              <strong>Заблокувати для оцінювання</strong>
-              <span>Після блокування зміни недоступні до кінця дедлайну</span>
+              <strong>Lock submission for judging</strong>
+              <span>Checking this indicates your project is final. You will not be able to edit these details after the deadline passes.</span>
             </span>
           </label>
           <div className="sub-footer-actions">
             <button type="submit" className="sub-submit-btn" disabled={saving || isDeadlinePast}>
-              {saving ? 'Збереження...' : existing ? 'Оновити →' : 'Подати роботу →'}
+              {saving ? 'Saving...' : (existing ? <><IconSave style={{ width: 14, height: 14 }} /> Update</> : <>Submit Entry →</>)}
             </button>
             {!isDeadlinePast && (
               <button type="button" className="sub-draft-btn" onClick={e => handleSave(null, true)} disabled={saving}>
-                Зберегти чернетку
+                Save as Draft
               </button>
             )}
           </div>
@@ -606,7 +628,14 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
                     : tournStatus === 'finished'      ? '#0ea5e9'
                     : '#888';
 
-  const canSubmit = tournStatus === 'running';
+  const now = Date.now();
+  const subStart = team.tournament_submission_start ? new Date(team.tournament_submission_start).getTime() : null;
+  const subEnd   = team.tournament_submission_end   ? new Date(team.tournament_submission_end).getTime()   : null;
+  const inSubmissionWindow = subStart && subEnd
+    ? (now >= subStart && now <= subEnd)
+    : tournStatus === 'running'; // fallback: use running status if no explicit period
+
+  const canSubmit = inSubmissionWindow;
   const canEdit   = tournStatus === 'registration';
 
   const tourDeadline = team.end_date ? deadlineInfo(team.end_date) : null;
@@ -651,60 +680,70 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
         </div>
       )}
 
+      {/* ── Submission (centered full-width) ── */}
+      {canSubmit ? (
+        <SubmissionSection
+          team={team}
+          toast={toast}
+          rounds={rounds}
+          existing={submission}
+          onSaved={loadData}
+        />
+      ) : submission ? (
+        <div className="sub-wrap">
+          <div className="sub-card" style={{ marginTop: 8 }}>
+            <div className="sub-card-accent" style={{ background: '#10b981' }} />
+            <h3 className="sub-card-title">Здана робота</h3>
+            <div className="tw-submitted-info" style={{ paddingLeft: 12 }}>
+              <a href={submission.github_repo_url} target="_blank" rel="noreferrer" className="tw-repo-link">
+                <IconGithub style={{ width: 13, height: 13, verticalAlign: -2, marginRight: 5 }} />{submission.github_repo_url}
+              </a>
+              <span className="tw-repo-branch">гілка: {submission.github_branch}</span>
+              {submission.live_demo_url && (
+                <a href={submission.live_demo_url} target="_blank" rel="noreferrer" className="tw-demo-link">🌐 Live demo</a>
+              )}
+              {submission.pitch_video_url && (
+                <a href={submission.pitch_video_url} target="_blank" rel="noreferrer" className="tw-demo-link">▶ Pitch video</a>
+              )}
+              {submission.description && (
+                <p className="tw-submitted-desc">{submission.description}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="sub-wrap">
+          <div className="sub-card" style={{ marginTop: 8 }}>
+            <div className="sub-card-accent" style={{ background: '#9ca3af' }} />
+            <h3 className="sub-card-title">Здача роботи</h3>
+            <p className="tw-section-note" style={{ paddingLeft: 12, margin: 0, color: '#6b7280' }}>
+              {subStart && subEnd
+                ? (now < subStart
+                  ? `Здача відкриється ${new Date(subStart).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+                  : now > subEnd
+                  ? 'Період здачі завершено. Роботи більше не приймаються.'
+                  : 'Здача наразі недоступна')
+                : tournStatus === 'registration'
+                ? 'Здача відкриється після старту турніру'
+                : tournStatus === 'finished'
+                ? 'Турнір завершено. Роботи більше не приймаються.'
+                : 'Здача наразі недоступна'}
+            </p>
+            {subStart && subEnd && now < subEnd && (
+              <div style={{ paddingLeft: 12 }}>
+                <DeadlineBar label="Період здачі до" dateStr={new Date(subEnd).toISOString()} />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── Main content ── */}
       <div className="tw-content">
         {/* Left: task + submission + docs */}
         <div className="tw-main-col">
           {/* Work Task */}
           <WorkTaskSection rounds={rounds} submission={submission} canSubmit={canSubmit} tournStatus={tournStatus} />
-
-          {/* Submission */}
-          {canSubmit ? (
-            <SubmissionSection
-              team={team}
-              toast={toast}
-              rounds={rounds}
-              existing={submission}
-              onSaved={loadData}
-            />
-          ) : submission ? (
-            <div className="tw-section">
-              <div className="tw-section-head">
-                <span className="tw-section-icon">✅</span>
-                <h3 className="tw-section-title">Здана робота</h3>
-                <span className="tw-section-badge">Подано</span>
-              </div>
-              <div className="tw-submitted-info">
-                <a href={submission.github_repo_url} target="_blank" rel="noreferrer" className="tw-repo-link">
-                  <IconGithub style={{ width: 13, height: 13, verticalAlign: -2, marginRight: 5 }} />{submission.github_repo_url}
-                </a>
-                <span className="tw-repo-branch">гілка: {submission.github_branch}</span>
-                {submission.live_demo_url && (
-                  <a href={submission.live_demo_url} target="_blank" rel="noreferrer" className="tw-demo-link">🌐 Live demo</a>
-                )}
-                {submission.pitch_video_url && (
-                  <a href={submission.pitch_video_url} target="_blank" rel="noreferrer" className="tw-demo-link">▶ Pitch video</a>
-                )}
-                {submission.description && (
-                  <p className="tw-submitted-desc">{submission.description}</p>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="tw-section tw-section--muted">
-              <div className="tw-section-head">
-                <span className="tw-section-icon"><IconSend style={{ width: 18, height: 18 }} /></span>
-                <h3 className="tw-section-title">Здача роботи</h3>
-              </div>
-              <p className="tw-section-note">
-                {tournStatus === 'registration'
-                  ? 'Здача відкриється після старту турніру'
-                  : tournStatus === 'finished'
-                  ? 'Турнір завершено. Роботи більше не приймаються.'
-                  : 'Здача наразі недоступна'}
-              </p>
-            </div>
-          )}
 
           {/* Notes & Docs */}
           <NotesSection

@@ -269,6 +269,29 @@ export function parseFileUrls(fileUrl) {
   return [fileUrl];
 }
 
+/** Pick the most relevant round for display/submission.
+ *  Priority: currently running by date → status=active → next upcoming → last past */
+export function pickCurrentRound(rounds) {
+  if (!Array.isArray(rounds) || rounds.length === 0) return null;
+  const now = Date.now();
+  const sorted = [...rounds].sort((a, b) => new Date(a.start_date || 0) - new Date(b.start_date || 0));
+  // 1. Round currently running by date
+  const byDate = sorted.find(r => {
+    const s = new Date(r.start_date || 0).getTime();
+    const e = new Date(r.end_date || 0).getTime();
+    return s <= now && now < e;
+  });
+  if (byDate) return byDate;
+  // 2. Round with status=active
+  const byStatus = sorted.find(r => r.status === 'active');
+  if (byStatus) return byStatus;
+  // 3. Next upcoming round
+  const upcoming = sorted.find(r => new Date(r.start_date || 0).getTime() > now);
+  if (upcoming) return upcoming;
+  // 4. Last round (all past)
+  return sorted[sorted.length - 1];
+}
+
 /* ══════════════════════════════════════════════════
    SHARED UI COMPONENTS
 ══════════════════════════════════════════════════ */
@@ -999,6 +1022,8 @@ export function TournamentForm({
   const [endDate, setEndDate] = useState(toDateTimeInput(t.end_date));
   const [regStart, setRegStart] = useState(toDateTimeInput(t.registration_start));
   const [regEnd, setRegEnd] = useState(toDateTimeInput(t.registration_end));
+  const [subStart, setSubStart] = useState(toDateTimeInput(t.submission_start));
+  const [subEnd, setSubEnd] = useState(toDateTimeInput(t.submission_end));
   const [teamsLimit, setTeamsLimit] = useState(t.teams_limit ?? '');
   const [minSize, setMinSize] = useState(t.min_team_size ?? 2);
   const [maxSize, setMaxSize] = useState(t.max_team_size ?? 5);
@@ -1036,6 +1061,8 @@ export function TournamentForm({
       end_date: endDate || null,
       registration_start: regStart || null,
       registration_end: regEnd || null,
+      submission_start: subStart || null,
+      submission_end: subEnd || null,
       teams_limit: teamsLimit === '' ? null : Number(teamsLimit),
       min_team_size: Number(minSize),
       max_team_size: Number(maxSize),
@@ -1472,6 +1499,19 @@ export function TournamentForm({
                   <label className="db-edit-label">Кінець реєстрації <span className="db-required">*</span></label>
                   <input type="datetime-local" className="db-input" value={regEnd} onChange={e => setRegEnd(e.target.value)} />
                   <small className="db-field-hint">⚙️ Після цього часу статус → Running</small>
+                </div>
+              </div>
+
+              <p className="db-wizard-section-subtitle" style={{ marginTop: 16 }}>Період здачі робіт</p>
+              <div className="db-edit-row-2">
+                <div className="db-edit-field">
+                  <label className="db-edit-label">Початок здачі</label>
+                  <input type="datetime-local" className="db-input" value={subStart} onChange={e => setSubStart(e.target.value)} />
+                  <small className="db-field-hint">Якщо не вказано — здача доступна поки турнір Running</small>
+                </div>
+                <div className="db-edit-field">
+                  <label className="db-edit-label">Кінець здачі</label>
+                  <input type="datetime-local" className="db-input" value={subEnd} onChange={e => setSubEnd(e.target.value)} />
                 </div>
               </div>
             </div>
