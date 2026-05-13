@@ -38,6 +38,124 @@ function deadlineInfo(dateStr) {
   return { isPast, text, diff, date: new Date(dateStr) };
 }
 
+/* ══════════════════════════════════════════════════
+   WorkTaskSection — round/task display
+═══════════════════════════════════════════════════ */
+function WorkTaskSection({ rounds, submission, canSubmit, tournStatus }) {
+  // Determine the round to display
+  let currentRound = null;
+  if (submission?.round_id) {
+    currentRound = rounds.find(r => r.id === submission.round_id || String(r.id) === String(submission.round_id));
+  }
+  if (!currentRound) {
+    currentRound = rounds.find(r => r.status === 'active');
+  }
+  if (!currentRound && rounds.length > 0) {
+    currentRound = rounds[0];
+  }
+
+  if (!currentRound) {
+    return (
+      <div className="tw-section tw-section--muted">
+        <div className="tw-section-head">
+          <span className="tw-section-icon">📋</span>
+          <h3 className="tw-section-title">Задача роботи</h3>
+        </div>
+        <p className="tw-section-note">
+          {tournStatus === 'registration'
+            ? "Задача з'явиться після старту турніру"
+            : tournStatus === 'finished'
+            ? 'Турнір завершено'
+            : 'Задача наразі недоступна'}
+        </p>
+      </div>
+    );
+  }
+
+  const dInfo = currentRound.end_date ? deadlineInfo(currentRound.end_date) : null;
+  const isPast = dInfo?.isPast ?? false;
+  const isUrgent = dInfo && !isPast && dInfo.diff < 86400000;
+  const statusColor = currentRound.status === 'active' ? '#2dba6e'
+    : currentRound.status === 'closed' ? '#ef4444'
+    : '#AC9EF8';
+  const statusLabel = currentRound.status === 'active' ? 'Активний'
+    : currentRound.status === 'closed' ? 'Завершений'
+    : 'Чернетка';
+
+  const mustHave = Array.isArray(currentRound.must_have_items) ? currentRound.must_have_items : [];
+  const materials = Array.isArray(currentRound.materials) ? currentRound.materials : [];
+
+  return (
+    <div className="tw-section tw-task-section">
+      <div className="tw-section-head">
+        <span className="tw-section-icon">📋</span>
+        <h3 className="tw-section-title">Задача роботи</h3>
+        <span className="tw-section-badge" style={{ background: `${statusColor}22`, color: statusColor, borderColor: `${statusColor}55` }}>
+          {statusLabel}
+        </span>
+      </div>
+
+      <div className="tw-task-body">
+        <h4 className="tw-task-title">{currentRound.title}</h4>
+
+        {currentRound.description && (
+          <div className="tw-task-block">
+            <span className="tw-task-label">Опис задачі</span>
+            <p className="tw-task-text">{currentRound.description}</p>
+          </div>
+        )}
+
+        {currentRound.tech_requirements && (
+          <div className="tw-task-block">
+            <span className="tw-task-label">🛠 Технічні вимоги</span>
+            <p className="tw-task-text">{currentRound.tech_requirements}</p>
+          </div>
+        )}
+
+        {mustHave.length > 0 && (
+          <div className="tw-task-block">
+            <span className="tw-task-label">✅ Обов'язково мати</span>
+            <ul className="tw-task-list">
+              {mustHave.map((item, i) => (
+                <li key={i} className="tw-task-list-item">{item}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {materials.length > 0 && (
+          <div className="tw-task-block">
+            <span className="tw-task-label">📎 Матеріали</span>
+            <ul className="tw-task-materials">
+              {materials.map((m, i) => (
+                <li key={i}>
+                  {m.startsWith('http') ? (
+                    <a href={m} target="_blank" rel="noreferrer" className="tw-task-link">🔗 {m}</a>
+                  ) : (
+                    <span className="tw-task-list-item">{m}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {dInfo && (
+          <div className={`tw-task-deadline${isPast ? ' past' : isUrgent ? ' urgent' : ''}`}>
+            <span className="tw-task-deadline-icon">⏱</span>
+            <span className="tw-task-deadline-text">
+              {isPast
+                ? `Дедлайн минув (${dInfo.text})`
+                : `Дедлайн: ${dInfo.date.toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} (ще ${dInfo.text})`
+              }
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function DeadlineBar({ label, dateStr }) {
   const info = deadlineInfo(dateStr);
   if (!info) return null;
@@ -535,8 +653,11 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
 
       {/* ── Main content ── */}
       <div className="tw-content">
-        {/* Left: submission + docs */}
+        {/* Left: task + submission + docs */}
         <div className="tw-main-col">
+          {/* Work Task */}
+          <WorkTaskSection rounds={rounds} submission={submission} canSubmit={canSubmit} tournStatus={tournStatus} />
+
           {/* Submission */}
           {canSubmit ? (
             <SubmissionSection

@@ -106,6 +106,12 @@ export default function TabChat({
   const [allUsers, setAllUsers] = useState([]);
   const [allUsersLoading, setAllUsersLoading] = useState(false);
 
+  // ── @mention autocomplete ────────────────────
+  const [mentionQuery, setMentionQuery]       = useState(null);   // null = closed, '' or 'abc' = open
+  const [mentionResults, setMentionResults]   = useState([]);
+  const [mentionIdx, setMentionIdx]           = useState(0);
+  const mentionRef = useRef(null);
+
   async function openChatProfile(basic) {
     setChatProfile({ ...basic, loading: true });
     try {
@@ -418,6 +424,18 @@ export default function TabChat({
     return () => document.removeEventListener('mousedown', fn);
   }, [ctxMenu]);
 
+  // Close mention dropdown on outside click (unless clicking inside the textarea or dropdown itself)
+  useEffect(() => {
+    if (mentionQuery === null) return;
+    const fn = e => {
+      const inDropdown = mentionRef.current && mentionRef.current.contains(e.target);
+      const inTextarea = inputRef.current && inputRef.current.contains(e.target);
+      if (!inDropdown && !inTextarea) { setMentionQuery(null); setMentionResults([]); }
+    };
+    document.addEventListener('mousedown', fn);
+    return () => document.removeEventListener('mousedown', fn);
+  }, [mentionQuery]);
+
   const send = async e => {
     e.preventDefault();
     if ((!text.trim() && !imgFiles.length) || !online) return;
@@ -442,17 +460,65 @@ export default function TabChat({
     socket.emit('message:typing', { room, isTyping: false });
     clearTimeout(typingTimer.current);
     setText(''); setReplyTo(null); setShowEmoji(false); setImgFiles([]);
+    setMentionQuery(null); setMentionResults([]);
     if (inputRef.current) { inputRef.current.style.height = 'auto'; }
   };
 
   const handleInput = e => {
-    setText(e.target.value);
+    const val = e.target.value;
+    setText(val);
     e.target.style.height = 'auto';
     e.target.style.height = Math.min(e.target.scrollHeight, 140) + 'px';
     if (!online) return;
     socket.emit('message:typing', { room, isTyping: true });
     clearTimeout(typingTimer.current);
     typingTimer.current = setTimeout(() => socket.emit('message:typing', { room, isTyping: false }), 2500);
+
+    // ── Detect @mention trigger ──
+    const el = e.target;
+    const cursor = el.selectionStart ?? val.length;
+    const before = val.slice(0, cursor);
+    const match = before.match(/@(\w{0,30})$/);
+    if (match) {
+      const q = match[1].toLowerCase();
+      setMentionQuery(q);
+      setMentionIdx(0);
+      // Filter from allUsers + messages authors as fallback
+      const seen = new Set();
+      const pool = [];
+      const addUser = u => { if (!seen.has(u.id ?? u.user_id)) { seen.add(u.id ?? u.user_id); pool.push(u); } };
+      allUsers.forEach(addUser);
+      messages.forEach(m => addUser({ id: m.user_id, username: m.username, user_avatar_url: m.user_avatar_url }));
+      const filtered = q
+        ? pool.filter(u => u.username && u.username.toLowerCase().includes(q)).slice(0, 8)
+        : pool.slice(0, 8);
+      setMentionResults(filtered);
+    } else {
+      if (mentionQuery !== null) { setMentionQuery(null); setMentionResults([]); }
+    }
+  };
+
+  // Insert selected @mention into text
+  const insertMention = (username) => {
+    const el = inputRef.current;
+    if (!el) return;
+    const cursor = el.selectionStart ?? text.length;
+    const before = text.slice(0, cursor);
+    const after = text.slice(cursor);
+    const replaced = before.replace(/@\w{0,30}$/, `@${username} `);
+    const newText = replaced + after;
+    setText(newText);
+    setMentionQuery(null);
+    setMentionResults([]);
+    // Restore cursor after React re-render
+    requestAnimationFrame(() => {
+      if (inputRef.current) {
+        const pos = replaced.length;
+        inputRef.current.selectionStart = pos;
+        inputRef.current.selectionEnd = pos;
+        inputRef.current.focus();
+      }
+    });
   };
 
   const addEmoji = emoji => { setText(t => t + emoji); setShowEmoji(false); inputRef.current?.focus(); };
@@ -697,6 +763,35 @@ export default function TabChat({
     finally { setAddMemberAdding(false); }
   };
 
+  // Render @mentions as highlighted clickable spans
+  const renderTextWithMentions = (text) => {
+    if (!text) return null;
+    const MENTION_RE = /@(\w+)/g;
+    const parts = [];
+    let last = 0;
+    let match;
+    while ((match = MENTION_RE.exec(text)) !== null) {
+      if (match.index > last) parts.push(text.slice(last, match.index));
+      const uname = match[1];
+      parts.push(
+        <span
+          key={`m-${match.index}`}
+          className={`db-chat-mention${uname === user?.username ? ' db-chat-mention--me' : ''}`}
+          onClick={e => {
+            e.stopPropagation();
+            const found = allUsers.find(u => u.username === uname)
+              || messages.find(m => m.username === uname);
+            if (found) openChatProfile({ user_id: found.id ?? found.user_id, username: uname, user_avatar_url: found.user_avatar_url });
+          }}
+          title={`@${uname}`}
+        >@{uname}</span>
+      );
+      last = match.index + match[0].length;
+    }
+    if (last < text.length) parts.push(text.slice(last));
+    return parts.length > 0 ? parts : text;
+  };
+
   /* ── Inner ChatMsg component ─────────────────── */
   function ChatMsg({ msg }) {
     const isMe  = msg.user_id === meId;
@@ -794,7 +889,7 @@ export default function TabChat({
                       ))}
                     </div>
                   )}
-                  {msg.text && <span className="db-chat-text">{msg.text}</span>}
+                  {msg.text && <span className="db-chat-text">{renderTextWithMentions(msg.text)}</span>}
                   {msg.edited_at && !bigEmoji && <span className="db-chat-edited"> (ред.)</span>}
                 </>
               )}
@@ -1270,6 +1365,37 @@ export default function TabChat({
               )}
             </div>
           )}
+          {/* ── @mention autocomplete dropdown ── */}
+          {mentionQuery !== null && mentionResults.length > 0 && (
+            <div className="db-mention-dropdown" ref={mentionRef}>
+              {mentionResults.map((u, i) => (
+                <button
+                  key={u.id ?? u.user_id}
+                  type="button"
+                  className={`db-mention-item${i === mentionIdx ? ' active' : ''}`}
+                  onMouseEnter={() => setMentionIdx(i)}
+                  onMouseDown={e => { e.preventDefault(); insertMention(u.username); }}
+                >
+                  <div className="db-mention-avatar-wrap">
+                    {u.user_avatar_url ? (
+                      <img
+                        src={u.user_avatar_url.startsWith('http') ? u.user_avatar_url : `${API_BASE}${u.user_avatar_url}`}
+                        alt={u.username}
+                        referrerPolicy="no-referrer"
+                        className="db-mention-avatar"
+                        onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextSibling && (e.currentTarget.nextSibling.style.removeProperty('display')); }}
+                      />
+                    ) : null}
+                    <div className="db-mention-avatar db-mention-avatar--initials"
+                      style={{ display: u.user_avatar_url ? 'none' : undefined }}>
+                      {(u.username || '?').slice(0, 2).toUpperCase()}
+                    </div>
+                  </div>
+                  <span className="db-mention-username">@{u.username}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <form className="db-chat-input-row" onSubmit={e => { e.preventDefault(); if (editingId) submitEdit(); else send(e); }}>
             <div className="db-chat-input-tools">
               <button type="button"
@@ -1304,6 +1430,13 @@ export default function TabChat({
                     }
                   }}
                   onKeyDown={e => {
+                    // ── @mention keyboard navigation ──
+                    if (mentionQuery !== null && mentionResults.length > 0) {
+                      if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIdx(i => (i + 1) % mentionResults.length); return; }
+                      if (e.key === 'ArrowUp')   { e.preventDefault(); setMentionIdx(i => (i - 1 + mentionResults.length) % mentionResults.length); return; }
+                      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertMention(mentionResults[mentionIdx].username); return; }
+                      if (e.key === 'Escape') { e.preventDefault(); setMentionQuery(null); setMentionResults([]); return; }
+                    }
                     if (e.key === 'Escape' && editingId) { e.preventDefault(); cancelEdit(); return; }
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();

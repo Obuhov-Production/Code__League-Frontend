@@ -220,6 +220,7 @@
   .db-chat-bubble      { font-size: 13.5px; padding: 9px 13px; }
   .db-chat-input-row   { padding: 10px 12px; gap: 6px; }
   .db-chat-input       { min-height: 40px; max-height: 100px; font-size: 14px; }
+  .db-mention-dropdown { left: 50px; right: 52px; }
   /* Send button: icon only on mobile */
   .db-send-btn         { padding: 0; width: 40px; justify-content: center; border-radius: 12px; }
   .db-send-label       { display: none; }
@@ -443,4 +444,12 @@
   .db-countdown-digits { gap: 6px; }
   .db-countdown-cell   { min-width: 40px; padding: 4px 6px; }
   .db-countdown-num    { font-size: 18px; }
+  .db-mention-dropdown { left: 10px; right: 10px; bottom: calc(100% + 6px); }
+  .db-mention-item { padding: 10px 12px; font-size: 15px; }
+  .db-mention-avatar { width: 32px; height: 32px; }
+  .db-mention-avatar-wrap { width: 32px; height: 32px; }
+  /* Team workspace */
+  .tw-task-title { font-size: 16px; }
+  .tw-task-text { font-size: 13px; }
+  .tw-task-deadline { padding: 8px 10px; font-size: 12px; }
 }
