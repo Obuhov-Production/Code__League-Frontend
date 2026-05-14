@@ -1,9 +1,9 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   getTournaments,
   createTournament, updateTournament,
   updateTournamentStatus, deleteTournament,
-  getAdminTeams, uploadTournamentFile, deleteTournamentFile,
+  getAdminTeams, getTeamById, uploadTournamentFile, deleteTournamentFile,
   getTournamentRounds, createRound, updateRound, deleteRound,
   advanceRound, uploadRoundFile,
 } from '@utils/authApi';
@@ -425,6 +425,86 @@ function EditTournamentModal({ tournament, toast, onClose, onSuccess }) {
    Доступ: create/edit/delete tournaments, view teams & results.
    Без управління користувачами та чатом (лише для Admin).
 ══════════════════════════════════════════════════ */
+const teamText = (value, fallback = '—') => {
+  const text = value == null ? '' : String(value).trim();
+  return text || fallback;
+};
+
+const teamMemberName = (member) => (
+  member?.full_name || member?.fullName || member?.username || member?.user?.username || member?.email || 'Учасник'
+);
+
+function OrganizerTeamPanel({ team, detail, loading, expanded, onToggle }) {
+  const data = detail || team;
+  const members = Array.isArray(data?.members) ? data.members : [];
+  const captainId = data?.captain_id ?? data?.captain?.id ?? team?.captain_id ?? null;
+  const captain = data?.captain || members.find(m => String(m.user_id ?? m.user?.id ?? m.id ?? '') === String(captainId ?? '')) || {};
+  const leaderEmail = teamText(data?.captain_email || captain?.email || data?.leader_email, 'Не вказано');
+  const telegram = teamText(data?.telegram_username || data?.telegram || data?.captain_telegram, 'Не вказано');
+
+  return (
+    <div className={`org-team-card${expanded ? ' expanded' : ''}`}>
+      <button type="button" className="org-team-head" onClick={onToggle}>
+        <span className="org-team-avatar">{teamText(team.name, '?').slice(0, 2).toUpperCase()}</span>
+        <span className="org-team-main">
+          <strong>{teamText(team.name, 'Без назви')}</strong>
+          <small>{teamText(team.tournament_name, 'Турнір не вказано')}</small>
+        </span>
+        <span className="org-team-tags">
+          {team.city && <span>{team.city}</span>}
+          {team.school && <span>{team.school}</span>}
+          <span>{Number(team.members_count ?? members.length ?? 0)} уч.</span>
+        </span>
+        <span className="org-team-chevron">{expanded ? '−' : '+'}</span>
+      </button>
+
+      {expanded && (
+        <div className="org-team-details">
+          {loading ? (
+            <div className="org-team-loading">Завантаження команди...</div>
+          ) : (
+            <>
+              <div className="org-team-info-grid">
+                <div><span>Капітан</span><strong>{teamText(data?.captain_name || team.captain_name || teamMemberName(captain))}</strong></div>
+                <div><span>Email лідера</span><strong>{leaderEmail}</strong></div>
+                <div><span>Telegram</span><strong>{telegram === 'Не вказано' ? telegram : `@${telegram.replace(/^@+/, '')}`}</strong></div>
+                <div><span>Місто</span><strong>{teamText(data?.city || team.city)}</strong></div>
+                <div><span>Заклад</span><strong>{teamText(data?.school || team.school)}</strong></div>
+                <div><span>Статус турніру</span><strong>{teamText(team.tournament_status)}</strong></div>
+              </div>
+
+              <div className="org-team-members-head">
+                <h4>Склад команди</h4>
+                <span>{members.length} учасників</span>
+              </div>
+              {members.length > 0 ? (
+                <div className="org-team-members">
+                  {members.map((member, index) => {
+                    const memberId = member.user_id ?? member.user?.id ?? member.id;
+                    const isCaptain = captainId != null && String(memberId) === String(captainId);
+                    return (
+                      <div key={`${memberId || index}-${index}`} className="org-team-member">
+                        <span className="org-team-member-avatar">{teamMemberName(member).slice(0, 2).toUpperCase()}</span>
+                        <span className="org-team-member-body">
+                          <strong>{teamMemberName(member)} {isCaptain && <b>Капітан</b>}</strong>
+                          <small>{teamText(member.email || member.user?.email, 'Email не вказано')}</small>
+                        </span>
+                        <span className="org-team-member-status">{member.status || 'accepted'}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="org-team-empty">Склад команди ще не підтягнувся</div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TabOrganizer({ toast, user }) {
   const isAdmin = (user?.role || '').toLowerCase().split(',').map(r => r.trim()).includes('admin');
   const canEditTournament = (t) => {
@@ -443,6 +523,11 @@ export default function TabOrganizer({ toast, user }) {
   const [confirmModal,   setConfirmModal]   = useState(null);
   const [filterTour,     setFilterTour]     = useState('');
   const [search,         setSearch]         = useState('');
+  const [teamSearch,     setTeamSearch]     = useState('');
+  const [teamSort,       setTeamSort]       = useState('name');
+  const [expandedTeamId, setExpandedTeamId] = useState(null);
+  const [teamDetails,    setTeamDetails]    = useState({});
+  const [teamDetailLoading, setTeamDetailLoading] = useState({});
 
   const confirmAction = (message, onConfirm) => setConfirmModal({ message, onConfirm });
 
@@ -475,6 +560,45 @@ export default function TabOrganizer({ toast, user }) {
   const filteredTournaments = tournaments.filter(t =>
     !search || t.name.toLowerCase().includes(search.toLowerCase())
   );
+
+  const visibleTeams = useMemo(() => {
+    const q = teamSearch.trim().toLowerCase();
+    const filtered = teams.filter(team => {
+      const tourOk = !filterTour || String(team.tournament_id) === String(filterTour);
+      const queryOk = !q || [
+        team.name,
+        team.tournament_name,
+        team.captain_name,
+        team.captain_email,
+        team.city,
+        team.school,
+        team.telegram_username,
+      ].filter(Boolean).some(value => String(value).toLowerCase().includes(q));
+      return tourOk && queryOk;
+    });
+
+    return [...filtered].sort((a, b) => {
+      if (teamSort === 'members') return Number(b.members_count || 0) - Number(a.members_count || 0);
+      if (teamSort === 'captain') return teamText(a.captain_name).localeCompare(teamText(b.captain_name), 'uk');
+      if (teamSort === 'tournament') return teamText(a.tournament_name).localeCompare(teamText(b.tournament_name), 'uk');
+      return teamText(a.name).localeCompare(teamText(b.name), 'uk');
+    });
+  }, [teams, filterTour, teamSearch, teamSort]);
+
+  const toggleTeam = async (team) => {
+    const nextId = expandedTeamId === team.id ? null : team.id;
+    setExpandedTeamId(nextId);
+    if (!nextId || teamDetails[team.id]) return;
+    setTeamDetailLoading(prev => ({ ...prev, [team.id]: true }));
+    try {
+      const detail = await getTeamById(team.id);
+      setTeamDetails(prev => ({ ...prev, [team.id]: detail }));
+    } catch {
+      toast.error('Не вдалося завантажити склад команди');
+    } finally {
+      setTeamDetailLoading(prev => ({ ...prev, [team.id]: false }));
+    }
+  };
 
   return (
     <div className="db-tab">
@@ -650,8 +774,52 @@ export default function TabOrganizer({ toast, user }) {
 
           {/* ─── TEAMS (read-only view) ─── */}
           {orgTab === 'teams' && (
-            <div className="db-admin-table-wrap">
-              <div style={{ marginBottom: 12, display: 'flex', gap: 10, alignItems: 'center' }}>
+            <div className="org-teams-panel">
+              <div className="org-teams-view">
+                <div className="org-teams-toolbar org-teams-toolbar--new">
+                  <div className="org-teams-title">
+                    <strong>{visibleTeams.length}</strong>
+                    <span>команд у вибірці</span>
+                  </div>
+                  <input
+                    className="db-input"
+                    value={teamSearch}
+                    onChange={e => setTeamSearch(e.target.value)}
+                    placeholder="Пошук: команда, капітан, місто, заклад..."
+                  />
+                  <select className="db-select db-select-sm" value={filterTour} onChange={e => setFilterTour(e.target.value)}>
+                    <option value="">Усі турніри</option>
+                    {[...new Map(teams
+                      .filter(t => t.tournament_id != null)
+                      .map(t => [t.tournament_id, t.tournament_name || 'Без назви'])
+                    ).entries()].map(([id, name]) => (
+                      <option key={id} value={id}>{name}</option>
+                    ))}
+                  </select>
+                  <select className="db-select db-select-sm" value={teamSort} onChange={e => setTeamSort(e.target.value)}>
+                    <option value="name">За назвою</option>
+                    <option value="tournament">За турніром</option>
+                    <option value="captain">За капітаном</option>
+                    <option value="members">За кількістю учасників</option>
+                  </select>
+                </div>
+
+                <div className="org-teams-list">
+                  {visibleTeams.length === 0 ? (
+                    <div className="org-team-empty">Команд за цими фільтрами немає</div>
+                  ) : visibleTeams.map(team => (
+                    <OrganizerTeamPanel
+                      key={team.id}
+                      team={team}
+                      detail={teamDetails[team.id]}
+                      loading={!!teamDetailLoading[team.id]}
+                      expanded={expandedTeamId === team.id}
+                      onToggle={() => toggleTeam(team)}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="org-teams-toolbar">
                 <label style={{ fontSize: 13, color: '#666' }}>Турнір:</label>
                 <select
                   className="db-select db-select-sm"

@@ -32,10 +32,85 @@
 }
 
 .reviews-page_wall {
-  overflow: hidden;
   padding: 6px 0 0;
-  width: 100vw;
-  margin-left: calc(50% - 50vw);
+}
+
+.reviews-page_tools {
+  display: grid;
+  grid-template-columns: minmax(150px, 190px) minmax(220px, 1fr) repeat(3, minmax(150px, 180px));
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 22px;
+  padding: 14px;
+  border: 1px solid rgba(172, 158, 248, 0.22);
+  border-radius: 20px;
+  background: rgba(25, 26, 35, 0.94);
+}
+
+.reviews-page_tools-label {
+  margin: 0 0 3px;
+  color: rgba(243, 243, 243, 0.58);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.reviews-page_tools strong {
+  color: var(--main_color);
+  font-size: 26px;
+  line-height: 1;
+}
+
+.reviews-page_tools span {
+  margin-left: 6px;
+  color: rgba(243, 243, 243, 0.55);
+  font-size: 13px;
+}
+
+.reviews-page_search,
+.reviews-page_select {
+  width: 100%;
+  height: 44px;
+  border: 1px solid rgba(172, 158, 248, 0.22);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color_light);
+  padding: 0 13px;
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+.reviews-page_search:focus,
+.reviews-page_select:focus {
+  border-color: rgba(172, 158, 248, 0.62);
+  box-shadow: 0 0 0 3px rgba(172, 158, 248, 0.12);
+}
+
+.reviews-page_select option {
+  background: #191a23;
+  color: #f3f3f3;
+}
+
+.reviews-page_grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 18px;
+  align-items: stretch;
+}
+
+.reviews-page_grid .reviews-page_bubble {
+  width: auto;
+  min-height: 168px;
+  flex: initial;
+}
+
+.reviews-page_empty {
+  padding: 34px 18px;
+  border: 1px dashed rgba(172, 158, 248, 0.26);
+  border-radius: 20px;
+  color: rgba(243, 243, 243, 0.7);
+  text-align: center;
+  background: rgba(25, 26, 35, 0.55);
 }
 
 .reviews-page_strip {
@@ -175,6 +250,15 @@
 @media (max-width: 768px) {
   .reviews-page_contact-form {
     max-width: 100%;
+  }
+
+  .reviews-page_tools {
+    grid-template-columns: 1fr;
+    border-radius: 16px;
+  }
+
+  .reviews-page_grid {
+    grid-template-columns: 1fr;
   }
 
   .reviews-page_strip {

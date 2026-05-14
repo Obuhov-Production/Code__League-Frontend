@@ -88,9 +88,10 @@ function TeamRegForm({ tournament, toast, onSuccess, onCancel, user }) {
     if (new Set(ids).size !== ids.length) {
       toast.error('Один користувач не може бути доданий двічі'); return;
     }
-    // Reject duplicate emails (leader vs members + members between themselves)
-    const allEmails = [emailTrim.toLowerCase(), ...members.map(m => m.linkedUser?.email?.trim().toLowerCase()).filter(Boolean)];
-    if (new Set(allEmails).size !== allEmails.length) {
+    // Leader is also stored as the first team member, so only member-to-member
+    // duplicates should be rejected here.
+    const memberEmails = members.map(m => m.linkedUser?.email?.trim().toLowerCase()).filter(Boolean);
+    if (new Set(memberEmails).size !== memberEmails.length) {
       toast.error('Email учасників повинні бути унікальними'); return;
     }
     setLoading(true);

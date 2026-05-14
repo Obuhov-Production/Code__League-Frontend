@@ -261,6 +261,10 @@ function RewiewsPage() {
 	const [isSubmitting, setIsSubmitting] = useState(false)
 	const [checkingAuth, setCheckingAuth] = useState(true)
 	const [isUserLoggedIn, setIsUserLoggedIn] = useState(isLoggedIn())
+	const [reviewQuery, setReviewQuery] = useState('')
+	const [ratingFilter, setRatingFilter] = useState('all')
+	const [sortMode, setSortMode] = useState('newest')
+	const [sourceFilter, setSourceFilter] = useState('all')
 	const [savedAnimationMs] = useState(() => {
 		const raw = Number(localStorage.getItem(STRIP_PROGRESS_KEY) || 0)
 		return Number.isFinite(raw) && raw >= 0 ? raw % STRIP_ANIMATION_DURATION : 0
@@ -381,6 +385,25 @@ function RewiewsPage() {
 		}
 		return rows
 	}, [reviews])
+
+	const visibleReviews = useMemo(() => {
+		const q = reviewQuery.trim().toLowerCase()
+		const filtered = reviews.filter((review) => {
+			const ratingOk = ratingFilter === 'all' || Number(review.rating || 0) === Number(ratingFilter)
+			const sourceOk = sourceFilter === 'all' || (sourceFilter === 'real' ? !String(review.id).startsWith('seed-') : String(review.id).startsWith('seed-'))
+			const queryOk = !q || [review.author, review.role, review.text]
+				.filter(Boolean)
+				.some((value) => String(value).toLowerCase().includes(q))
+			return ratingOk && sourceOk && queryOk
+		})
+
+		return [...filtered].sort((a, b) => {
+			if (sortMode === 'rating-high') return Number(b.rating || 0) - Number(a.rating || 0)
+			if (sortMode === 'rating-low') return Number(a.rating || 0) - Number(b.rating || 0)
+			if (sortMode === 'oldest') return new Date(a.createdAt || 0) - new Date(b.createdAt || 0)
+			return new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
+		})
+	}, [reviews, reviewQuery, ratingFilter, sortMode, sourceFilter])
 
 	const handleSubmit = async (e) => {
 		e.preventDefault()
@@ -515,16 +538,52 @@ function RewiewsPage() {
 				</section>
 
 				<section className="reviews-page_wall" aria-live="polite">
-					{!loading && strips.map((strip, rowIdx) => (
-						<div
-							key={rowIdx}
-							className={`reviews-page_strip ${rowIdx % 2 === 0 ? 'reviews-page_strip--loop' : 'reviews-page_strip--reverse'}`}
-						>
-							{strip.map((review, idx) => (
-								<ReviewBubble key={`strip-${rowIdx}-${review.id}-${idx}`} review={review} />
-							))}
+					<div className="container">
+						<div className="reviews-page_tools">
+							<div>
+								<p className="reviews-page_tools-label">Відгуки</p>
+								<strong>{visibleReviews.length}</strong>
+								<span>з {reviews.length}</span>
+							</div>
+							<input
+								className="reviews-page_search"
+								value={reviewQuery}
+								onChange={(e) => setReviewQuery(e.target.value)}
+								placeholder="Пошук за автором або текстом..."
+							/>
+							<select className="reviews-page_select" value={ratingFilter} onChange={(e) => setRatingFilter(e.target.value)}>
+								<option value="all">Усі оцінки</option>
+								<option value="5">5 зірок</option>
+								<option value="4">4 зірки</option>
+								<option value="3">3 зірки</option>
+								<option value="2">2 зірки</option>
+								<option value="1">1 зірка</option>
+							</select>
+							<select className="reviews-page_select" value={sortMode} onChange={(e) => setSortMode(e.target.value)}>
+								<option value="newest">Нові спочатку</option>
+								<option value="oldest">Старі спочатку</option>
+								<option value="rating-high">Вища оцінка</option>
+								<option value="rating-low">Нижча оцінка</option>
+							</select>
+							<select className="reviews-page_select" value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
+								<option value="all">Усі джерела</option>
+								<option value="real">Від користувачів</option>
+								<option value="preset">Приклади</option>
+							</select>
 						</div>
-					))}
+
+						{loading ? (
+							<div className="reviews-page_empty">Завантажуємо відгуки...</div>
+						) : visibleReviews.length === 0 ? (
+							<div className="reviews-page_empty">За цими фільтрами відгуків немає</div>
+						) : (
+							<div className="reviews-page_grid">
+								{visibleReviews.map((review) => (
+									<ReviewBubble key={`review-${review.id}`} review={review} />
+								))}
+							</div>
+						)}
+					</div>
 				</section>
 			</main>
 

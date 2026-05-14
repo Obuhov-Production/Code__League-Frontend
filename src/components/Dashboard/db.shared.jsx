@@ -4,7 +4,7 @@ const PublicProfileModal = lazy(() =>
   import('./PublicProfilePage.jsx').then(m => ({ default: m.PublicProfileModal }))
 );
 import { io } from 'socket.io-client';
-import { searchUsers, getUserProfile, getTournaments, getTournamentFiles, API_BASE, CHECK_BACKEND, getToken } from '@utils/authApi';
+import { searchUsers, getUserProfile, getTournaments, getTournament, getTournamentFiles, API_BASE, CHECK_BACKEND, getToken } from '@utils/authApi';
 
 import IconGithubSm  from '@images/dashboard_components/icon_github.svg?react';
 import IconLogoutSm  from '@images/dashboard_components/icon_logout.svg?react';
@@ -931,25 +931,95 @@ function JurySearchSelector({ selectedJury, onChange, initialUsers = [] }) {
 /* ══════════════════════════════════════════════════
    MARKDOWN RENDERER
 ══════════════════════════════════════════════════ */
-function MarkdownRenderer({ text }) {
+export function MarkdownRenderer({ text }) {
   const formatMarkdown = (txt) => {
     if (!txt) return '';
-    let html = txt
-      .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-      .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-      .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/__(.*?)__/g, '<u>$1</u>')
-      .replace(/~~(.*?)~~/g, '<del>$1</del>')
-      .replace(/`(.*?)`/g, '<code>$1</code>')
-      .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
-      .replace(/^- (.*$)/gim, '<li>$1</li>')
-      .replace(/<li>(.*?)<\/li>/g, (match) => match)
-      .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
-      .replace(/\n/g, '<br/>');
-    return html;
+    const escapeHtml = (value) => String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+    const inline = (value) => escapeHtml(value)
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+|\/[^)\s]*)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/__([^_]+)__/g, '<strong>$1</strong>')
+      .replace(/~~([^~]+)~~/g, '<del>$1</del>')
+      .replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+
+    const lines = String(txt).replace(/\r\n/g, '\n').split('\n');
+    const out = [];
+    let paragraph = [];
+    let list = [];
+    let inCode = false;
+    let codeLang = '';
+    let codeLines = [];
+
+    const flushParagraph = () => {
+      if (!paragraph.length) return;
+      out.push(`<p>${inline(paragraph.join(' '))}</p>`);
+      paragraph = [];
+    };
+
+    const flushList = () => {
+      if (!list.length) return;
+      out.push(`<ul>${list.map(item => `<li>${inline(item)}</li>`).join('')}</ul>`);
+      list = [];
+    };
+
+    for (const line of lines) {
+      const codeMatch = line.match(/^```(\w+)?\s*$/);
+      if (codeMatch) {
+        if (inCode) {
+          out.push(`<pre><code${codeLang ? ` data-lang="${escapeHtml(codeLang)}"` : ''}>${escapeHtml(codeLines.join('\n'))}</code></pre>`);
+          inCode = false;
+          codeLang = '';
+          codeLines = [];
+        } else {
+          flushParagraph();
+          flushList();
+          inCode = true;
+          codeLang = codeMatch[1] || '';
+        }
+        continue;
+      }
+
+      if (inCode) {
+        codeLines.push(line);
+        continue;
+      }
+
+      if (!line.trim()) {
+        flushParagraph();
+        flushList();
+        continue;
+      }
+
+      const heading = line.match(/^(#{1,6})\s+(.+)$/);
+      if (heading) {
+        flushParagraph();
+        flushList();
+        const level = Math.min(heading[1].length, 3);
+        out.push(`<h${level}>${inline(heading[2].trim())}</h${level}>`);
+        continue;
+      }
+
+      const item = line.match(/^\s*[-*]\s+(.+)$/);
+      if (item) {
+        flushParagraph();
+        list.push(item[1].trim());
+        continue;
+      }
+
+      paragraph.push(line.trim());
+    }
+
+    if (inCode) out.push(`<pre><code${codeLang ? ` data-lang="${escapeHtml(codeLang)}"` : ''}>${escapeHtml(codeLines.join('\n'))}</code></pre>`);
+    flushParagraph();
+    flushList();
+    return out.join('');
   };
 
   return (
@@ -995,7 +1065,14 @@ function parsePrizeList(value) {
 }
 
 function normalizeTournamentJury(tournament) {
-  const users = tournament?.jury_members || tournament?.jury || tournament?.assigned_jury || [];
+  const users =
+    tournament?.jury_members ||
+    tournament?.juryMembers ||
+    tournament?.assigned_jury ||
+    tournament?.assignedJury ||
+    tournament?.judges ||
+    tournament?.jury ||
+    [];
   if (!Array.isArray(users)) return [];
   return users.filter(u => u && u.id).map(u => ({
     ...u,
@@ -1005,7 +1082,18 @@ function normalizeTournamentJury(tournament) {
 
 function normalizeTournamentJuryIds(tournament) {
   if (Array.isArray(tournament?.jury_ids)) return tournament.jury_ids.map(Number).filter(Boolean);
+  if (Array.isArray(tournament?.juryIds)) return tournament.juryIds.map(Number).filter(Boolean);
+  if (Array.isArray(tournament?.assigned_jury_ids)) return tournament.assigned_jury_ids.map(Number).filter(Boolean);
+  if (Array.isArray(tournament?.judge_ids)) return tournament.judge_ids.map(Number).filter(Boolean);
   return normalizeTournamentJury(tournament).map(u => Number(u.id)).filter(Boolean);
+}
+
+function firstDefined(...values) {
+  return values.find(v => v !== undefined && v !== null && v !== '');
+}
+
+function tournamentField(tournament, ...keys) {
+  return firstDefined(...keys.map(key => tournament?.[key]));
 }
 
 function insertMd(textareaId, before, after, setFn, currentVal) {
@@ -1033,6 +1121,8 @@ export function TournamentForm({
 }) {
   const isCreate = mode === 'create';
   const t = tournament || {};
+  const initialRules = tournamentField(t, 'rules', 'tournament_rules', 'rules_text', 'rulesText');
+  const initialTz = tournamentField(t, 'tz', 'tournament_tz', 'technical_task', 'technicalTask', 'task_text', 'taskText');
 
   const [step, setStep] = useState(1);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -1047,8 +1137,8 @@ export function TournamentForm({
   const [parentTournaments, setParentTournaments] = useState([]);
 
   // Step 2 — Правила
-  const [rulesMode, setRulesMode] = useState(t.rules_mode || (t.rules_file_url ? 'file' : 'file'));
-  const [rulesText, setRulesText] = useState(t.rules || '');
+  const [rulesMode, setRulesMode] = useState(t.rules_mode || (initialRules ? 'text' : 'file'));
+  const [rulesText, setRulesText] = useState(initialRules || '');
   const [rulesFile, setRulesFile] = useState(null);
   const [rulesFileName, setRulesFileName] = useState(
     t.rules_file_url ? fileNameFromUrl(t.rules_file_url) : ''
@@ -1056,8 +1146,8 @@ export function TournamentForm({
   const [rulesFileRemoved, setRulesFileRemoved] = useState(false);
 
   // Step 3 — ТЗ
-  const [tzMode, setTzMode] = useState(t.tz ? 'text' : (!isCreate && t.id ? 'file' : 'text'));
-  const [tz, setTz] = useState(t.tz || '');
+  const [tzMode, setTzMode] = useState(initialTz ? 'text' : (!isCreate && t.id ? 'file' : 'text'));
+  const [tz, setTz] = useState(initialTz || '');
   const [tzMainFile, setTzMainFile] = useState(null);
   const [tzFiles, setTzFiles] = useState([]);
   const [existingFiles, setExistingFiles] = useState({ rules: [], tz: [], misc: [] });
@@ -1069,12 +1159,12 @@ export function TournamentForm({
   const [initialJuryUsers, setInitialJuryUsers] = useState(normalizeTournamentJury(t));
 
   // Step 5 — Налаштування
-  const [startDate, setStartDate] = useState(toDateTimeInput(t.start_date));
-  const [endDate, setEndDate] = useState(toDateTimeInput(t.end_date));
-  const [regStart, setRegStart] = useState(toDateTimeInput(t.registration_start));
-  const [regEnd, setRegEnd] = useState(toDateTimeInput(t.registration_end));
-  const [subStart, setSubStart] = useState(toDateTimeInput(t.submission_start));
-  const [subEnd, setSubEnd] = useState(toDateTimeInput(t.submission_end));
+  const [startDate, setStartDate] = useState(toDateTimeInput(tournamentField(t, 'start_date', 'tournament_start', 'startDate')));
+  const [endDate, setEndDate] = useState(toDateTimeInput(tournamentField(t, 'end_date', 'tournament_end', 'endDate')));
+  const [regStart, setRegStart] = useState(toDateTimeInput(tournamentField(t, 'registration_start', 'registrationStart', 'registration_start_date')));
+  const [regEnd, setRegEnd] = useState(toDateTimeInput(tournamentField(t, 'registration_end', 'registrationEnd', 'registration_end_date')));
+  const [subStart, setSubStart] = useState(toDateTimeInput(tournamentField(t, 'submission_start', 'tournament_submission_start', 'submissionStart')));
+  const [subEnd, setSubEnd] = useState(toDateTimeInput(tournamentField(t, 'submission_end', 'tournament_submission_end', 'submissionEnd')));
   const [teamsLimit, setTeamsLimit] = useState(t.teams_limit ?? '');
   const [minSize, setMinSize] = useState(t.min_team_size ?? 2);
   const [maxSize, setMaxSize] = useState(t.max_team_size ?? 5);
@@ -1093,6 +1183,46 @@ export function TournamentForm({
     if (isCreate || !t.id) return;
     let cancelled = false;
 
+    getTournament(t.id)
+      .then(detail => {
+        if (cancelled || !detail) return;
+
+        const detailRules = tournamentField(detail, 'rules', 'tournament_rules', 'rules_text', 'rulesText');
+        const detailTz = tournamentField(detail, 'tz', 'tournament_tz', 'technical_task', 'technicalTask', 'task_text', 'taskText');
+        if (!rulesText && detailRules) {
+          setRulesText(detailRules);
+          setRulesMode('text');
+        }
+        if (!tz && detailTz) {
+          setTz(detailTz);
+          setTzMode('text');
+        }
+
+        const nextStart = toDateTimeInput(tournamentField(detail, 'start_date', 'tournament_start', 'startDate'));
+        const nextEnd = toDateTimeInput(tournamentField(detail, 'end_date', 'tournament_end', 'endDate'));
+        const nextRegStart = toDateTimeInput(tournamentField(detail, 'registration_start', 'registrationStart', 'registration_start_date'));
+        const nextRegEnd = toDateTimeInput(tournamentField(detail, 'registration_end', 'registrationEnd', 'registration_end_date'));
+        const nextSubStart = toDateTimeInput(tournamentField(detail, 'submission_start', 'tournament_submission_start', 'submissionStart'));
+        const nextSubEnd = toDateTimeInput(tournamentField(detail, 'submission_end', 'tournament_submission_end', 'submissionEnd'));
+
+        if (!startDate && nextStart) setStartDate(nextStart);
+        if (!endDate && nextEnd) setEndDate(nextEnd);
+        if (!regStart && nextRegStart) setRegStart(nextRegStart);
+        if (!regEnd && nextRegEnd) setRegEnd(nextRegEnd);
+        if (!subStart && nextSubStart) setSubStart(nextSubStart);
+        if (!subEnd && nextSubEnd) setSubEnd(nextSubEnd);
+
+        const detailJury = normalizeTournamentJury(detail);
+        const detailJuryIds = normalizeTournamentJuryIds(detail);
+        if (detailJury.length) {
+          setInitialJuryUsers(detailJury);
+          setSelectedJury(detailJuryIds.length ? detailJuryIds : detailJury.map(u => Number(u.id)).filter(Boolean));
+        } else if (detailJuryIds.length) {
+          setSelectedJury(detailJuryIds);
+        }
+      })
+      .catch(() => {});
+
     getTournamentFiles(t.id)
       .then(data => {
         if (cancelled) return;
@@ -1109,14 +1239,18 @@ export function TournamentForm({
 
     fetch(`${API_BASE}/tournaments/${t.id}/jury`, { headers: { Authorization: `Bearer ${getToken()}` } })
       .then(res => res.ok ? res.json() : [])
-      .then(users => {
+      .then(data => {
+        const users = Array.isArray(data)
+          ? data
+          : (data?.jury_members || data?.juryMembers || data?.assigned_jury || data?.assignedJury || data?.judges || data?.jury || []);
         if (cancelled || !Array.isArray(users)) return;
         const normalized = users.filter(u => u?.id).map(u => ({
           ...u,
           username: u.username || u.full_name || u.name || u.email || `#${u.id}`,
         }));
+        const normalizedIds = normalized.map(u => Number(u.id)).filter(Boolean);
         setInitialJuryUsers(normalized);
-        setSelectedJury(prev => prev.length ? prev : normalized.map(u => Number(u.id)).filter(Boolean));
+        setSelectedJury(normalizedIds);
       })
       .catch(() => {});
 
@@ -1163,6 +1297,7 @@ export function TournamentForm({
       elo_per_round: Number(eloPerRound),
       elo_winner: Number(eloWinner),
       tz: tz.trim() || null,
+      tz_enabled: tzMode === 'text' ? Boolean(tz.trim()) : (Boolean(tzMainFile) || tzFiles.length > 0 || existingFiles.tz.length > 0),
       additional_prizes: hasAdditionalPrizes
         ? JSON.stringify(additionalPrizes.filter(p => p.description.trim()))
         : null,
@@ -1526,13 +1661,16 @@ export function TournamentForm({
 
               {showTzPreview && (
                 <div className="modal-overlay" onClick={() => setShowTzPreview(false)}>
-                  <div className="db-preview-modal" onClick={e => e.stopPropagation()}>
+                  <div className="db-preview-modal db-preview-modal--tz-live db-preview-modal--tz-side" onClick={e => e.stopPropagation()}>
                     <div className="db-preview-header">
                       <h4>Попередній перегляд ТЗ</h4>
                       <button type="button" className="db-preview-close" onClick={() => setShowTzPreview(false)}>✕</button>
                     </div>
-                    <div className="db-preview-content">
-                      <MarkdownRenderer text={tz || '*(Технічне завдання порожнє)*'} />
+                    <div className="db-preview-content db-preview-content--live">
+                      <div className="db-preview-pane-title">Предпросмотр</div>
+                      <div className="db-preview-paper">
+                        <MarkdownRenderer text={tz || '*(Технічне завдання порожнє)*'} />
+                      </div>
                     </div>
                     <div className="db-preview-footer">
                       <button type="button" className="db-btn db-btn-ghost" onClick={() => setShowTzPreview(false)}>Закрити</button>
@@ -1625,45 +1763,45 @@ export function TournamentForm({
             <h4 className="db-wizard-step-title">📅 Налаштування турніру</h4>
 
             <div className="db-wizard-date-section">
-              <p className="db-wizard-section-subtitle">Часові рамки турніру</p>
+              <p className="db-wizard-section-subtitle">1. Реєстрація команд</p>
               <div className="db-edit-row-2">
                 <div className="db-edit-field">
-                  <label className="db-edit-label">Початок турніру <span className="db-required">*</span></label>
-                  <input type="datetime-local" className="db-input" value={startDate} onChange={e => setStartDate(e.target.value)} />
-                  <small className="db-field-hint">⚙️ Цей пункт визначає коли турнір стане доступним для реєстрації</small>
-                </div>
-                <div className="db-edit-field">
-                  <label className="db-edit-label">Кінець турніру <span className="db-required">*</span></label>
-                  <input type="datetime-local" className="db-input" value={endDate} onChange={e => setEndDate(e.target.value)} />
-                  <small className="db-field-hint">⚙️ Цей пункт визначає коли турнір завершиться повністю</small>
-                </div>
-              </div>
-
-              <p className="db-wizard-section-subtitle" style={{ marginTop: 16 }}>Реєстрація команд</p>
-              <div className="db-edit-row-2">
-                <div className="db-edit-field">
-                  <label className="db-edit-label">Початок реєстрації <span className="db-required">*</span></label>
+                  <label className="db-edit-label">Відкрити реєстрацію <span className="db-required">*</span></label>
                   <input type="datetime-local" className="db-input" value={regStart} onChange={e => setRegStart(e.target.value)} />
-                  <small className="db-field-hint">⚙️ Цей пункт визначає коли реєстрація стане доступною</small>
+                  <small className="db-field-hint">З цього моменту учасники бачать кнопку реєстрації та можуть створювати команду.</small>
                 </div>
                 <div className="db-edit-field">
-                  <label className="db-edit-label">Кінець реєстрації <span className="db-required">*</span></label>
+                  <label className="db-edit-label">Закрити реєстрацію <span className="db-required">*</span></label>
                   <input type="datetime-local" className="db-input" value={regEnd} onChange={e => setRegEnd(e.target.value)} />
-                  <small className="db-field-hint">⚙️ Цей пункт визначає коли реєстрація завершиться</small>
+                  <small className="db-field-hint">Після цього часу нові команди вже не зможуть податися на турнір.</small>
                 </div>
               </div>
 
-              <p className="db-wizard-section-subtitle" style={{ marginTop: 16 }}>Період здачі робіт</p>
+              <p className="db-wizard-section-subtitle" style={{ marginTop: 16 }}>2. Проведення турніру</p>
               <div className="db-edit-row-2">
                 <div className="db-edit-field">
-                  <label className="db-edit-label">Початок здачі</label>
-                  <input type="datetime-local" className="db-input" value={subStart} onChange={e => setSubStart(e.target.value)} />
-                  <small className="db-field-hint">⚙️ Цей пункт визначає коли здача робіт стане доступною</small>
+                  <label className="db-edit-label">Старт турніру <span className="db-required">*</span></label>
+                  <input type="datetime-local" className="db-input" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                  <small className="db-field-hint">У цей час турнір переходить у робочий етап: команди бачать ТЗ, матеріали та починають роботу.</small>
                 </div>
                 <div className="db-edit-field">
-                  <label className="db-edit-label">Кінець здачі</label>
+                  <label className="db-edit-label">Фініш турніру <span className="db-required">*</span></label>
+                  <input type="datetime-local" className="db-input" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                  <small className="db-field-hint">Фінальна дата турніру. Після неї турнір вважається завершеним.</small>
+                </div>
+              </div>
+
+              <p className="db-wizard-section-subtitle" style={{ marginTop: 16 }}>3. Здача робіт</p>
+              <div className="db-edit-row-2">
+                <div className="db-edit-field">
+                  <label className="db-edit-label">Відкрити здачу</label>
+                  <input type="datetime-local" className="db-input" value={subStart} onChange={e => setSubStart(e.target.value)} />
+                  <small className="db-field-hint">З цього часу команда бачить форму подачі роботи: GitHub, демо, відео та опис.</small>
+                </div>
+                <div className="db-edit-field">
+                  <label className="db-edit-label">Дедлайн здачі</label>
                   <input type="datetime-local" className="db-input" value={subEnd} onChange={e => setSubEnd(e.target.value)} />
-                  <small className="db-field-hint">⚙️ Цей пункт визначає коли здача робіт завершиться</small>
+                  <small className="db-field-hint">Після цього часу роботи більше не приймаються, а журі може фінально оцінювати подані проєкти.</small>
                 </div>
               </div>
             </div>
@@ -1860,8 +1998,8 @@ function toDateTimeInput(d) {
   try {
     const date = new Date(d);
     if (isNaN(date.getTime())) return '';
-    // format: YYYY-MM-DDTHH:MM
-    return date.toISOString().slice(0, 16);
+    const pad = value => String(value).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
   } catch { return ''; }
 }
 

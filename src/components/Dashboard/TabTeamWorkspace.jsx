@@ -3,7 +3,7 @@ import {
   getTeamById, getTournamentRounds, getTeamSubmissions,
   createSubmission, updateSubmission, API_BASE, getTournamentFiles
 } from '@utils/authApi';
-import { StatusBadge, UserAvatar, pickCurrentRound, getSocket } from './db.shared.jsx';
+import { StatusBadge, UserAvatar, pickCurrentRound, getSocket, MarkdownRenderer } from './db.shared.jsx';
 
 import IconSave      from '@images/dashboard_components/save.svg?react';
 import IconTeams     from '@images/dashboard_components/icon_teams.svg?react';
@@ -15,7 +15,6 @@ import IconClock     from '@images/dashboard_components/icon_clock_diamond.svg?r
 import IconExternal  from '@images/dashboard_components/icon_external_link.svg?react';
 import IconFolder    from '@images/dashboard_components/icon_folder_panel.svg?react';
 import IconPlay      from '@images/dashboard_components/icon_play.svg?react';
-import IconTournament from '@images/dashboard_components/icon_tournament.svg?react';
 
 const AVATAR_GRADIENTS = [
   'linear-gradient(135deg,#AC9EF8,#7c5ff5)',
@@ -335,7 +334,6 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
     if (!repoUrl.trim()) { toast.error('Вкажіть URL репозиторію'); setTouched(t => ({...t, repo: true})); return; }
     if (!branch.trim())  { toast.error('Оберіть гілку'); return; }
     if (!demoUrl.trim()) { toast.error('Вкажіть URL живого демо'); return; }
-    if (!videoUrl.trim()) { toast.error('Вкажіть URL пітч-відео'); return; }
     if (!finalRoundId)   { toast.error('Не знайдено жодного раунду'); return; }
     if (!locked) { toast.error('Підтвердіть, що робота фінальна і готова до оцінювання'); return; }
     
@@ -343,7 +341,7 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
     const payload = {
       github_repo_url: repoUrl.trim(),
       github_branch:   branch.trim(),
-      pitch_video_url: videoUrl.trim() || null,
+      pitch_video_url: videoUrl.trim(),
       live_demo_url:   demoUrl.trim()  || null,
       description:     desc.trim()     || null,
     };
@@ -352,7 +350,7 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
         await updateSubmission(existing.id, payload);
         toast.success(draft ? 'Чернетку збережено!' : 'Роботу оновлено!');
       } else {
-        await createSubmission(Number(finalRoundId), { ...payload, team_id: team.id });
+        await createSubmission(Number(finalRoundId), payload);
         toast.success('Роботу подано!');
       }
       localStorage.removeItem(draftKey);
@@ -368,7 +366,7 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
   const statusText  = isDeadlinePast ? 'ЗАКРИТО' : 'ВІДКРИТО';
 
   return (
-    <div className="sub-wrap">
+    <div className="sub-wrap" id="work-submit">
       {/* ── Dark header ── */}
       <div className="sub-hero">
         <div className="sub-hero-left">
@@ -450,7 +448,7 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
           <div className="sub-field">
             <label className="sub-label">
               <span style={{ fontSize: 14 }}>▶</span>
-              URL пітч-відео <span className="db-required">*</span>
+              URL пітч-відео <span className="sub-optional">(Необов'язково)</span>
             </label>
             <div className="sub-input-row">
               <span className="sub-input-icon">▶</span>
@@ -626,14 +624,9 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
   const [docUrl,   setDocUrl]   = useState(() => localStorage.getItem(docUrlKey) || '');
   const [docFile,  setDocFile]  = useState(null);
   const [tournamentFiles, setTournamentFiles] = useState([]);
-  const [checkedItems, setCheckedItems] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(`tw_check_${teamId}`) || '[]'); }
-    catch { return []; }
-  });
 
   useEffect(() => { localStorage.setItem(storageKey, notes); }, [notes]);
   useEffect(() => { localStorage.setItem(docUrlKey, docUrl); }, [docUrl]);
-  useEffect(() => { localStorage.setItem(`tw_check_${teamId}`, JSON.stringify(checkedItems)); }, [checkedItems, teamId]);
 
   const loadData = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -761,6 +754,102 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
     URL.revokeObjectURL(url);
   };
 
+  const hasTournamentMaterials =
+    (team.tournament_rules || team.tournament_rules_file_url) ||
+    ((team.tournament_tz_enabled && team.tournament_tz) || tournamentFiles.length > 0);
+
+  const scrollToSection = (event, id) => {
+    event.preventDefault();
+    const target = document.getElementById(id);
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const submissionBlock = canSubmit ? (
+    <SubmissionSection
+      team={team}
+      toast={toast}
+      rounds={rounds}
+      existing={submission}
+      onSaved={loadData}
+    />
+  ) : submission ? (
+    <div className="sub-wrap" id="work-submit">
+      <div className="sub-card tw-info-card">
+        <div className="sub-card-accent" style={{ background: '#10b981' }} />
+        <WorkspaceCardTitle icon={IconCheck} title="Здана робота" badge="Готово" accent="#10b981" />
+        <div className="tw-submitted-info">
+          <a href={submission.github_repo_url} target="_blank" rel="noreferrer" className="tw-repo-link">
+            <IconGithub />{submission.github_repo_url}
+          </a>
+          <span className="tw-repo-branch">Гілка: {submission.github_branch}</span>
+          {submission.live_demo_url && (
+            <a href={submission.live_demo_url} target="_blank" rel="noreferrer" className="tw-demo-link"><IconExternal /> Живе демо</a>
+          )}
+          {submission.pitch_video_url && (
+            <a href={submission.pitch_video_url} target="_blank" rel="noreferrer" className="tw-demo-link"><IconPlay /> Пітч-відео</a>
+          )}
+          {submission.description && (
+            <p className="tw-submitted-desc">{submission.description}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  ) : tournStatus === 'running' && activeRound ? (
+    <div className="sub-wrap" id="work-submit">
+      <div className="sub-card tw-info-card">
+        <div className="sub-card-accent" style={{ background: '#3b82f6' }} />
+        <WorkspaceCardTitle icon={IconClock} title="Робота над проєктом" badge="Очікує здачу" accent="#3b82f6" />
+        <div className="tw-soft-panel">
+          <p>Зараз ви працюєте над проєктом. Коли відкриється період здачі, тут з'явиться форма для завантаження вашої роботи.</p>
+          {subStart && subEnd && (
+            <div className="tw-date-strip tw-date-strip--blue">
+              <span>
+                <IconCalendar /> Період здачі: {new Date(subStart).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} - {new Date(subEnd).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </div>
+          )}
+          <div className="tw-work-notes">
+            <label>Нотатки команди</label>
+            <textarea
+              className="db-input"
+              rows={4}
+              placeholder="Посилання на ресурси, ідеї, todo-лист..."
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+            />
+            <p>Нотатки зберігаються локально у вашому браузері.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  ) : (
+    <div className="sub-wrap" id="work-submit">
+      <div className="sub-card tw-info-card">
+        <div className="sub-card-accent" style={{ background: '#9ca3af' }} />
+        <WorkspaceCardTitle icon={IconClock} title="Здача роботи" badge="Недоступно" accent="#9ca3af" />
+        <p className="tw-section-note">
+          {subStart && subEnd
+            ? (now < subStart
+              ? `Здача відкриється ${new Date(subStart).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+              : now > subEnd
+              ? 'Період здачі завершено. Роботи більше не приймаються.'
+              : 'Здача наразі недоступна')
+            : tournStatus === 'registration'
+            ? 'Здача відкриється після старту турніру'
+            : tournStatus === 'finished'
+            ? 'Турнір завершено. Роботи більше не приймаються.'
+            : 'Здача наразі недоступна'}
+        </p>
+        {subStart && subEnd && now < subEnd && (
+          <div>
+            <DeadlineBar label="Період здачі до" dateStr={new Date(subEnd).toISOString()} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="db-tab tw-page">
       {/* ── Header ── */}
@@ -800,101 +889,27 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
         </div>
       )}
 
-      {/* ── Active Round Info ── */}
-      {activeRound && (
-        <div className="sub-wrap">
-          <div className="sub-card tw-info-card tw-round-card">
-            <div className="sub-card-accent" style={{ background: '#7c5ff5' }} />
-            <WorkspaceCardTitle icon={IconTournament} title={activeRound.title} badge="Активний" accent="#7c5ff5" />
+      <nav className="tw-quick-nav" aria-label="Навігація по сторінці команди">
+        <a href="#work-submit" onClick={event => scrollToSection(event, 'work-submit')}>Здача</a>
+        {hasTournamentMaterials && <a href="#tournament-materials" onClick={event => scrollToSection(event, 'tournament-materials')}>Матеріали</a>}
+      </nav>
 
-              {activeRound.description && (
-                <div className="tw-round-field">
-                  <label>Завдання</label>
-                  <p>{activeRound.description}</p>
-                </div>
-              )}
-
-              {activeRound.tech_requirements && (
-                <div className="tw-round-field">
-                  <label>Технічні вимоги</label>
-                  <p>{activeRound.tech_requirements}</p>
-                </div>
-              )}
-
-              {activeRound.must_have_items?.length > 0 && (
-                <div className="tw-round-field">
-                  <label>Обов'язкові елементи</label>
-                  <div className="tw-check-list">
-                    {activeRound.must_have_items.map((item, i) => {
-                      const key = `${activeRound.id}-${i}`;
-                      const checked = checkedItems.includes(key);
-                      return (
-                        <label key={i} className={`tw-check-row${checked ? ' checked' : ''}`}>
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => setCheckedItems(prev =>
-                              checked ? prev.filter(x => x !== key) : [...prev, key]
-                            )}
-                          />
-                          <IconCheck />
-                          <span>{item}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {(activeRound.rules_file_url || activeRound.tz_file_url) && (
-                <div className="tw-link-row">
-                  {activeRound.rules_file_url && (
-                    <a href={fileUrl(activeRound.rules_file_url)} target="_blank" rel="noreferrer" download className="tw-file-pill">
-                      <IconFolder /> Правила раунду
-                    </a>
-                  )}
-                  {activeRound.tz_file_url && (
-                    <a href={fileUrl(activeRound.tz_file_url)} target="_blank" rel="noreferrer" download className="tw-file-pill blue">
-                      <IconAttach /> ТЗ раунду
-                    </a>
-                  )}
-                </div>
-              )}
-
-              <div className="tw-date-strip">
-                {activeRound.start_date && (
-                  <span><IconCalendar /> Початок: {new Date(activeRound.start_date).toLocaleString('uk-UA')}</span>
-                )}
-                {activeRound.end_date && (
-                  <span><IconClock /> Дедлайн: {new Date(activeRound.end_date).toLocaleString('uk-UA')}</span>
-                )}
-              </div>
-          </div>
-        </div>
-      )}
+      {submissionBlock}
 
       {/* ── Tournament Materials: Rules + TZ combined ── */}
-      {((team.tournament_rules || team.tournament_rules_file_url) ||
-        ((team.tournament_tz_enabled && team.tournament_tz) || tournamentFiles.length > 0)) && (
-        <div className="sub-wrap">
+      {hasTournamentMaterials && (
+        <div className="sub-wrap" id="tournament-materials">
           <div className="sub-card tw-info-card">
             <div className="sub-card-accent" style={{ background: '#7c5ff5' }} />
             <WorkspaceCardTitle icon={IconFolder} title="Матеріали турніру" accent="#7c5ff5" />
             <div className="tw-materials-grid">
               {/* ── Left: Rules ── */}
-              {(team.tournament_rules || team.tournament_rules_file_url) && (
+              {team.tournament_rules && (
                 <div className="tw-material-col">
                   <h4>Правила</h4>
-                  {team.tournament_rules && (
-                    <div className="tw-round-field">
-                      <p>{team.tournament_rules}</p>
-                    </div>
-                  )}
-                  {team.tournament_rules_file_url && (
-                    <a href={fileUrl(team.tournament_rules_file_url)} target="_blank" rel="noreferrer" download className="tw-file-pill">
-                      <IconExternal /> Відкрити правила
-                    </a>
-                  )}
+                  <div className="tw-round-field tw-markdown-card">
+                    <MarkdownRenderer text={team.tournament_rules} />
+                  </div>
                 </div>
               )}
 
@@ -904,8 +919,8 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
                   <h4>Технічне завдання</h4>
                   {team.tournament_tz_enabled && team.tournament_tz && (
                     <>
-                      <div className="tw-round-field">
-                        <p>{team.tournament_tz}</p>
+                      <div className="tw-round-field tw-markdown-card">
+                        <MarkdownRenderer text={team.tournament_tz} />
                       </div>
                       <div className="tw-link-row">
                         <button type="button" onClick={downloadTzMd} className="tw-file-pill blue">
@@ -931,100 +946,17 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
                 </div>
               )}
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Submission (centered full-width) ── */}
-      {canSubmit ? (
-        <SubmissionSection
-          team={team}
-          toast={toast}
-          rounds={rounds}
-          existing={submission}
-          onSaved={loadData}
-        />
-      ) : submission ? (
-        <div className="sub-wrap">
-          <div className="sub-card tw-info-card">
-            <div className="sub-card-accent" style={{ background: '#10b981' }} />
-            <WorkspaceCardTitle icon={IconCheck} title="Здана робота" badge="Готово" accent="#10b981" />
-            <div className="tw-submitted-info">
-              <a href={submission.github_repo_url} target="_blank" rel="noreferrer" className="tw-repo-link">
-                <IconGithub />{submission.github_repo_url}
-              </a>
-              <span className="tw-repo-branch">Гілка: {submission.github_branch}</span>
-              {submission.live_demo_url && (
-                <a href={submission.live_demo_url} target="_blank" rel="noreferrer" className="tw-demo-link"><IconExternal /> Живе демо</a>
-              )}
-              {submission.pitch_video_url && (
-                <a href={submission.pitch_video_url} target="_blank" rel="noreferrer" className="tw-demo-link"><IconPlay /> Пітч-відео</a>
-              )}
-              {submission.description && (
-                <p className="tw-submitted-desc">{submission.description}</p>
-              )}
-            </div>
-          </div>
-        </div>
-      ) : tournStatus === 'running' && activeRound ? (
-        /* ── Project work phase ── */
-        <div className="sub-wrap">
-          <div className="sub-card tw-info-card">
-            <div className="sub-card-accent" style={{ background: '#3b82f6' }} />
-            <WorkspaceCardTitle icon={IconClock} title="Робота над проєктом" badge="Очікує здачу" accent="#3b82f6" />
-            <div className="tw-soft-panel">
-              <p>
-                Зараз ви працюєте над проєктом. Коли відкриється період здачі, тут з'явиться форма для завантаження вашої роботи.
-              </p>
-              {subStart && subEnd && (
-                <div className="tw-date-strip tw-date-strip--blue">
-                  <span>
-                    <IconCalendar /> Період здачі: {new Date(subStart).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} — {new Date(subEnd).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
-              )}
-
-              {/* Temporary notes while working */}
-              <div className="tw-work-notes">
-                <label>Нотатки команди</label>
-                <textarea
-                  className="db-input"
-                  rows={4}
-                  placeholder="Посилання на ресурси, ідеї, todo-лист..."
-                  value={notes}
-                  onChange={e => setNotes(e.target.value)}
-                />
-                <p>Нотатки зберігаються локально у вашому браузері.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="sub-wrap">
-          <div className="sub-card tw-info-card">
-            <div className="sub-card-accent" style={{ background: '#9ca3af' }} />
-            <WorkspaceCardTitle icon={IconClock} title="Здача роботи" badge="Недоступно" accent="#9ca3af" />
-            <p className="tw-section-note">
-              {subStart && subEnd
-                ? (now < subStart
-                  ? `Здача відкриється ${new Date(subStart).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
-                  : now > subEnd
-                  ? 'Період здачі завершено. Роботи більше не приймаються.'
-                  : 'Здача наразі недоступна')
-                : tournStatus === 'registration'
-                ? 'Здача відкриється після старту турніру'
-                : tournStatus === 'finished'
-                ? 'Турнір завершено. Роботи більше не приймаються.'
-                : 'Здача наразі недоступна'}
-            </p>
-            {subStart && subEnd && now < subEnd && (
-              <div>
-                <DeadlineBar label="Період здачі до" dateStr={new Date(subEnd).toISOString()} />
+            {team.tournament_rules_file_url && (
+              <div className="tw-materials-footer">
+                <a href={fileUrl(team.tournament_rules_file_url)} target="_blank" rel="noreferrer" download className="tw-file-pill tw-rules-wide-pill">
+                  <IconExternal /> Відкрити правила
+                </a>
               </div>
             )}
           </div>
         </div>
       )}
+
     </div>
   );
 }
