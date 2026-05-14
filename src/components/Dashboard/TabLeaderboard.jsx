@@ -115,6 +115,7 @@ export default function TabLeaderboard({ user, toast }) {
                     <CertificateGenerator
                       teamName={row.team_name}
                       tournamentName={tournaments.find(t => String(t.id) === selected)?.name}
+                      tournamentIcon={tournaments.find(t => String(t.id) === selected)?.emoji}
                       place={i + 1}
                       score={score}
                       date={formatDate(new Date())}

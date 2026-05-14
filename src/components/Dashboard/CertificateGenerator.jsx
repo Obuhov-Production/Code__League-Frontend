@@ -37,6 +37,18 @@ export default function CertificateGenerator({
     window.print()
   }
 
+  const handleDownloadPdf = () => {
+    const oldTitle = document.title
+    const safeTeamName = String(teamName || 'certificate').replace(/[\\/:*?"<>|]/g, '-')
+
+    document.title = `${certificateId}-${safeTeamName}`
+    window.print()
+
+    window.setTimeout(() => {
+      document.title = oldTitle
+    }, 500)
+  }
+
   if (!show) {
     return (
       <button
@@ -86,19 +98,138 @@ export default function CertificateGenerator({
             padding: 0 !important;
             margin: 0 !important;
             background: #ffffff !important;
-            display: block !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            overflow: hidden !important;
           }
 
           .cert-card {
-            width: 297mm !important;
-            height: 210mm !important;
+            width: 286mm !important;
+            height: 199mm !important;
             max-width: none !important;
             max-height: none !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 28px 40px !important;
+            box-sizing: border-box !important;
             border-radius: 0 !important;
             box-shadow: none !important;
             page-break-after: avoid !important;
             page-break-before: avoid !important;
             page-break-inside: avoid !important;
+            overflow: hidden !important;
+            print-color-adjust: exact !important;
+            -webkit-print-color-adjust: exact !important;
+          }
+
+          .cert-top {
+            margin-bottom: 14px !important;
+          }
+
+          .cert-logo-wrap {
+            width: 88px !important;
+            height: 88px !important;
+          }
+
+          .cert-logo {
+            width: 58px !important;
+            height: 58px !important;
+          }
+
+          .cert-badge {
+            margin-bottom: 8px !important;
+            padding: 5px 16px !important;
+          }
+
+          .cert-title {
+            font-size: 48px !important;
+          }
+
+          .cert-title-accent {
+            font-size: 16px !important;
+            margin-top: 7px !important;
+          }
+
+          .cert-divider {
+            margin: 18px auto 16px !important;
+          }
+
+          .cert-sub {
+            max-width: 760px !important;
+            margin-bottom: 14px !important;
+            font-size: 15px !important;
+            line-height: 1.55 !important;
+          }
+
+          .cert-tournament {
+            margin-bottom: 14px !important;
+            padding: 9px 18px !important;
+          }
+
+          .cert-team-label {
+            margin-top: 8px !important;
+          }
+
+          .cert-team {
+            margin-bottom: 10px !important;
+            font-size: 38px !important;
+          }
+
+          .cert-achievement {
+            display: none !important;
+          }
+
+          .cert-print-result {
+            display: flex !important;
+          }
+
+          .cert-text {
+            margin-bottom: 14px !important;
+            font-size: 13px !important;
+            line-height: 1.55 !important;
+          }
+
+          .cert-bottom {
+            margin-top: 14px !important;
+          }
+
+          .cert-corner-bl {
+            bottom: 24px !important;
+          }
+
+          .cert-corner-br {
+            bottom: 24px !important;
+          }
+
+          .cert-seal {
+            width: 88px !important;
+            height: 88px !important;
+          }
+
+          .cert-seal-inner {
+            width: 62px !important;
+            height: 62px !important;
+          }
+
+          .cert-footer {
+            margin-top: 10px !important;
+            padding: 8px 28px 0 !important;
+            border-top-color: rgba(30, 27, 46, 0.08) !important;
+            font-size: 9px !important;
+            line-height: 1.35 !important;
+            gap: 16px !important;
+            align-items: center !important;
+          }
+
+          .cert-footer-logo {
+            display: none !important;
+          }
+
+          .cert-footer > div {
+            min-width: 0 !important;
+            max-width: 46% !important;
+            overflow-wrap: anywhere !important;
           }
 
           .cert-no-print {
@@ -126,6 +257,7 @@ export default function CertificateGenerator({
           width: min(1120px, 96vw);
           min-height: 760px;
           padding: 44px 58px;
+          box-sizing: border-box;
           background:
             linear-gradient(#ffffff, #ffffff) padding-box,
             linear-gradient(135deg, #7c5ff5, #f59e0b, #1e1b2e) border-box;
@@ -359,6 +491,21 @@ export default function CertificateGenerator({
           border: 1px solid rgba(124, 95, 245, 0.22);
         }
 
+        .cert-tournament-icon {
+          width: 32px;
+          height: 32px;
+          border-radius: 10px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex: 0 0 auto;
+          background: linear-gradient(135deg, rgba(124, 95, 245, 0.16), rgba(245, 158, 11, 0.18));
+          color: #1e1b2e;
+          font-size: 18px;
+          line-height: 1;
+          box-shadow: inset 0 0 0 1px rgba(124, 95, 245, 0.18);
+        }
+
         .cert-team-label {
           position: relative;
           z-index: 2;
@@ -424,6 +571,27 @@ export default function CertificateGenerator({
           font-weight: 900;
         }
 
+        .cert-print-result {
+          position: relative;
+          z-index: 2;
+          display: none;
+          align-items: center;
+          justify-content: center;
+          gap: 18px;
+          max-width: 760px;
+          margin: 12px auto 16px;
+          color: #1e1b2e;
+          font-family: Inter, Arial, sans-serif;
+          font-size: 14px;
+          font-weight: 900;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+        }
+
+        .cert-print-result span {
+          color: #7c5ff5;
+        }
+
         .cert-text {
           position: relative;
           z-index: 2;
@@ -476,10 +644,9 @@ export default function CertificateGenerator({
         .cert-bottom {
           position: relative;
           z-index: 2;
-          display: grid;
-          grid-template-columns: 1fr auto 1fr;
-          gap: 28px;
-          align-items: end;
+          display: flex;
+          justify-content: center;
+          align-items: center;
           margin-top: 28px;
         }
 
@@ -569,15 +736,17 @@ export default function CertificateGenerator({
           font-size: 11px;
         }
 
-        .cert-qr {
-          width: 54px;
-          height: 54px;
-          border-radius: 8px;
+        .cert-footer-logo {
+          width: 58px;
+          height: 58px;
+          border-radius: 16px;
+          padding: 10px;
+          object-fit: contain;
           background:
-            linear-gradient(90deg, #1e1b2e 8px, transparent 8px) 0 0 / 18px 18px,
-            linear-gradient(#1e1b2e 8px, transparent 8px) 0 0 / 18px 18px,
+            linear-gradient(135deg, rgba(124, 95, 245, 0.18), rgba(245, 158, 11, 0.20)),
             #ffffff;
-          border: 1px solid rgba(30, 27, 46, 0.18);
+          border: 1px solid rgba(30, 27, 46, 0.12);
+          box-shadow: inset 0 0 0 5px #ffffff;
         }
 
         .cert-actions {
@@ -624,14 +793,19 @@ export default function CertificateGenerator({
           background: #f3f1fb;
         }
 
+        .cert-action-muted {
+          color: #5b536e;
+          background: #ffffff;
+          box-shadow: inset 0 0 0 1px rgba(30, 27, 46, 0.12);
+        }
+
         @media (max-width: 900px) {
           .cert-card {
             min-height: auto;
             padding: 34px 26px;
           }
 
-          .cert-top,
-          .cert-bottom {
+          .cert-top {
             grid-template-columns: 1fr;
           }
 
@@ -654,6 +828,253 @@ export default function CertificateGenerator({
 
           .cert-seal {
             margin: 0 auto;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .cert-overlay {
+            padding: 12px 12px 112px;
+            align-items: flex-start;
+            justify-content: center;
+          }
+
+          .cert-card {
+            width: 100%;
+            min-height: auto;
+            padding: 26px 18px;
+            border-width: 6px;
+            border-radius: 18px;
+            box-shadow:
+              0 18px 46px rgba(30, 27, 46, 0.18),
+              inset 0 0 0 1px rgba(30, 27, 46, 0.08),
+              inset 0 0 0 7px rgba(124, 95, 245, 0.06);
+          }
+
+          .cert-card::before,
+          .cert-card::after {
+            width: 160px;
+            height: 160px;
+            opacity: 0.16;
+          }
+
+          .cert-card::before {
+            top: -74px;
+            left: -74px;
+          }
+
+          .cert-card::after {
+            right: -78px;
+            bottom: -78px;
+          }
+
+          .cert-inner-border {
+            inset: 12px;
+            border-radius: 12px;
+          }
+
+          .cert-corner {
+            width: 42px;
+            height: 42px;
+          }
+
+          .cert-corner-tl {
+            top: 18px;
+            left: 18px;
+          }
+
+          .cert-corner-tr {
+            top: 18px;
+            right: 18px;
+          }
+
+          .cert-corner-bl {
+            bottom: 18px;
+            left: 18px;
+          }
+
+          .cert-corner-br {
+            bottom: 18px;
+            right: 18px;
+          }
+
+          .cert-top {
+            grid-template-columns: 1fr auto 1fr;
+            gap: 8px;
+            margin-bottom: 14px;
+          }
+
+          .cert-meta {
+            font-size: 9px;
+            line-height: 1.35;
+            text-align: left;
+            word-break: break-word;
+          }
+
+          .cert-meta-right {
+            text-align: right;
+          }
+
+          .cert-logo-wrap {
+            width: 64px;
+            height: 64px;
+            border-width: 3px;
+          }
+
+          .cert-logo {
+            width: 42px;
+            height: 42px;
+          }
+
+          .cert-badge {
+            max-width: calc(100% - 24px);
+            padding: 5px 10px;
+            font-size: 9px;
+            letter-spacing: 0.12em;
+            white-space: normal;
+          }
+
+          .cert-title {
+            font-size: clamp(30px, 10vw, 40px);
+            letter-spacing: 0.04em;
+          }
+
+          .cert-title-accent {
+            margin-top: 7px;
+            font-size: 12px;
+            letter-spacing: 0.14em;
+          }
+
+          .cert-divider {
+            width: 88%;
+            margin: 16px auto 14px;
+          }
+
+          .cert-sub {
+            margin-bottom: 14px;
+            font-size: 13px;
+            line-height: 1.55;
+          }
+
+          .cert-tournament {
+            width: 100%;
+            max-width: 100%;
+            gap: 8px;
+            padding: 9px 12px;
+            border-radius: 16px;
+            font-size: 14px;
+            line-height: 1.25;
+            white-space: normal;
+          }
+
+          .cert-tournament-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            font-size: 16px;
+          }
+
+          .cert-team-label {
+            margin-top: 10px;
+            font-size: 10px;
+            letter-spacing: 0.12em;
+          }
+
+          .cert-team {
+            margin: 7px auto 10px;
+            font-size: clamp(28px, 9vw, 36px);
+          }
+
+          .cert-achievement {
+            grid-template-columns: 1fr;
+            gap: 8px;
+            margin: 16px auto 18px;
+          }
+
+          .cert-stat {
+            padding: 11px 12px;
+            border-radius: 14px;
+          }
+
+          .cert-stat-icon {
+            margin-bottom: 4px;
+            font-size: 20px;
+          }
+
+          .cert-stat-label {
+            margin-bottom: 3px;
+            font-size: 9px;
+          }
+
+          .cert-stat-value {
+            font-size: 15px;
+          }
+
+          .cert-text {
+            margin-bottom: 16px;
+            font-size: 12px;
+            line-height: 1.6;
+          }
+
+          .cert-members {
+            margin: 12px auto 16px;
+            padding: 12px;
+            border-radius: 14px;
+          }
+
+          .cert-bottom {
+            margin-top: 16px;
+          }
+
+          .cert-seal {
+            width: 82px;
+            height: 82px;
+          }
+
+          .cert-seal-inner {
+            width: 58px;
+            height: 58px;
+          }
+
+          .cert-footer {
+            flex-direction: column;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 16px;
+            padding-top: 10px;
+            font-size: 9px;
+            text-align: center;
+          }
+
+          .cert-footer-logo {
+            width: 46px;
+            height: 46px;
+            border-radius: 12px;
+            padding: 8px;
+            order: -1;
+          }
+
+          .cert-actions {
+            left: 12px;
+            right: 12px;
+            bottom: max(12px, env(safe-area-inset-bottom));
+            transform: none;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            padding: 8px;
+            border-radius: 14px;
+          }
+
+          .cert-action-btn {
+            min-width: 0;
+            padding: 11px 10px;
+            border-radius: 11px;
+            font-size: 12px;
+            white-space: nowrap;
+          }
+
+          .cert-action-ghost {
+            grid-column: 1 / -1;
           }
         }
       `}</style>
@@ -692,12 +1113,12 @@ export default function CertificateGenerator({
 
         <p className="cert-sub">
           Цим сертифікатом підтверджується, що команда успішно взяла участь
-          у турнірі з програмування, продемонструвала командну роботу,
+          у турнірі, продемонструвала командну роботу,
           швидкість прийняття рішень та високий рівень технічної підготовки.
         </p>
 
         <div className="cert-tournament">
-            <span>🏁</span>
+          <span className="cert-tournament-icon">{tournamentIcon || '\uD83C\uDFC6'}</span>
           <span>{tournamentName || 'Code League Tournament'}</span>
         </div>
 
@@ -716,8 +1137,8 @@ export default function CertificateGenerator({
 
           <div className="cert-stat">
             <span className="cert-stat-icon">⚡</span>
-            <div className="cert-stat-label">Формат</div>
-            <div className="cert-stat-value">Programming Battle</div>
+            <div className="cert-stat-label">Подія</div>
+            <div className="cert-stat-value">Турнір</div>
           </div>
 
           <div className="cert-stat">
@@ -727,9 +1148,15 @@ export default function CertificateGenerator({
           </div>
         </div>
 
+        <div className="cert-print-result">
+          <div>Результат: <span>{placeText}</span></div>
+          <div>Подія: <span>Турнір</span></div>
+          <div>Бали: <span>{scoreText ? scoreText : '—'}</span></div>
+        </div>
+
         <p className="cert-text">
           Команда показала наполегливість, уважність до деталей та здатність
-          ефективно працювати з кодом в умовах обмеженого часу. Цей документ
+          ефективно працювати над завданнями в умовах обмеженого часу. Цей документ
           засвідчує участь, досягнення та внесок команди у розвиток
           інтелектуального змагання CodeLeague.
         </p>
@@ -748,23 +1175,11 @@ export default function CertificateGenerator({
         )}
 
         <div className="cert-bottom">
-          <div className="cert-signature">
-            <div className="cert-sign-line" />
-            <div className="cert-sign-name">Організаційний комітет</div>
-            <div className="cert-sign-role">CodeLeague</div>
-          </div>
-
           <div className="cert-seal">
             <div className="cert-seal-inner">
               <div className="cert-seal-icon">🏅</div>
               <div className="cert-seal-text">Award</div>
             </div>
-          </div>
-
-          <div className="cert-signature">
-            <div className="cert-sign-line" />
-            <div className="cert-sign-name">Керівник турніру</div>
-            <div className="cert-sign-role">Підпис / Signature</div>
           </div>
         </div>
 
@@ -773,7 +1188,7 @@ export default function CertificateGenerator({
             Експортовано з платформи CodeLeague · Документ сформовано автоматично
           </div>
 
-          <div className="cert-qr" title={certificateId} />
+          <img src={logoImg} alt="CodeLeague" className="cert-footer-logo" title={certificateId} />
 
           <div>
             Перевірочний код: <strong>{certificateId}</strong>
@@ -784,6 +1199,10 @@ export default function CertificateGenerator({
       <div className="cert-actions cert-no-print">
         <button className="cert-action-btn cert-action-primary" onClick={handlePrint}>
           🖨 Друк / PDF
+        </button>
+
+        <button className="cert-action-btn cert-action-muted" onClick={handleDownloadPdf}>
+          📄 Скачати PDF
         </button>
 
         <button className="cert-action-btn cert-action-ghost" onClick={() => setShow(false)}>
