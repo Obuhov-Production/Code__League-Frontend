@@ -4,7 +4,7 @@ const PublicProfileModal = lazy(() =>
   import('./PublicProfilePage.jsx').then(m => ({ default: m.PublicProfileModal }))
 );
 import { io } from 'socket.io-client';
-import { searchUsers, getUserProfile, API_BASE, CHECK_BACKEND, getToken } from '@utils/authApi';
+import { searchUsers, getUserProfile, getTournaments, API_BASE, CHECK_BACKEND, getToken } from '@utils/authApi';
 
 import IconGithubSm  from '@images/dashboard_components/icon_github.svg?react';
 import IconLogoutSm  from '@images/dashboard_components/icon_logout.svg?react';
@@ -998,6 +998,8 @@ export function TournamentForm({
   const [status, setStatus] = useState(t.status || 'draft');
   const [name, setName] = useState(t.name || '');
   const [description, setDescription] = useState(t.description || '');
+  const [parentTournamentId, setParentTournamentId] = useState(t.parent_tournament_id || '');
+  const [parentTournaments, setParentTournaments] = useState([]);
 
   // Step 2 — Правила
   const [rulesMode, setRulesMode] = useState(t.rules_mode || (t.rules_file_url ? 'file' : 'file'));
@@ -1079,6 +1081,7 @@ export function TournamentForm({
 
     if (selectedJury.length > 0) payload.jury_ids = selectedJury;
     if (isCreate) payload.status = status;
+    if (parentTournamentId) payload.parent_tournament_id = Number(parentTournamentId);
 
     const files = {
       rules: rulesMode === 'file' ? rulesFile : null,
@@ -1086,6 +1089,15 @@ export function TournamentForm({
     };
     await onSubmit(payload, files);
   };
+
+  // Load available parent tournaments (only for create mode, exclude current)
+  useEffect(() => {
+    if (!isCreate) return;
+    getTournaments().then(list => {
+      const opts = (list || []).filter(x => x.id !== t.id);
+      setParentTournaments(opts);
+    }).catch(() => {});
+  }, [isCreate, t.id]);
 
   const ac = ACCENT[isCreate ? status : (t.status || 'draft')] || ACCENT.draft;
 
@@ -1212,6 +1224,25 @@ export function TournamentForm({
                 placeholder="Загальний опис турніру, теми, цільова аудиторія..."
               />
             </div>
+
+            {isCreate && (
+              <div className="db-edit-field" style={{ marginTop: 12 }}>
+                <label className="db-edit-label">🔗 Батьківський турнір (якщо це раунд)</label>
+                <select
+                  className="db-input db-select"
+                  value={parentTournamentId}
+                  onChange={e => setParentTournamentId(e.target.value)}
+                >
+                  <option value="">— Самостійний турнір —</option>
+                  {parentTournaments.map(pt => (
+                    <option key={pt.id} value={pt.id}>{pt.emoji || '🏆'} {pt.name}</option>
+                  ))}
+                </select>
+                <small className="db-field-hint">
+                  Якщо цей турнір є раундом іншого турніру, він автоматично додасться як раунд у батьківський.
+                </small>
+              </div>
+            )}
           </div>
         )}
 

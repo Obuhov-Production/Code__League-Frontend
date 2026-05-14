@@ -912,6 +912,19 @@ export async function advanceRound(tournamentId, direction) {
   });
 }
 
+export async function uploadRoundFile(roundId, type, file) {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${BASE}/rounds/${roundId}/upload-file?type=${type}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${getToken()}` },
+    body: form,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || data.message || 'Не вдалося завантажити файл');
+  return data;
+}
+
 /* ── Submissions ──────────────────────────────────── */
 
 export async function getTeamSubmissions(teamId) {

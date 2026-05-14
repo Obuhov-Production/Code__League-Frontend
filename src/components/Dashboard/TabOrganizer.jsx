@@ -5,7 +5,7 @@ import {
   updateTournamentStatus, deleteTournament,
   getAdminTeams, uploadTournamentFile,
   getTournamentRounds, createRound, updateRound, deleteRound,
-  advanceRound,
+  advanceRound, uploadRoundFile,
 } from '@utils/authApi';
 import { StatusBadge, ConfirmModal, formatDate, TournamentForm } from './db.shared.jsx';
 import IconTeams from '@images/dashboard_components/icon_teams.svg?react';
@@ -96,6 +96,9 @@ function RoundManager({ tournament, toast, onRoundsChange }) {
   const [newMust, setNewMust]   = useState('');
   const [newStart, setNewStart] = useState('');
   const [newEnd, setNewEnd]     = useState('');
+  const [newMaxTeams, setNewMaxTeams] = useState('');
+  const [newRulesFile, setNewRulesFile] = useState(null);
+  const [newTzFile, setNewTzFile]       = useState(null);
 
   const loadRounds = useCallback(async () => {
     setLoading(true);
@@ -131,7 +134,7 @@ function RoundManager({ tournament, toast, onRoundsChange }) {
     if (!newTitle.trim() || !newStart || !newEnd) { toast.error('Заповніть назву та дати'); return; }
     setSaving(true);
     try {
-      await createRound(tournament.id, {
+      const created = await createRound(tournament.id, {
         title: newTitle,
         description: newDesc || null,
         tech_requirements: newTech || null,
@@ -140,10 +143,18 @@ function RoundManager({ tournament, toast, onRoundsChange }) {
         deadline_at: new Date(newEnd).toISOString(),
         sort_order: rounds.length,
         status: 'draft',
+        max_teams_pass: newMaxTeams === '' ? null : Number(newMaxTeams),
       });
+      // Upload files if selected
+      if (newRulesFile && created?.id) {
+        await uploadRoundFile(created.id, 'rules', newRulesFile);
+      }
+      if (newTzFile && created?.id) {
+        await uploadRoundFile(created.id, 'tz', newTzFile);
+      }
       toast.success('Раунд створено');
       setShowCreate(false);
-      setNewTitle(''); setNewDesc(''); setNewTech(''); setNewMust(''); setNewStart(''); setNewEnd('');
+      setNewTitle(''); setNewDesc(''); setNewTech(''); setNewMust(''); setNewStart(''); setNewEnd(''); setNewMaxTeams(''); setNewRulesFile(null); setNewTzFile(null);
       await loadRounds();
     } catch (e) { toast.error(e.message); }
     finally { setSaving(false); }
@@ -210,9 +221,15 @@ function RoundManager({ tournament, toast, onRoundsChange }) {
       {/* Round details */}
       {current && (
         <div className="org-round-details">
+          {current.max_teams_pass && (
+            <div className="org-round-field">
+              <label>👥 Макс. команд що проходять</label>
+              <p>{current.max_teams_pass}</p>
+            </div>
+          )}
           {current.description && (
             <div className="org-round-field">
-              <label>Опис</label>
+              <label>Опис / Завдання</label>
               <p>{current.description}</p>
             </div>
           )}
@@ -228,6 +245,18 @@ function RoundManager({ tournament, toast, onRoundsChange }) {
               <ul>{current.must_have_items.map((item, i) => <li key={i}>{item}</li>)}</ul>
             </div>
           )}
+          <div className="org-round-files">
+            {current.rules_file_url && (
+              <a href={current.rules_file_url} target="_blank" rel="noreferrer" className="org-round-file-link">
+                📜 Правила
+              </a>
+            )}
+            {current.tz_file_url && (
+              <a href={current.tz_file_url} target="_blank" rel="noreferrer" className="org-round-file-link">
+                📋 ТЗ
+              </a>
+            )}
+          </div>
           <div className="org-round-dates">
             <span>📅 {new Date(current.starts_at).toLocaleString('uk-UA')} — {new Date(current.deadline_at).toLocaleString('uk-UA')}</span>
           </div>
@@ -256,6 +285,20 @@ function RoundManager({ tournament, toast, onRoundsChange }) {
             <div style={{ flex: 1 }}>
               <label style={{ fontSize: 12, color: '#888' }}>Дедлайн</label>
               <input className="db-input" type="datetime-local" value={newEnd} onChange={e => setNewEnd(e.target.value)} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 12, color: '#888' }}>Макс. команд що проходять</label>
+              <input className="db-input" type="number" min={1} placeholder="∞" value={newMaxTeams} onChange={e => setNewMaxTeams(e.target.value)} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 12, color: '#888' }}>Файл правил</label>
+              <input type="file" accept=".pdf,.doc,.docx,.txt,.md" onChange={e => setNewRulesFile(e.target.files?.[0] || null)} style={{ color: '#ccc', fontSize: 13 }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 12, color: '#888' }}>Файл ТЗ</label>
+              <input type="file" accept=".pdf,.zip,.txt,.md,.doc,.docx,.png,.jpg,.gif" onChange={e => setNewTzFile(e.target.files?.[0] || null)} style={{ color: '#ccc', fontSize: 13 }} />
             </div>
           </div>
           <button className="db-btn db-btn-primary" onClick={handleCreate} disabled={saving}>

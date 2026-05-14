@@ -715,10 +715,65 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
                 </div>
               )}
 
+              {(activeRound.rules_file_url || activeRound.tz_file_url) && (
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 8 }}>
+                  {activeRound.rules_file_url && (
+                    <a href={activeRound.rules_file_url} target="_blank" rel="noreferrer" style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      padding: '6px 12px', borderRadius: 8,
+                      background: 'rgba(245,158,11,.12)', color: '#f59e0b',
+                      fontSize: 13, textDecoration: 'none',
+                    }}>📜 Правила раунду</a>
+                  )}
+                  {activeRound.tz_file_url && (
+                    <a href={activeRound.tz_file_url} target="_blank" rel="noreferrer" style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      padding: '6px 12px', borderRadius: 8,
+                      background: 'rgba(59,130,246,.12)', color: '#60a5fa',
+                      fontSize: 13, textDecoration: 'none',
+                    }}>📋 ТЗ раунду</a>
+                  )}
+                </div>
+              )}
+
               <div style={{ display: 'flex', gap: 16, fontSize: 13, color: '#888', marginTop: 4, paddingBottom: 4 }}>
                 <span>📅 Початок: {new Date(activeRound.starts_at).toLocaleString('uk-UA')}</span>
                 <span>⏰ Дедлайн: {new Date(activeRound.deadline_at).toLocaleString('uk-UA')}</span>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Tournament Materials (Rules & TZ) ── */}
+      {(team.tournament_rules || team.tournament_rules_file_url || (team.tournament_tz_enabled && team.tournament_tz)) && (
+        <div className="sub-wrap">
+          <div className="sub-card" style={{ marginTop: 8 }}>
+            <div className="sub-card-accent" style={{ background: '#f59e0b' }} />
+            <h3 className="sub-card-title">📚 Матеріали турніру</h3>
+            <div style={{ padding: '0 12px' }}>
+              {team.tournament_rules && (
+                <div className="tw-round-field">
+                  <label style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5 }}>📜 Правила</label>
+                  <p style={{ margin: '4px 0 12px', lineHeight: 1.6, color: '#e0e0e0', whiteSpace: 'pre-wrap' }}>{team.tournament_rules}</p>
+                </div>
+              )}
+              {team.tournament_rules_file_url && (
+                <div style={{ margin: '0 0 12px' }}>
+                  <a href={team.tournament_rules_file_url} target="_blank" rel="noreferrer" style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '6px 12px', borderRadius: 8,
+                    background: 'rgba(245,158,11,.12)', color: '#f59e0b',
+                    fontSize: 13, textDecoration: 'none',
+                  }}>📜 Файл правил</a>
+                </div>
+              )}
+              {team.tournament_tz_enabled && team.tournament_tz && (
+                <div className="tw-round-field">
+                  <label style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5 }}>📋 Технічне завдання</label>
+                  <p style={{ margin: '4px 0 0', lineHeight: 1.6, color: '#e0e0e0', whiteSpace: 'pre-wrap' }}>{team.tournament_tz}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -752,6 +807,40 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
               {submission.description && (
                 <p className="tw-submitted-desc">{submission.description}</p>
               )}
+            </div>
+          </div>
+        </div>
+      ) : tournStatus === 'running' && activeRound ? (
+        /* ── Project work phase ── */
+        <div className="sub-wrap">
+          <div className="sub-card" style={{ marginTop: 8 }}>
+            <div className="sub-card-accent" style={{ background: '#3b82f6' }} />
+            <h3 className="sub-card-title">🔧 Робота над проєктом</h3>
+            <div style={{ padding: '0 12px' }}>
+              <p style={{ margin: '0 0 12px', color: '#e0e0e0', lineHeight: 1.6 }}>
+                Зараз ви працюєте над проєктом. Коли відкриється період здачі, тут з'явиться форма для завантаження вашої роботи.
+              </p>
+              {subStart && subEnd && (
+                <div style={{ marginBottom: 12, padding: '10px 14px', background: 'rgba(59,130,246,.08)', borderRadius: 8, border: '1px solid rgba(59,130,246,.2)' }}>
+                  <span style={{ fontSize: 13, color: '#60a5fa' }}>
+                    📅 Період здачі: {new Date(subStart).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} — {new Date(subEnd).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              )}
+
+              {/* Temporary notes while working */}
+              <div className="tw-work-notes">
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5 }}>📝 Нотатки команди</label>
+                <textarea
+                  className="db-input"
+                  rows={4}
+                  placeholder="Посилання на ресурси, ідеї, todo-лист..."
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  style={{ resize: 'vertical', marginTop: 6, fontSize: 14 }}
+                />
+                <p style={{ fontSize: 11, color: '#666', margin: '4px 0 0' }}>Нотатки зберігаються локально у вашому браузері.</p>
+              </div>
             </div>
           </div>
         </div>
