@@ -264,6 +264,29 @@ export default function TabOverview({ user, toast, onNavigate }) {
               </div>
             </div>
 
+            {/* Календар дедлайнів */}
+            <div className="db-ov-section">
+              <h3 className="db-ov-title">Календар дедлайнів</h3>
+              {(() => {
+                const events = tournaments.flatMap(t => {
+                  const items = [];
+                  if (t.registration_end) items.push({ label: 'Реєстрація', date: t.registration_end, name: t.name, color: '#AC9EF8' });
+                  if (t.end_date) items.push({ label: 'Кінець турніру', date: t.end_date, name: t.name, color: '#f59e0b' });
+                  return items;
+                }).filter(e => new Date(e.date) > new Date()).sort((a, b) => new Date(a.date) - new Date(b.date));
+                if (events.length === 0) return <p className="db-ov-empty">Немає майбутніх подій</p>;
+                return events.slice(0, 5).map((e, i) => (
+                  <div key={i} className="db-ov-item" onClick={() => onNavigate('tournaments')}>
+                    <div className="db-ov-dot" style={{ background: e.color }} />
+                    <div className="db-ov-item-text">
+                      <strong>{e.name}</strong>
+                      <span>{e.label} — {formatDate(e.date)}</span>
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+
             {/* Прогресс активности - только мои турниры и команды */}
             <div className="db-ov-section db-ov-section-progress">
               <h3 className="db-ov-title">Моя активність</h3>

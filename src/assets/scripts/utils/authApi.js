@@ -288,10 +288,10 @@ export async function getLeaderboard(tournamentId) {
 }
 
 export async function createAnnouncement(tournamentId, title, message) {
-  return request(`${BASE}/tournaments/${tournamentId}/announcements`, {
+  return request(`${BASE}/announcements`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ title, message }),
+    body: JSON.stringify({ tournament_id: tournamentId, title, message }),
   });
 }
 
@@ -910,6 +910,10 @@ export async function advanceRound(tournamentId, direction) {
     headers: authHeaders(),
     body: JSON.stringify({ direction }),
   });
+}
+
+export async function getTournamentFiles(tournamentId, type) {
+  return request(`${BASE}/tournaments/${tournamentId}/files${type ? `?type=${type}` : ''}`, { headers: authHeaders() });
 }
 
 export async function uploadRoundFile(roundId, type, file) {

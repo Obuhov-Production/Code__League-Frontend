@@ -21,7 +21,7 @@ import {
   updateTournamentStatus, deleteTournament,
   setUserRole, deleteAdminUser, setUserPassword, adminDeleteTeam,
   clearChatRoom, getCustomChatRooms, createChatRoom, deleteChatRoom,
-  getChatRoomSettings, setChatRoomSettings, postChatAnnouncement,
+  getChatRoomSettings, setChatRoomSettings, postChatAnnouncement, createAnnouncement,
   getAdminOrganizerApplications, reviewOrganizerApplication,
   getAdminUserBadges, adminGrantBadge, adminRevokeBadge,
   getUserDailyStats,
@@ -756,6 +756,9 @@ export default function TabAdmin({ toast }) {
   const [roomSettings,   setRoomSettings]   = useState({});
   const [announceRoom,   setAnnounceRoom]   = useState('general');
   const [announceText,   setAnnounceText]   = useState('');
+  const [tournamentAnnounceId, setTournamentAnnounceId] = useState('');
+  const [tournamentAnnounceTitle, setTournamentAnnounceTitle] = useState('');
+  const [tournamentAnnounceMsg, setTournamentAnnounceMsg] = useState('');
   const [settingsRoom,   setSettingsRoom]   = useState('general');
   const [savingSettings, setSavingSettings] = useState(false);
   const [creatingRoom,   setCreatingRoom]   = useState(false);
@@ -896,7 +899,7 @@ export default function TabAdmin({ toast }) {
   const confirmAction = (message, onConfirm) => setConfirmModal({ message, onConfirm });
 
   const handleStatus = async (id, status) => {
-    try { await updateTournamentStatus(id, status); toast.success('Статус оновлено'); load(); }
+    try { await updateTournamentStatus(id, status); toast.success('Статус оновлено'); load(); window.location.reload(); }
     catch (err) { toast.error(err.message); }
   };
   const handleDelete = async (id, name) => {
@@ -1005,6 +1008,17 @@ export default function TabAdmin({ toast }) {
       await postChatAnnouncement(announceRoom, announceText.trim());
       setAnnounceText('');
       toast.success('Оголошення надіслано');
+    } catch (err) { toast.error(err.message); }
+  };
+
+  const handleCreateTournamentAnnouncement = async e => {
+    e.preventDefault();
+    if (!tournamentAnnounceId || !tournamentAnnounceTitle.trim() || !tournamentAnnounceMsg.trim()) return;
+    try {
+      await createAnnouncement(Number(tournamentAnnounceId), tournamentAnnounceTitle.trim(), tournamentAnnounceMsg.trim());
+      setTournamentAnnounceTitle('');
+      setTournamentAnnounceMsg('');
+      toast.success('Оголошення турніру створено');
     } catch (err) { toast.error(err.message); }
   };
 
@@ -1693,12 +1707,12 @@ export default function TabAdmin({ toast }) {
                 </form>
               </div>
 
-              {/* ── CARD 3: Announcement ── */}
+              {/* ── CARD 3: Chat Announcement ── */}
               <div className="db-admin-card">
                 <div className="db-admin-card-header">
                   <div className="db-admin-card-icon" style={{ background: 'rgba(245,158,11,.12)' }}>📣</div>
                   <div className="db-admin-card-header-text">
-                    <h3 className="db-admin-card-title">Оголошення</h3>
+                    <h3 className="db-admin-card-title">Оголошення в чат</h3>
                     <p className="db-admin-card-sub">Системне повідомлення в чаті</p>
                   </div>
                 </div>
@@ -1729,6 +1743,43 @@ export default function TabAdmin({ toast }) {
                   <button type="submit" className="db-btn db-btn-primary" style={{ alignSelf: 'flex-start' }}
                     disabled={!announceText.trim() || announceText.length > 500}>
                     📣 Надіслати оголошення
+                  </button>
+                </form>
+              </div>
+
+              {/* ── CARD 4: Tournament Announcement ── */}
+              <div className="db-admin-card">
+                <div className="db-admin-card-header">
+                  <div className="db-admin-card-icon" style={{ background: 'rgba(59,130,246,.12)' }}>📢</div>
+                  <div className="db-admin-card-header-text">
+                    <h3 className="db-admin-card-title">Оголошення турніру</h3>
+                    <p className="db-admin-card-sub">Прив'язане до конкретного турніру</p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleCreateTournamentAnnouncement} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div className="db-form-row">
+                    <label className="db-admin-field-label">ТУРНІР</label>
+                    <CustomSelect value={tournamentAnnounceId} onChange={setTournamentAnnounceId}
+                      options={tournaments.map(t => ({ value: String(t.id), label: t.name }))} />
+                  </div>
+                  <div className="db-form-row">
+                    <label className="db-admin-field-label">ЗАГОЛОВОК</label>
+                    <input className="db-input" value={tournamentAnnounceTitle} onChange={e => setTournamentAnnounceTitle(e.target.value)}
+                      placeholder="Назва оголошення" maxLength={120} />
+                  </div>
+                  <div className="db-form-row">
+                    <label className="db-admin-field-label">ПОВІДОМЛЕННЯ</label>
+                    <textarea className="db-input db-announce-textarea" rows={4}
+                      value={tournamentAnnounceMsg} onChange={e => setTournamentAnnounceMsg(e.target.value)}
+                      placeholder="Текст оголошення..." maxLength={1000} />
+                    <div className="db-admin-char-count" style={{ color: tournamentAnnounceMsg.length > 900 ? '#ef4444' : undefined }}>
+                      {tournamentAnnounceMsg.length} / 1000
+                    </div>
+                  </div>
+                  <button type="submit" className="db-btn db-btn-primary" style={{ alignSelf: 'flex-start' }}
+                    disabled={!tournamentAnnounceId || !tournamentAnnounceTitle.trim() || !tournamentAnnounceMsg.trim()}>
+                    📢 Створити оголошення турніру
                   </button>
                 </form>
               </div>

@@ -88,6 +88,11 @@ function TeamRegForm({ tournament, toast, onSuccess, onCancel, user }) {
     if (new Set(ids).size !== ids.length) {
       toast.error('Один користувач не може бути доданий двічі'); return;
     }
+    // Reject duplicate emails (leader vs members + members between themselves)
+    const allEmails = [emailTrim.toLowerCase(), ...members.map(m => m.linkedUser?.email?.trim().toLowerCase()).filter(Boolean)];
+    if (new Set(allEmails).size !== allEmails.length) {
+      toast.error('Email учасників повинні бути унікальними'); return;
+    }
     setLoading(true);
     const cleanMembers = members.map(m => ({
       full_name: m.linkedUser.username,
@@ -106,6 +111,7 @@ function TeamRegForm({ tournament, toast, onSuccess, onCancel, user }) {
       };
       await registerTeam(teamPayload);
       onSuccess();
+      window.location.reload();
     }
     catch (err) { toast.error(err.message); }
     finally { setLoading(false); }

@@ -130,34 +130,62 @@ function RoundManager({ tournament, toast, onRoundsChange }) {
     });
   };
 
-  const handleCreate = async () => {
+  const handleSave = async () => {
     if (!newTitle.trim() || !newStart || !newEnd) { toast.error('Заповніть назву та дати'); return; }
     setSaving(true);
     try {
-      const created = await createRound(tournament.id, {
-        title: newTitle,
-        description: newDesc || null,
-        tech_requirements: newTech || null,
-        must_have_items: newMust ? newMust.split('\n').map(s => s.trim()).filter(Boolean) : [],
-        starts_at: new Date(newStart).toISOString(),
-        deadline_at: new Date(newEnd).toISOString(),
-        sort_order: rounds.length,
-        status: 'draft',
-        max_teams_pass: newMaxTeams === '' ? null : Number(newMaxTeams),
-      });
-      // Upload files if selected
-      if (newRulesFile && created?.id) {
-        await uploadRoundFile(created.id, 'rules', newRulesFile);
+      if (editMode && current) {
+        // UPDATE existing round
+        await updateRound(current.id, {
+          title: newTitle,
+          description: newDesc || null,
+          tech_requirements: newTech || null,
+          must_have_items: newMust ? newMust.split('\n').map(s => s.trim()).filter(Boolean) : [],
+          starts_at: new Date(newStart).toISOString(),
+          deadline_at: new Date(newEnd).toISOString(),
+          max_teams_pass: newMaxTeams === '' ? null : Number(newMaxTeams),
+        });
+        if (newRulesFile) await uploadRoundFile(current.id, 'rules', newRulesFile);
+        if (newTzFile) await uploadRoundFile(current.id, 'tz', newTzFile);
+        toast.success('Раунд оновлено');
+        setEditMode(false);
+      } else {
+        // CREATE new round
+        const created = await createRound(tournament.id, {
+          title: newTitle,
+          description: newDesc || null,
+          tech_requirements: newTech || null,
+          must_have_items: newMust ? newMust.split('\n').map(s => s.trim()).filter(Boolean) : [],
+          starts_at: new Date(newStart).toISOString(),
+          deadline_at: new Date(newEnd).toISOString(),
+          sort_order: rounds.length,
+          status: 'draft',
+          max_teams_pass: newMaxTeams === '' ? null : Number(newMaxTeams),
+        });
+        if (newRulesFile && created?.id) await uploadRoundFile(created.id, 'rules', newRulesFile);
+        if (newTzFile && created?.id) await uploadRoundFile(created.id, 'tz', newTzFile);
+        toast.success('Раунд створено');
+        setShowCreate(false);
       }
-      if (newTzFile && created?.id) {
-        await uploadRoundFile(created.id, 'tz', newTzFile);
-      }
-      toast.success('Раунд створено');
-      setShowCreate(false);
       setNewTitle(''); setNewDesc(''); setNewTech(''); setNewMust(''); setNewStart(''); setNewEnd(''); setNewMaxTeams(''); setNewRulesFile(null); setNewTzFile(null);
       await loadRounds();
     } catch (e) { toast.error(e.message); }
     finally { setSaving(false); }
+  };
+
+  const handleEditStart = () => {
+    if (!current) return;
+    setNewTitle(current.title || '');
+    setNewDesc(current.description || '');
+    setNewTech(current.tech_requirements || '');
+    setNewMust((current.must_have_items || []).join('\n'));
+    setNewStart(current.starts_at ? new Date(current.starts_at).toISOString().slice(0, 16) : '');
+    setNewEnd(current.deadline_at ? new Date(current.deadline_at).toISOString().slice(0, 16) : '');
+    setNewMaxTeams(current.max_teams_pass ?? '');
+    setNewRulesFile(null);
+    setNewTzFile(null);
+    setEditMode(true);
+    setShowCreate(true);
   };
 
   const handleDeleteRound = (roundId, title) => {
@@ -169,6 +197,25 @@ function RoundManager({ tournament, toast, onRoundsChange }) {
         finally { setConfirmModal(null); }
       },
     });
+  };
+
+  const handleReorder = async (dir) => {
+    if (!current || rounds.length < 2) return;
+    const swapIdx = activeIdx + dir;
+    if (swapIdx < 0 || swapIdx >= rounds.length) return;
+    const a = rounds[activeIdx];
+    const b = rounds[swapIdx];
+    setSaving(true);
+    try {
+      await Promise.all([
+        updateRound(a.id, { sort_order: b.sort_order ?? swapIdx }),
+        updateRound(b.id, { sort_order: a.sort_order ?? activeIdx }),
+      ]);
+      toast.success('Порядок раундів оновлено');
+      await loadRounds();
+      setActiveIdx(swapIdx);
+    } catch (e) { toast.error(e.message); }
+    finally { setSaving(false); }
   };
 
   const current = rounds[activeIdx];
@@ -208,6 +255,8 @@ function RoundManager({ tournament, toast, onRoundsChange }) {
             ● {current.status === 'active' ? 'Активний' : current.status === 'draft' ? 'Чернетка' : current.status === 'submission_closed' ? 'Здача закрита' : 'Оцінено'}
           </span>
           <div className="org-round-actions">
+            <button className="db-btn db-btn-ghost db-btn-sm" disabled={saving || activeIdx <= 0} onClick={() => handleReorder(-1)} title="Вгору">↑</button>
+            <button className="db-btn db-btn-ghost db-btn-sm" disabled={saving || activeIdx >= rounds.length - 1} onClick={() => handleReorder(1)} title="Вниз">↓</button>
             <button className="db-btn db-btn-ghost db-btn-sm" disabled={saving} onClick={() => handleAdvance(-1)} title="Попередній раунд">
               ⏪ Попередній
             </button>
@@ -261,18 +310,28 @@ function RoundManager({ tournament, toast, onRoundsChange }) {
             <span>📅 {new Date(current.starts_at).toLocaleString('uk-UA')} — {new Date(current.deadline_at).toLocaleString('uk-UA')}</span>
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <button className="db-btn db-btn-ghost db-btn-sm" onClick={handleEditStart}>✏ Редагувати</button>
             <button className="db-btn db-btn-danger db-btn-sm" onClick={() => handleDeleteRound(current.id, current.title)}>🗑 Видалити</button>
           </div>
         </div>
       )}
 
-      {/* Create new round */}
-      <button className="db-btn db-btn-ghost" style={{ marginTop: 12 }} onClick={() => setShowCreate(p => !p)}>
+      {/* Create / Edit round toggle */}
+      <button className="db-btn db-btn-ghost" style={{ marginTop: 12 }} onClick={() => {
+        if (showCreate && editMode) { setEditMode(false); setShowCreate(false); }
+        else if (showCreate) { setShowCreate(false); }
+        else { setShowCreate(true); setEditMode(false); setNewTitle(''); setNewDesc(''); setNewTech(''); setNewMust(''); setNewStart(''); setNewEnd(''); setNewMaxTeams(''); setNewRulesFile(null); setNewTzFile(null); }
+      }}>
         {showCreate ? '✕ Скасувати' : '+ Додати раунд'}
       </button>
 
       {showCreate && (
         <div className="org-round-create-form">
+          {editMode && (
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#3b82f6', marginBottom: 8 }}>
+              ✏ Редагування раунду «{current?.title}»
+            </div>
+          )}
           <input className="db-input" placeholder="Назва раунду *" value={newTitle} onChange={e => setNewTitle(e.target.value)} />
           <textarea className="db-input" rows={3} placeholder="Опис (завдання, правила...)" value={newDesc} onChange={e => setNewDesc(e.target.value)} style={{ resize: 'vertical' }} />
           <textarea className="db-input" rows={2} placeholder="Технічні вимоги" value={newTech} onChange={e => setNewTech(e.target.value)} style={{ resize: 'vertical' }} />
@@ -293,16 +352,16 @@ function RoundManager({ tournament, toast, onRoundsChange }) {
               <input className="db-input" type="number" min={1} placeholder="∞" value={newMaxTeams} onChange={e => setNewMaxTeams(e.target.value)} />
             </div>
             <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 12, color: '#888' }}>Файл правил</label>
+              <label style={{ fontSize: 12, color: '#888' }}>{editMode ? 'Новий файл правил (опціонально)' : 'Файл правил'}</label>
               <input type="file" accept=".pdf,.doc,.docx,.txt,.md" onChange={e => setNewRulesFile(e.target.files?.[0] || null)} style={{ color: '#ccc', fontSize: 13 }} />
             </div>
             <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 12, color: '#888' }}>Файл ТЗ</label>
+              <label style={{ fontSize: 12, color: '#888' }}>{editMode ? 'Новий файл ТЗ (опціонально)' : 'Файл ТЗ'}</label>
               <input type="file" accept=".pdf,.zip,.txt,.md,.doc,.docx,.png,.jpg,.gif" onChange={e => setNewTzFile(e.target.files?.[0] || null)} style={{ color: '#ccc', fontSize: 13 }} />
             </div>
           </div>
-          <button className="db-btn db-btn-primary" onClick={handleCreate} disabled={saving}>
-            {saving ? 'Зберігаю...' : 'Створити раунд'}
+          <button className="db-btn db-btn-primary" onClick={handleSave} disabled={saving}>
+            {saving ? 'Зберігаю...' : (editMode ? '💾 Зберегти зміни' : 'Створити раунд')}
           </button>
         </div>
       )}
@@ -397,7 +456,7 @@ export default function TabOrganizer({ toast, user }) {
   useEffect(() => { if (orgTab === 'teams') loadTeams(); }, [orgTab, loadTeams]);
 
   const handleStatus = async (id, status) => {
-    try { await updateTournamentStatus(id, status); toast.success('Статус оновлено'); loadTournaments(); }
+    try { await updateTournamentStatus(id, status); toast.success('Статус оновлено'); loadTournaments(); window.location.reload(); }
     catch (err) { toast.error(err.message); }
   };
 

@@ -368,6 +368,10 @@ function EditTeamModal({ team, toast, onClose, onSuccess }) {
     if (!name.trim()) { toast.error("Введіть назву команди"); return; }
     const filled = members.filter(m => m.linkedUser);
     if (filled.length < min) { toast.error(`Мінімум ${min} учасника(-ів) у команді`); return; }
+    const emails = filled.map(m => m.linkedUser.email?.trim().toLowerCase()).filter(Boolean);
+    if (new Set(emails).size !== emails.length) {
+      toast.error('Email учасників повинні бути унікальними'); return;
+    }
     setSaving(true);
     const cleanMembers = filled.map(m => ({
       full_name: m.linkedUser.username,

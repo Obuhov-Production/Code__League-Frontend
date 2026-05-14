@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   getTeamById, getTournamentRounds, getTeamSubmissions,
-  createSubmission, updateSubmission
+  createSubmission, updateSubmission, API_BASE, getTournamentFiles
 } from '@utils/authApi';
 import { StatusBadge, UserAvatar, pickCurrentRound } from './db.shared.jsx';
 
@@ -561,9 +561,15 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
   const [notes,    setNotes]    = useState(() => localStorage.getItem(storageKey) || '');
   const [docUrl,   setDocUrl]   = useState(() => localStorage.getItem(docUrlKey) || '');
   const [docFile,  setDocFile]  = useState(null);
+  const [tournamentFiles, setTournamentFiles] = useState([]);
+  const [checkedItems, setCheckedItems] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(`tw_check_${teamId}`) || '[]'); }
+    catch { return []; }
+  });
 
   useEffect(() => { localStorage.setItem(storageKey, notes); }, [notes]);
   useEffect(() => { localStorage.setItem(docUrlKey, docUrl); }, [docUrl]);
+  useEffect(() => { localStorage.setItem(`tw_check_${teamId}`, JSON.stringify(checkedItems)); }, [checkedItems, teamId]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -575,8 +581,13 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
       setTeam(t);
       setSubmission(subs?.[0] ?? null);
       if (t?.tournament_id) {
-        const r = await getTournamentRounds(t.tournament_id).catch(() => []);
+        const [r, files] = await Promise.all([
+          getTournamentRounds(t.tournament_id).catch(() => []),
+          getTournamentFiles(t.tournament_id, 'tz').catch(() => ({ files: [] })),
+        ]);
         setRounds(r);
+        const tzFiles = files.files?.find(g => g.type === 'tz')?.files ?? [];
+        setTournamentFiles(tzFiles);
       }
     } catch (err) {
       toast.error('Помилка завантаження');
@@ -634,6 +645,28 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
 
   // Find the active round to show task/requirements
   const activeRound = rounds.find(r => r.status === 'active') || null;
+
+  // Helper: make relative file URL absolute
+  const fileUrl = (relativePath) => {
+    if (!relativePath) return null;
+    if (relativePath.startsWith('http')) return relativePath;
+    const base = API_BASE.replace(/\/api$/, '');
+    return base + relativePath;
+  };
+
+  // Helper: download TZ text as .md file
+  const downloadTzMd = () => {
+    if (!team.tournament_tz) return;
+    const blob = new Blob([team.tournament_tz], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(team.tournament_name || 'tournament').replace(/\s+/g, '_')}-tz.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="db-tab tw-page">
@@ -706,31 +739,55 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
 
               {activeRound.must_have_items?.length > 0 && (
                 <div className="tw-round-field">
-                  <label style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5 }}>Обов'язкові елементи</label>
-                  <ul style={{ margin: '4px 0 12px', paddingLeft: 20, color: '#e0e0e0' }}>
-                    {activeRound.must_have_items.map((item, i) => (
-                      <li key={i} style={{ marginBottom: 4 }}>{item}</li>
-                    ))}
-                  </ul>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5 }}>☑ Обов'язкові елементи</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, margin: '8px 0 12px' }}>
+                    {activeRound.must_have_items.map((item, i) => {
+                      const key = `${activeRound.id}-${i}`;
+                      const checked = checkedItems.includes(key);
+                      return (
+                        <label key={i} style={{
+                          display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '6px 10px', borderRadius: 8,
+                          background: checked ? 'rgba(45,186,110,.1)' : 'rgba(255,255,255,.04)',
+                          border: `1px solid ${checked ? 'rgba(45,186,110,.25)' : 'rgba(255,255,255,.08)'}`,
+                          cursor: 'pointer', transition: 'all .14s',
+                          textDecoration: checked ? 'line-through' : 'none',
+                          opacity: checked ? .6 : 1,
+                        }}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => setCheckedItems(prev =>
+                              checked ? prev.filter(x => x !== key) : [...prev, key]
+                            )}
+                            style={{ cursor: 'pointer', width: 16, height: 16, accentColor: '#2dba6e' }}
+                          />
+                          <span style={{ fontSize: 14, color: '#e0e0e0' }}>{item}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
               {(activeRound.rules_file_url || activeRound.tz_file_url) && (
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 8 }}>
                   {activeRound.rules_file_url && (
-                    <a href={activeRound.rules_file_url} target="_blank" rel="noreferrer" style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 6,
-                      padding: '6px 12px', borderRadius: 8,
-                      background: 'rgba(245,158,11,.12)', color: '#f59e0b',
-                      fontSize: 13, textDecoration: 'none',
+                    <a href={fileUrl(activeRound.rules_file_url)} target="_blank" rel="noreferrer" download style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 8,
+                      padding: '8px 16px', borderRadius: 10,
+                      background: 'rgba(245,158,11,.15)', color: '#f59e0b',
+                      fontSize: 14, fontWeight: 500, textDecoration: 'none',
+                      border: '1px solid rgba(245,158,11,.3)',
                     }}>📜 Правила раунду</a>
                   )}
                   {activeRound.tz_file_url && (
-                    <a href={activeRound.tz_file_url} target="_blank" rel="noreferrer" style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 6,
-                      padding: '6px 12px', borderRadius: 8,
-                      background: 'rgba(59,130,246,.12)', color: '#60a5fa',
-                      fontSize: 13, textDecoration: 'none',
+                    <a href={fileUrl(activeRound.tz_file_url)} target="_blank" rel="noreferrer" download style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 8,
+                      padding: '8px 16px', borderRadius: 10,
+                      background: 'rgba(59,130,246,.15)', color: '#60a5fa',
+                      fontSize: 14, fontWeight: 500, textDecoration: 'none',
+                      border: '1px solid rgba(59,130,246,.3)',
                     }}>📋 ТЗ раунду</a>
                   )}
                 </div>
@@ -745,33 +802,84 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
         </div>
       )}
 
-      {/* ── Tournament Materials (Rules & TZ) ── */}
-      {(team.tournament_rules || team.tournament_rules_file_url || (team.tournament_tz_enabled && team.tournament_tz)) && (
+      {/* ── Tournament Materials: Rules + TZ combined ── */}
+      {((team.tournament_rules || team.tournament_rules_file_url) ||
+        ((team.tournament_tz_enabled && team.tournament_tz) || tournamentFiles.length > 0)) && (
         <div className="sub-wrap">
           <div className="sub-card" style={{ marginTop: 8 }}>
-            <div className="sub-card-accent" style={{ background: '#f59e0b' }} />
-            <h3 className="sub-card-title">📚 Матеріали турніру</h3>
-            <div style={{ padding: '0 12px' }}>
-              {team.tournament_rules && (
-                <div className="tw-round-field">
-                  <label style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5 }}>📜 Правила</label>
-                  <p style={{ margin: '4px 0 12px', lineHeight: 1.6, color: '#e0e0e0', whiteSpace: 'pre-wrap' }}>{team.tournament_rules}</p>
+            <div className="sub-card-accent" style={{ background: '#7c5ff5' }} />
+            <h3 className="sub-card-title">📋 Матеріали турніру</h3>
+            <div style={{ display: 'flex', gap: 0, padding: '0 12px 12px' }}>
+              {/* ── Left: Rules ── */}
+              {(team.tournament_rules || team.tournament_rules_file_url) && (
+                <div style={{ flex: 1, minWidth: 0, paddingRight: 20 }}>
+                  <h4 style={{ fontSize: 13, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: 0.5, margin: '0 0 12px' }}>Правила</h4>
+                  {team.tournament_rules && (
+                    <div className="tw-round-field">
+                      <p style={{ margin: '4px 0 12px', lineHeight: 1.6, color: '#e0e0e0', whiteSpace: 'pre-wrap' }}>{team.tournament_rules}</p>
+                    </div>
+                  )}
+                  {team.tournament_rules_file_url && (
+                    <div style={{ margin: '0 0 4px' }}>
+                      <a href={fileUrl(team.tournament_rules_file_url)} target="_blank" rel="noreferrer" download style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 8,
+                        padding: '8px 16px', borderRadius: 10,
+                        background: 'rgba(245,158,11,.15)', color: '#f59e0b',
+                        fontSize: 14, fontWeight: 500, textDecoration: 'none',
+                        border: '1px solid rgba(245,158,11,.3)',
+                      }}>📜 Відкрити правила</a>
+                    </div>
+                  )}
                 </div>
               )}
-              {team.tournament_rules_file_url && (
-                <div style={{ margin: '0 0 12px' }}>
-                  <a href={team.tournament_rules_file_url} target="_blank" rel="noreferrer" style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                    padding: '6px 12px', borderRadius: 8,
-                    background: 'rgba(245,158,11,.12)', color: '#f59e0b',
-                    fontSize: 13, textDecoration: 'none',
-                  }}>📜 Файл правил</a>
-                </div>
+
+              {/* ── Divider ── */}
+              {(team.tournament_rules || team.tournament_rules_file_url) &&
+               ((team.tournament_tz_enabled && team.tournament_tz) || tournamentFiles.length > 0) && (
+                <div style={{ width: 1, background: 'rgba(255,255,255,.1)', margin: '0 20px', flexShrink: 0 }} />
               )}
-              {team.tournament_tz_enabled && team.tournament_tz && (
-                <div className="tw-round-field">
-                  <label style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5 }}>📋 Технічне завдання</label>
-                  <p style={{ margin: '4px 0 0', lineHeight: 1.6, color: '#e0e0e0', whiteSpace: 'pre-wrap' }}>{team.tournament_tz}</p>
+
+              {/* ── Right: TZ & Materials ── */}
+              {((team.tournament_tz_enabled && team.tournament_tz) || tournamentFiles.length > 0) && (
+                <div style={{ flex: 1, minWidth: 0, paddingLeft: 0 }}>
+                  <h4 style={{ fontSize: 13, fontWeight: 700, color: '#60a5fa', textTransform: 'uppercase', letterSpacing: 0.5, margin: '0 0 12px' }}>Технічне завдання</h4>
+                  {team.tournament_tz_enabled && team.tournament_tz && (
+                    <>
+                      <div className="tw-round-field">
+                        <p style={{ margin: '4px 0 12px', lineHeight: 1.6, color: '#e0e0e0', whiteSpace: 'pre-wrap' }}>{team.tournament_tz}</p>
+                      </div>
+                      <div style={{ margin: '0 0 14px' }}>
+                        <button type="button" onClick={downloadTzMd} style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 8,
+                          padding: '8px 16px', borderRadius: 10,
+                          background: 'rgba(59,130,246,.15)', color: '#60a5fa',
+                          fontSize: 14, fontWeight: 500, textDecoration: 'none',
+                          border: '1px solid rgba(59,130,246,.3)',
+                          cursor: 'pointer',
+                        }}>⬇ Скачати ТЗ як .md</button>
+                      </div>
+                    </>
+                  )}
+                  {tournamentFiles.length > 0 && (
+                    <div className="tw-round-field" style={{ paddingTop: 10, borderTop: '1px dashed rgba(255,255,255,.1)' }}>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5 }}>📃 Матеріали до ТЗ</label>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                        {tournamentFiles.map((f, i) => (
+                          <a key={i} href={fileUrl(f.url)} target="_blank" rel="noreferrer" download style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 8,
+                            padding: '8px 14px', borderRadius: 8,
+                            background: 'rgba(255,255,255,.05)', color: '#ccc',
+                            fontSize: 13, textDecoration: 'none',
+                            border: '1px solid rgba(255,255,255,.08)',
+                          }}>
+                            <span>📎</span>
+                            <span style={{ flex: 1 }}>{f.name}</span>
+                            <span style={{ fontSize: 11, color: '#888' }}>Відкрити фаіл</span>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

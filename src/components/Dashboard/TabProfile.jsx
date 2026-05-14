@@ -6,7 +6,8 @@ import badge2Img from '@images/pin/bage2.png';
 import { getMe, getMyTeams, updateMe, uploadAvatar, uploadBanner, deleteBanner,
   submitOrganizerApplication, getMyOrganizerApplication, getMyBadges,
   deleteMyAccount, clearSession,
-  requestPasswordChange, confirmPasswordChange, verifyPasswordChangeCode } from '@utils/authApi';
+  requestPasswordChange, confirmPasswordChange, verifyPasswordChangeCode,
+  getTeamSubmissions } from '@utils/authApi';
 import { BANNER_PRESETS, StatusBadge, UserAvatar, formatDate, formatDateTime, hasRole, displayName, resolveAvatarUrl, PresenceBadge } from './db.shared.jsx';
 import IconUser     from '@images/dashboard_components/icon_user_cube.svg?react';
 import IconMedal    from '@images/dashboard_components/icon_medal.svg?react';
@@ -504,6 +505,7 @@ function OrganizerApplyModal({ onClose, onSubmit }) {
 export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
   const [myTeams,   setMyTeams]  = useState([]);
   const [myBadges,  setMyBadges] = useState([]);
+  const [mySubmissions, setMySubmissions] = useState([]);
   const [editing,   setEditing]  = useState(false);
   const [saving,    setSaving]   = useState(false);
   const [savingPib, setSavingPib] = useState(false);
@@ -534,7 +536,16 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
   const pinnedBadgeDef = pinnedBadge ? ALL_BADGES.find(b => b.id === pinnedBadge) : null;
 
   useEffect(() => {
-    getMyTeams().then(setMyTeams).catch(() => {});
+    getMyTeams().then(async teams => {
+      setMyTeams(teams);
+      if (teams.length > 0) {
+        try {
+          const subs = await Promise.all(teams.map(t => getTeamSubmissions(t.id).catch(() => [])));
+          const flat = subs.flatMap((arr, i) => arr.map(s => ({ ...s, teamName: teams[i]?.name, tournamentName: teams[i]?.tournament_name })));
+          setMySubmissions(flat);
+        } catch { /* ignore */ }
+      }
+    }).catch(() => {});
     getMyBadges().then(setMyBadges).catch(() => {});
   }, []);
 
@@ -987,6 +998,24 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
                   <div key={t.id} className="db-field-row">
                     <label>{t.tournament_name}</label>
                     <span style={{ display:'flex', alignItems:'center', gap:8 }}>{t.name} <StatusBadge status={t.tournament_status} /></span>
+                  </div>
+                ))}
+              </div>
+            )}
+        </div>
+
+        <div className="db-info-card">
+          <h3><span className="db-card-icon db-card-icon--svg"><IconFolder /></span> Мої сабміти</h3>
+          {mySubmissions.length === 0 ? <p style={{ color:'#aaa', fontSize:14 }}>Ще немає сабмітів</p>
+            : (
+              <div className="db-field-list">
+                {mySubmissions.slice(0,5).map((s, i) => (
+                  <div key={i} className="db-field-row">
+                    <label>{s.tournamentName || '—'}</label>
+                    <span style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      <a href={s.repo_url} target="_blank" rel="noopener noreferrer" style={{ color:'#AC9EF8', fontSize:13 }}>{s.teamName || 'Команда'}</a>
+                      {s.locked ? <StatusBadge status="locked" /> : <StatusBadge status="draft" />}
+                    </span>
                   </div>
                 ))}
               </div>

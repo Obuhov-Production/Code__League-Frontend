@@ -42,8 +42,9 @@
   .db-tournament-grid  { grid-template-columns: 1fr; }
 
   .db-leaderboard-header,
-  .db-leaderboard-row  { grid-template-columns: 38px 1fr 70px; }
+  .db-leaderboard-row  { grid-template-columns: 38px 1fr 90px; }
   .db-lb-bar-wrap      { display: none; }
+  .db-lb-actions-head  { display: none; }
 
   /* Chat: rooms become horizontal scrollable chip strip */
   .db-chat-layout {
@@ -257,7 +258,8 @@
   .db-tournament-card-top h3 { font-size: 14px; }
 
   .db-leaderboard-header,
-  .db-leaderboard-row  { grid-template-columns: 32px 1fr 60px; padding: 10px; gap: 8px; }
+  .db-leaderboard-row  { grid-template-columns: 32px 1fr 80px; padding: 10px; gap: 8px; }
+  .db-lb-actions-head  { display: none; }
   .db-rank             { font-size: 16px; }
   .db-lb-team strong   { font-size: 13px; }
   .db-lb-score         { font-size: 14px; }

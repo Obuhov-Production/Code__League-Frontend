@@ -162,6 +162,7 @@ export default function LeaderboardPage() {
   const [loading,     setLoading]     = useState(FROM_BACKEND)
   const [loadingRows, setLoadingRows] = useState(false)
   const [error,       setError]       = useState(null)
+  const [expandedRow, setExpandedRow] = useState(null)
 
   // ── Завантажити список турнірів з бекенду ────────────────────────────────
   useEffect(() => {
@@ -197,6 +198,25 @@ export default function LeaderboardPage() {
   }, [selected])
 
   const maxScore = rows.reduce((m, r) => Math.max(m, Number(r.total_score)), 0)
+
+  const downloadCSV = () => {
+    const t = tournaments.find(x => x.id === selected)
+    const header = ['#','Команда','Місто','Бали','Рейтинг %']
+    const data = rows.map((r, i) => [
+      i+1, r.team_name, r.city || '', Number(r.total_score).toFixed(1),
+      maxScore > 0 ? Math.round((Number(r.total_score)/maxScore)*100) + '%' : '0%'
+    ])
+    const csv = [header, ...data].map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${t?.name || 'leaderboard'}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="lb-page">
@@ -242,6 +262,9 @@ export default function LeaderboardPage() {
                 )
               })}
             </div>
+            {rows.length > 0 && (
+              <button className="lb-csv-btn" onClick={downloadCSV} title="Експорт CSV">📥 Експорт CSV</button>
+            )}
 
             {/* ── Tournament dropdown (mobile) ── */}
             <TournamentDropdown
@@ -273,8 +296,11 @@ export default function LeaderboardPage() {
           ) : rows.map((row, i) => {
             const score = Number(row.total_score)
             const pct   = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0
+            const isExpanded = expandedRow === row.team_id
+            const criteria = row.criteria_breakdown || {}
+            const criteriaKeys = Object.keys(criteria)
             return (
-              <div key={row.team_id} className={`lb-board-row${i < 3 ? ' top' : ''}`}>
+              <div key={row.team_id} className={`lb-board-row${i < 3 ? ' top' : ''}`} style={{ flexWrap: 'wrap' }}>
                 <span className="lb-rank">{MEDALS[i] ?? `${i + 1}.`}</span>
                 <div className="lb-team">
                   <strong>{row.team_name}</strong>
@@ -286,6 +312,25 @@ export default function LeaderboardPage() {
                   </div>
                 </div>
                 <span className="lb-score">{score.toFixed(1)}</span>
+                {criteriaKeys.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setExpandedRow(isExpanded ? null : row.team_id)}
+                    style={{ marginLeft: 8, background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 12 }}
+                  >
+                    {isExpanded ? '▲ Деталі' : '▼ Деталі'}
+                  </button>
+                )}
+                {isExpanded && criteriaKeys.length > 0 && (
+                  <div style={{ width: '100%', marginTop: 8, paddingLeft: 48, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    {criteriaKeys.map(key => (
+                      <div key={key} style={{ background: '#f3f4f6', padding: '6px 12px', borderRadius: 8, border: '1px solid #e5e7eb' }}>
+                        <span style={{ color: '#666', fontSize: 12 }}>{key}</span>
+                        <span style={{ color: '#111', fontWeight: 600, marginLeft: 8 }}>{Number(criteria[key]).toFixed(1)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )
           })}

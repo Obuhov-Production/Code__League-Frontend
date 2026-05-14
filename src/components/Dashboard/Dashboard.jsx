@@ -735,7 +735,7 @@ export default function Dashboard() {
               {tab === 'overview'    && <TabOverview    user={user} toast={toast} onNavigate={setTab} />}
               {tab === 'tournaments' && <TabTournaments user={user} toast={toast} />}
               {tab === 'teams'       && <TabTeams       toast={toast} setTab={setTab} />}
-              {tab === 'leaderboard' && <TabLeaderboard toast={toast} />}
+              {tab === 'leaderboard' && <TabLeaderboard user={user} toast={toast} />}
               {/* TabChat stays mounted on every tab so messages stream in live in the background.
                   Hidden via display:none when not on chat tab — state, sockets and listeners survive. */}
               {user && (
