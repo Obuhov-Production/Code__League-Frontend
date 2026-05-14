@@ -1482,10 +1482,12 @@ export function TournamentForm({
                 <div className="db-edit-field">
                   <label className="db-edit-label">Початок турніру <span className="db-required">*</span></label>
                   <input type="datetime-local" className="db-input" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                  <small className="db-field-hint">⚙️ Цей пункт визначає коли турнір стане доступним для реєстрації</small>
                 </div>
                 <div className="db-edit-field">
                   <label className="db-edit-label">Кінець турніру <span className="db-required">*</span></label>
                   <input type="datetime-local" className="db-input" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                  <small className="db-field-hint">⚙️ Цей пункт визначає коли турнір завершиться повністю</small>
                 </div>
               </div>
 
@@ -1494,11 +1496,12 @@ export function TournamentForm({
                 <div className="db-edit-field">
                   <label className="db-edit-label">Початок реєстрації <span className="db-required">*</span></label>
                   <input type="datetime-local" className="db-input" value={regStart} onChange={e => setRegStart(e.target.value)} />
+                  <small className="db-field-hint">⚙️ Цей пункт визначає коли реєстрація стане доступною</small>
                 </div>
                 <div className="db-edit-field">
                   <label className="db-edit-label">Кінець реєстрації <span className="db-required">*</span></label>
                   <input type="datetime-local" className="db-input" value={regEnd} onChange={e => setRegEnd(e.target.value)} />
-                  <small className="db-field-hint">⚙️ Після цього часу статус → Running</small>
+                  <small className="db-field-hint">⚙️ Цей пункт визначає коли реєстрація завершиться</small>
                 </div>
               </div>
 
@@ -1507,11 +1510,12 @@ export function TournamentForm({
                 <div className="db-edit-field">
                   <label className="db-edit-label">Початок здачі</label>
                   <input type="datetime-local" className="db-input" value={subStart} onChange={e => setSubStart(e.target.value)} />
-                  <small className="db-field-hint">Якщо не вказано — здача доступна поки турнір Running</small>
+                  <small className="db-field-hint">⚙️ Цей пункт визначає коли здача робіт стане доступною</small>
                 </div>
                 <div className="db-edit-field">
                   <label className="db-edit-label">Кінець здачі</label>
                   <input type="datetime-local" className="db-input" value={subEnd} onChange={e => setSubEnd(e.target.value)} />
+                  <small className="db-field-hint">⚙️ Цей пункт визначає коли здача робіт завершиться</small>
                 </div>
               </div>
             </div>
