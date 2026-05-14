@@ -145,9 +145,23 @@ export default function TabChat({
   const isAdmin     = user?.role === 'admin';
 
   useEffect(() => {
-    getMyTeams().then(setMyTeams).catch(() => {});
+    const refreshTeams = () => getMyTeams().then(setMyTeams).catch(() => {});
+    refreshTeams();
     getCustomChatRooms().then(setCustomRooms).catch(() => {});
+    window.addEventListener('cl:teams:changed', refreshTeams);
+    return () => window.removeEventListener('cl:teams:changed', refreshTeams);
   }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+    const refreshTeams = notif => {
+      if (!notif || ['team_invite', 'team_member_joined', 'team_invite_rejected'].includes(notif.icon)) {
+        getMyTeams().then(setMyTeams).catch(() => {});
+      }
+    };
+    socket.on('notification:new', refreshTeams);
+    return () => socket.off('notification:new', refreshTeams);
+  }, [socket]);
 
   const ROOMS = useMemo(() => [
     ...BASE_ROOMS,

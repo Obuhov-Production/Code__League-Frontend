@@ -309,6 +309,13 @@ export async function uploadTournamentFile(tournamentId, type, file) {
   return data;
 }
 
+export async function deleteTournamentFile(tournamentId, type, name) {
+  return request(`${BASE}/tournaments/${tournamentId}/files/${encodeURIComponent(type)}/${encodeURIComponent(name)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+}
+
 /* ── Teams ───────────────────────────────────────── */
 
 export async function getMyTeams() {
@@ -779,7 +786,33 @@ export async function setUserPassword(id, password) {
 /* ── Admin: teams ────────────────────────────────── */
 
 export async function getAdminTeams() {
-  return request(`${BASE}/admin/teams`, { headers: authHeaders() });
+  const data = await request(`${BASE}/admin/teams`, { headers: authHeaders() });
+  const teams = Array.isArray(data) ? data : (data?.teams || []);
+  return teams.map(team => {
+    const members = Array.isArray(team.members) ? team.members : [];
+    const acceptedMembers = members.filter(m => (m.status || 'accepted') !== 'rejected');
+    const captainId = team.captain_id ?? team.captain?.id ?? null;
+    const captainMember = members.find(m => String(m.user_id ?? m.user?.id ?? '') === String(captainId ?? ''));
+    const captainName =
+      team.captain_name ||
+      team.captain?.username ||
+      team.captain?.full_name ||
+      captainMember?.full_name ||
+      captainMember?.fullName ||
+      captainMember?.username ||
+      null;
+
+    return {
+      ...team,
+      tournament_id: team.tournament_id ?? team.tournament?.id ?? null,
+      tournament_name: team.tournament_name ?? team.tournament?.name ?? '—',
+      tournament_status: team.tournament_status ?? team.tournament?.status ?? 'draft',
+      captain_name: captainName ?? '—',
+      captain_email: team.captain_email ?? team.captain?.email ?? captainMember?.email ?? team.leader_email ?? null,
+      members_count: team.members_count ?? acceptedMembers.length ?? 0,
+      pending_members_count: team.pending_members_count ?? members.filter(m => m.status === 'pending').length,
+    };
+  });
 }
 
 export async function adminDeleteTeam(id) {

@@ -104,6 +104,9 @@ function TeamInviteCard({ notif, onResolved, toast }) {
       await acceptTeamInvite(memberId);
       setResolved('accepted');
       toast?.success?.('Ви приєдналися до команди');
+      window.dispatchEvent(new CustomEvent('cl:teams:changed', {
+        detail: { reason: 'invite-accepted', memberId }
+      }));
       onResolved?.('accepted');
     } catch (err) { toast?.error?.(err.message); }
     finally { setActing(null); }
@@ -116,6 +119,9 @@ function TeamInviteCard({ notif, onResolved, toast }) {
       await rejectTeamInvite(memberId);
       setResolved('rejected');
       toast?.success?.('Запрошення відхилено');
+      window.dispatchEvent(new CustomEvent('cl:teams:changed', {
+        detail: { reason: 'invite-rejected', memberId }
+      }));
       onResolved?.('rejected');
     } catch (err) { toast?.error?.(err.message); }
     finally { setActing(null); }
@@ -343,7 +349,10 @@ export default function Dashboard() {
   /* --- Team rooms for notification labels --- */
   useEffect(() => {
     if (!user) return;
-    getMyTeams().then(d => setMyTeams(Array.isArray(d) ? d : [])).catch(() => {});
+    const refreshTeams = () => getMyTeams().then(d => setMyTeams(Array.isArray(d) ? d : [])).catch(() => {});
+    refreshTeams();
+    window.addEventListener('cl:teams:changed', refreshTeams);
+    return () => window.removeEventListener('cl:teams:changed', refreshTeams);
   }, [user?.id]);
 
   /* --- Notification --- */
@@ -369,6 +378,14 @@ export default function Dashboard() {
       toast.info(notif.message, 4000);
       if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
         new Notification('Code League', { body: notif.message });
+      }
+      if (['team_invite', 'team_member_joined', 'team_invite_rejected'].includes(notif?.icon)) {
+        getMyTeams()
+          .then(d => setMyTeams(Array.isArray(d) ? d : []))
+          .catch(() => {});
+        window.dispatchEvent(new CustomEvent('cl:teams:changed', {
+          detail: { reason: notif.icon, notification: notif }
+        }));
       }
     };
     socket.on('notification:new', onNotif);

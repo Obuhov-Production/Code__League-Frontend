@@ -3,11 +3,19 @@ import {
   getTeamById, getTournamentRounds, getTeamSubmissions,
   createSubmission, updateSubmission, API_BASE, getTournamentFiles
 } from '@utils/authApi';
-import { StatusBadge, UserAvatar, pickCurrentRound } from './db.shared.jsx';
+import { StatusBadge, UserAvatar, pickCurrentRound, getSocket } from './db.shared.jsx';
 
 import IconSave      from '@images/dashboard_components/save.svg?react';
 import IconTeams     from '@images/dashboard_components/icon_teams.svg?react';
 import IconGithub    from '@images/dashboard_components/icon_github.svg?react';
+import IconAttach    from '@images/dashboard_components/icon_attach.svg?react';
+import IconCalendar  from '@images/dashboard_components/icon_calendar_card.svg?react';
+import IconCheck     from '@images/dashboard_components/icon_check_diamond.svg?react';
+import IconClock     from '@images/dashboard_components/icon_clock_diamond.svg?react';
+import IconExternal  from '@images/dashboard_components/icon_external_link.svg?react';
+import IconFolder    from '@images/dashboard_components/icon_folder_panel.svg?react';
+import IconPlay      from '@images/dashboard_components/icon_play.svg?react';
+import IconTournament from '@images/dashboard_components/icon_tournament.svg?react';
 
 const AVATAR_GRADIENTS = [
   'linear-gradient(135deg,#AC9EF8,#7c5ff5)',
@@ -194,6 +202,18 @@ function MemberAvatarRow({ members, captainId }) {
   );
 }
 
+function WorkspaceCardTitle({ icon: Icon, title, badge, accent = '#7c5ff5' }) {
+  return (
+    <div className="tw-card-head">
+      <span className="tw-card-icon" style={{ '--tw-accent': accent }}>
+        {Icon ? <Icon /> : null}
+      </span>
+      <h3 className="tw-card-title">{title}</h3>
+      {badge && <span className="tw-card-badge" style={{ '--tw-accent': accent }}>{badge}</span>}
+    </div>
+  );
+}
+
 /* ── Submission section ───────────────────────────── */
 function CountdownTimer({ deadline }) {
   const [tick, setTick] = useState(0);
@@ -218,18 +238,29 @@ function CountdownTimer({ deadline }) {
   );
 }
 
+function readSubmissionDraft(teamId) {
+  try {
+    return JSON.parse(localStorage.getItem(`tw_submission_draft_${teamId}`) || '{}');
+  } catch {
+    return {};
+  }
+}
+
 function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
-  const [repoUrl,   setRepoUrl]   = useState(existing?.github_repo_url || '');
-  const [branch,    setBranch]    = useState(existing?.github_branch   || 'main');
-  const [videoUrl,  setVideoUrl]  = useState(existing?.pitch_video_url || '');
-  const [demoUrl,   setDemoUrl]   = useState(existing?.live_demo_url   || '');
-  const [desc,      setDesc]      = useState(existing?.description     || '');
+  const initialDraft = !existing ? readSubmissionDraft(team.id) : {};
+  const draftKey = `tw_submission_draft_${team.id}`;
+  const [repoUrl,   setRepoUrl]   = useState(existing?.github_repo_url || initialDraft.repoUrl || '');
+  const [branch,    setBranch]    = useState(existing?.github_branch   || initialDraft.branch || 'main');
+  const [videoUrl,  setVideoUrl]  = useState(existing?.pitch_video_url || initialDraft.videoUrl || '');
+  const [demoUrl,   setDemoUrl]   = useState(existing?.live_demo_url   || initialDraft.demoUrl || '');
+  const [desc,      setDesc]      = useState(existing?.description     || initialDraft.desc || '');
+  const [docFileName, setDocFileName] = useState(initialDraft.docFileName || '');
   const [roundId,   setRoundId]   = useState(existing?.round_id ? String(existing.round_id) : '');
   const [branches,  setBranches]  = useState([]);
   const [loadingB,  setLoadingB]  = useState(false);
   const [repoValid, setRepoValid] = useState(null); // null | true | false
   const [saving,    setSaving]    = useState(false);
-  const [locked,    setLocked]    = useState(false);
+  const [locked,    setLocked]    = useState(!!existing);
   const [deadline,  setDeadline]  = useState(null);
   const [touched,   setTouched]   = useState({});
 
@@ -287,6 +318,14 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
 
   const handleSave = async (e, draft = false) => {
     e?.preventDefault();
+    if (draft) {
+      localStorage.setItem(draftKey, JSON.stringify({
+        repoUrl, branch, videoUrl, demoUrl, desc, docFileName, savedAt: new Date().toISOString()
+      }));
+      toast.success('Чернетку збережено локально');
+      return;
+    }
+
     let finalRoundId = roundId;
     if (!finalRoundId && rounds.length > 0) {
       const best = pickCurrentRound(rounds);
@@ -295,7 +334,10 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
     if (isDeadlinePast) { toast.error('Дедлайн здачі роботи минув'); return; }
     if (!repoUrl.trim()) { toast.error('Вкажіть URL репозиторію'); setTouched(t => ({...t, repo: true})); return; }
     if (!branch.trim())  { toast.error('Оберіть гілку'); return; }
+    if (!demoUrl.trim()) { toast.error('Вкажіть URL живого демо'); return; }
+    if (!videoUrl.trim()) { toast.error('Вкажіть URL пітч-відео'); return; }
     if (!finalRoundId)   { toast.error('Не знайдено жодного раунду'); return; }
+    if (!locked) { toast.error('Підтвердіть, що робота фінальна і готова до оцінювання'); return; }
     
     setSaving(true);
     const payload = {
@@ -311,9 +353,13 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
         toast.success(draft ? 'Чернетку збережено!' : 'Роботу оновлено!');
       } else {
         await createSubmission(Number(finalRoundId), { ...payload, team_id: team.id });
-        toast.success(draft ? 'Чернетку збережено!' : 'Роботу подано!');
+        toast.success('Роботу подано!');
       }
+      localStorage.removeItem(draftKey);
       onSaved?.();
+      window.dispatchEvent(new CustomEvent('cl:teams:changed', {
+        detail: { reason: 'submission-saved', teamId: team.id }
+      }));
     } catch (err) { toast.error(err.message); }
     finally { setSaving(false); }
   };
@@ -424,11 +470,29 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
           {/* File upload */}
           <div className="sub-field">
             <label className="sub-file-drop">
-              <input type="file" style={{ display: 'none' }} />
-              <div className="sub-file-drop-icon">☁️</div>
-              <p className="sub-file-drop-title">Клікніть, щоб завантажити</p>
-              <p className="sub-file-drop-hint">Схеми архітектури, презентації (PDF, PNG, JPG до 10МБ)</p>
+              <input
+                type="file"
+                style={{ display: 'none' }}
+                accept=".pdf,.png,.jpg,.jpeg"
+                onChange={e => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  if (file.size > 10 * 1024 * 1024) {
+                    toast.error('Файл має бути до 10МБ');
+                    return;
+                  }
+                  setDocFileName(file.name);
+                }}
+              />
+              <div className="sub-file-drop-icon">{docFileName ? '📄' : '☁️'}</div>
+              <p className="sub-file-drop-title">{docFileName || 'Клікніть, щоб вибрати файл'}</p>
+              <p className="sub-file-drop-hint">PDF, PNG або JPG до 10МБ. Для суддів додайте посилання на файл у нотатках.</p>
             </label>
+            {docFileName && (
+              <button type="button" className="sub-file-remove-inline" onClick={() => setDocFileName('')}>
+                Прибрати файл
+              </button>
+            )}
           </div>
 
           <div className="sub-field">
@@ -571,8 +635,8 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
   useEffect(() => { localStorage.setItem(docUrlKey, docUrl); }, [docUrl]);
   useEffect(() => { localStorage.setItem(`tw_check_${teamId}`, JSON.stringify(checkedItems)); }, [checkedItems, teamId]);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const [t, subs] = await Promise.all([
         getTeamById(teamId),
@@ -592,11 +656,39 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
     } catch (err) {
       toast.error('Помилка завантаження');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [teamId, toast]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    const refresh = () => loadData({ silent: true });
+    const refreshForTeam = (event) => {
+      const changedTeamId = event?.detail?.teamId ?? event?.detail?.team?.id ?? event?.teamId ?? event?.team_id;
+      if (!changedTeamId || String(changedTeamId) === String(teamId)) refresh();
+    };
+
+    window.addEventListener('focus', refresh);
+    window.addEventListener('cl:teams:changed', refreshForTeam);
+    socket?.on?.('notification:new', refresh);
+    socket?.on?.('status:changed', refresh);
+    socket?.on?.('team:updated', refreshForTeam);
+    socket?.on?.('submission:updated', refreshForTeam);
+
+    const interval = window.setInterval(refresh, 30000);
+
+    return () => {
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('cl:teams:changed', refreshForTeam);
+      socket?.off?.('notification:new', refresh);
+      socket?.off?.('status:changed', refresh);
+      socket?.off?.('team:updated', refreshForTeam);
+      socket?.off?.('submission:updated', refreshForTeam);
+      window.clearInterval(interval);
+    };
+  }, [loadData, teamId]);
 
   if (loading) {
     return (
@@ -630,14 +722,6 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
                     : tournStatus === 'finished'      ? '#0ea5e9'
                     : '#888';
 
-  const now = Date.now();
-  const subStart = team.tournament_submission_start ? new Date(team.tournament_submission_start).getTime() : null;
-  const subEnd   = team.tournament_submission_end   ? new Date(team.tournament_submission_end).getTime()   : null;
-  const inSubmissionWindow = subStart && subEnd
-    ? (now >= subStart && now <= subEnd)
-    : tournStatus === 'running';
-
-  const canSubmit = inSubmissionWindow;
   const canEdit   = tournStatus === 'registration';
 
   const tourDeadline = team.end_date ? deadlineInfo(team.end_date) : null;
@@ -645,6 +729,15 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
 
   // Find the active round to show task/requirements
   const activeRound = rounds.find(r => r.status === 'active') || null;
+  const now = Date.now();
+  const subStart = team.tournament_submission_start ? new Date(team.tournament_submission_start).getTime() : null;
+  const subEnd   = team.tournament_submission_end   ? new Date(team.tournament_submission_end).getTime()   : null;
+  const activeRoundEnd = activeRound?.end_date ? new Date(activeRound.end_date).getTime() : null;
+  const roundAcceptsSubmission = !!activeRound && activeRound.status === 'active' && (!activeRoundEnd || now <= activeRoundEnd);
+  const inSubmissionWindow = subStart && subEnd
+    ? (now >= subStart && now <= subEnd)
+    : roundAcceptsSubmission;
+  const canSubmit = tournStatus === 'running' && inSubmissionWindow && roundAcceptsSubmission;
 
   // Helper: make relative file URL absolute
   const fileUrl = (relativePath) => {
@@ -710,59 +803,42 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
       {/* ── Active Round Info ── */}
       {activeRound && (
         <div className="sub-wrap">
-          <div className="sub-card" style={{ marginTop: 0 }}>
+          <div className="sub-card tw-info-card tw-round-card">
             <div className="sub-card-accent" style={{ background: '#7c5ff5' }} />
-            <div style={{ padding: '0 12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                <h3 className="sub-card-title" style={{ margin: 0 }}>
-                  🎯 {activeRound.title}
-                </h3>
-                <span style={{
-                  fontSize: 11, padding: '2px 8px', borderRadius: 8,
-                  background: '#16a34a22', color: '#16a34a', fontWeight: 600,
-                }}>Активний</span>
-              </div>
+            <WorkspaceCardTitle icon={IconTournament} title={activeRound.title} badge="Активний" accent="#7c5ff5" />
 
               {activeRound.description && (
                 <div className="tw-round-field">
-                  <label style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5 }}>Завдання</label>
-                  <p style={{ margin: '4px 0 12px', lineHeight: 1.6, color: '#e0e0e0', whiteSpace: 'pre-wrap' }}>{activeRound.description}</p>
+                  <label>Завдання</label>
+                  <p>{activeRound.description}</p>
                 </div>
               )}
 
               {activeRound.tech_requirements && (
                 <div className="tw-round-field">
-                  <label style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5 }}>Технічні вимоги</label>
-                  <p style={{ margin: '4px 0 12px', lineHeight: 1.6, color: '#e0e0e0', whiteSpace: 'pre-wrap' }}>{activeRound.tech_requirements}</p>
+                  <label>Технічні вимоги</label>
+                  <p>{activeRound.tech_requirements}</p>
                 </div>
               )}
 
               {activeRound.must_have_items?.length > 0 && (
                 <div className="tw-round-field">
-                  <label style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5 }}>☑ Обов'язкові елементи</label>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, margin: '8px 0 12px' }}>
+                  <label>Обов'язкові елементи</label>
+                  <div className="tw-check-list">
                     {activeRound.must_have_items.map((item, i) => {
                       const key = `${activeRound.id}-${i}`;
                       const checked = checkedItems.includes(key);
                       return (
-                        <label key={i} style={{
-                          display: 'flex', alignItems: 'center', gap: 10,
-                          padding: '6px 10px', borderRadius: 8,
-                          background: checked ? 'rgba(45,186,110,.1)' : 'rgba(255,255,255,.04)',
-                          border: `1px solid ${checked ? 'rgba(45,186,110,.25)' : 'rgba(255,255,255,.08)'}`,
-                          cursor: 'pointer', transition: 'all .14s',
-                          textDecoration: checked ? 'line-through' : 'none',
-                          opacity: checked ? .6 : 1,
-                        }}>
+                        <label key={i} className={`tw-check-row${checked ? ' checked' : ''}`}>
                           <input
                             type="checkbox"
                             checked={checked}
                             onChange={() => setCheckedItems(prev =>
                               checked ? prev.filter(x => x !== key) : [...prev, key]
                             )}
-                            style={{ cursor: 'pointer', width: 16, height: 16, accentColor: '#2dba6e' }}
                           />
-                          <span style={{ fontSize: 14, color: '#e0e0e0' }}>{item}</span>
+                          <IconCheck />
+                          <span>{item}</span>
                         </label>
                       );
                     })}
@@ -771,33 +847,28 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
               )}
 
               {(activeRound.rules_file_url || activeRound.tz_file_url) && (
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 8 }}>
+                <div className="tw-link-row">
                   {activeRound.rules_file_url && (
-                    <a href={fileUrl(activeRound.rules_file_url)} target="_blank" rel="noreferrer" download style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 8,
-                      padding: '8px 16px', borderRadius: 10,
-                      background: 'rgba(245,158,11,.15)', color: '#f59e0b',
-                      fontSize: 14, fontWeight: 500, textDecoration: 'none',
-                      border: '1px solid rgba(245,158,11,.3)',
-                    }}>📜 Правила раунду</a>
+                    <a href={fileUrl(activeRound.rules_file_url)} target="_blank" rel="noreferrer" download className="tw-file-pill">
+                      <IconFolder /> Правила раунду
+                    </a>
                   )}
                   {activeRound.tz_file_url && (
-                    <a href={fileUrl(activeRound.tz_file_url)} target="_blank" rel="noreferrer" download style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 8,
-                      padding: '8px 16px', borderRadius: 10,
-                      background: 'rgba(59,130,246,.15)', color: '#60a5fa',
-                      fontSize: 14, fontWeight: 500, textDecoration: 'none',
-                      border: '1px solid rgba(59,130,246,.3)',
-                    }}>📋 ТЗ раунду</a>
+                    <a href={fileUrl(activeRound.tz_file_url)} target="_blank" rel="noreferrer" download className="tw-file-pill blue">
+                      <IconAttach /> ТЗ раунду
+                    </a>
                   )}
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: 16, fontSize: 13, color: '#888', marginTop: 4, paddingBottom: 4 }}>
-                <span>📅 Початок: {new Date(activeRound.starts_at).toLocaleString('uk-UA')}</span>
-                <span>⏰ Дедлайн: {new Date(activeRound.deadline_at).toLocaleString('uk-UA')}</span>
+              <div className="tw-date-strip">
+                {activeRound.start_date && (
+                  <span><IconCalendar /> Початок: {new Date(activeRound.start_date).toLocaleString('uk-UA')}</span>
+                )}
+                {activeRound.end_date && (
+                  <span><IconClock /> Дедлайн: {new Date(activeRound.end_date).toLocaleString('uk-UA')}</span>
+                )}
               </div>
-            </div>
           </div>
         </div>
       )}
@@ -806,75 +877,52 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
       {((team.tournament_rules || team.tournament_rules_file_url) ||
         ((team.tournament_tz_enabled && team.tournament_tz) || tournamentFiles.length > 0)) && (
         <div className="sub-wrap">
-          <div className="sub-card" style={{ marginTop: 8 }}>
+          <div className="sub-card tw-info-card">
             <div className="sub-card-accent" style={{ background: '#7c5ff5' }} />
-            <h3 className="sub-card-title">📋 Матеріали турніру</h3>
-            <div style={{ display: 'flex', gap: 0, padding: '0 12px 12px' }}>
+            <WorkspaceCardTitle icon={IconFolder} title="Матеріали турніру" accent="#7c5ff5" />
+            <div className="tw-materials-grid">
               {/* ── Left: Rules ── */}
               {(team.tournament_rules || team.tournament_rules_file_url) && (
-                <div style={{ flex: 1, minWidth: 0, paddingRight: 20 }}>
-                  <h4 style={{ fontSize: 13, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: 0.5, margin: '0 0 12px' }}>Правила</h4>
+                <div className="tw-material-col">
+                  <h4>Правила</h4>
                   {team.tournament_rules && (
                     <div className="tw-round-field">
-                      <p style={{ margin: '4px 0 12px', lineHeight: 1.6, color: '#e0e0e0', whiteSpace: 'pre-wrap' }}>{team.tournament_rules}</p>
+                      <p>{team.tournament_rules}</p>
                     </div>
                   )}
                   {team.tournament_rules_file_url && (
-                    <div style={{ margin: '0 0 4px' }}>
-                      <a href={fileUrl(team.tournament_rules_file_url)} target="_blank" rel="noreferrer" download style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 8,
-                        padding: '8px 16px', borderRadius: 10,
-                        background: 'rgba(245,158,11,.15)', color: '#f59e0b',
-                        fontSize: 14, fontWeight: 500, textDecoration: 'none',
-                        border: '1px solid rgba(245,158,11,.3)',
-                      }}>📜 Відкрити правила</a>
-                    </div>
+                    <a href={fileUrl(team.tournament_rules_file_url)} target="_blank" rel="noreferrer" download className="tw-file-pill">
+                      <IconExternal /> Відкрити правила
+                    </a>
                   )}
                 </div>
               )}
 
-              {/* ── Divider ── */}
-              {(team.tournament_rules || team.tournament_rules_file_url) &&
-               ((team.tournament_tz_enabled && team.tournament_tz) || tournamentFiles.length > 0) && (
-                <div style={{ width: 1, background: 'rgba(255,255,255,.1)', margin: '0 20px', flexShrink: 0 }} />
-              )}
-
               {/* ── Right: TZ & Materials ── */}
               {((team.tournament_tz_enabled && team.tournament_tz) || tournamentFiles.length > 0) && (
-                <div style={{ flex: 1, minWidth: 0, paddingLeft: 0 }}>
-                  <h4 style={{ fontSize: 13, fontWeight: 700, color: '#60a5fa', textTransform: 'uppercase', letterSpacing: 0.5, margin: '0 0 12px' }}>Технічне завдання</h4>
+                <div className="tw-material-col">
+                  <h4>Технічне завдання</h4>
                   {team.tournament_tz_enabled && team.tournament_tz && (
                     <>
                       <div className="tw-round-field">
-                        <p style={{ margin: '4px 0 12px', lineHeight: 1.6, color: '#e0e0e0', whiteSpace: 'pre-wrap' }}>{team.tournament_tz}</p>
+                        <p>{team.tournament_tz}</p>
                       </div>
-                      <div style={{ margin: '0 0 14px' }}>
-                        <button type="button" onClick={downloadTzMd} style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 8,
-                          padding: '8px 16px', borderRadius: 10,
-                          background: 'rgba(59,130,246,.15)', color: '#60a5fa',
-                          fontSize: 14, fontWeight: 500, textDecoration: 'none',
-                          border: '1px solid rgba(59,130,246,.3)',
-                          cursor: 'pointer',
-                        }}>⬇ Скачати ТЗ як .md</button>
+                      <div className="tw-link-row">
+                        <button type="button" onClick={downloadTzMd} className="tw-file-pill blue">
+                          <IconAttach /> Скачати ТЗ як .md
+                        </button>
                       </div>
                     </>
                   )}
                   {tournamentFiles.length > 0 && (
-                    <div className="tw-round-field" style={{ paddingTop: 10, borderTop: '1px dashed rgba(255,255,255,.1)' }}>
-                      <label style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5 }}>📃 Матеріали до ТЗ</label>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                    <div className="tw-round-field tw-files-block">
+                      <label>Матеріали до ТЗ</label>
+                      <div className="tw-file-list">
                         {tournamentFiles.map((f, i) => (
-                          <a key={i} href={fileUrl(f.url)} target="_blank" rel="noreferrer" download style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 8,
-                            padding: '8px 14px', borderRadius: 8,
-                            background: 'rgba(255,255,255,.05)', color: '#ccc',
-                            fontSize: 13, textDecoration: 'none',
-                            border: '1px solid rgba(255,255,255,.08)',
-                          }}>
-                            <span>📎</span>
+                          <a key={i} href={fileUrl(f.url)} target="_blank" rel="noreferrer" download className="tw-file-link-card">
+                            <IconAttach />
                             <span style={{ flex: 1 }}>{f.name}</span>
-                            <span style={{ fontSize: 11, color: '#888' }}>Відкрити фаіл</span>
+                            <small>Відкрити</small>
                           </a>
                         ))}
                       </div>
@@ -898,19 +946,19 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
         />
       ) : submission ? (
         <div className="sub-wrap">
-          <div className="sub-card" style={{ marginTop: 8 }}>
+          <div className="sub-card tw-info-card">
             <div className="sub-card-accent" style={{ background: '#10b981' }} />
-            <h3 className="sub-card-title">Здана робота</h3>
-            <div className="tw-submitted-info" style={{ paddingLeft: 12 }}>
+            <WorkspaceCardTitle icon={IconCheck} title="Здана робота" badge="Готово" accent="#10b981" />
+            <div className="tw-submitted-info">
               <a href={submission.github_repo_url} target="_blank" rel="noreferrer" className="tw-repo-link">
-                <IconGithub style={{ width: 13, height: 13, verticalAlign: -2, marginRight: 5 }} />{submission.github_repo_url}
+                <IconGithub />{submission.github_repo_url}
               </a>
               <span className="tw-repo-branch">Гілка: {submission.github_branch}</span>
               {submission.live_demo_url && (
-                <a href={submission.live_demo_url} target="_blank" rel="noreferrer" className="tw-demo-link">🌐 Живе демо</a>
+                <a href={submission.live_demo_url} target="_blank" rel="noreferrer" className="tw-demo-link"><IconExternal /> Живе демо</a>
               )}
               {submission.pitch_video_url && (
-                <a href={submission.pitch_video_url} target="_blank" rel="noreferrer" className="tw-demo-link">▶ Пітч-відео</a>
+                <a href={submission.pitch_video_url} target="_blank" rel="noreferrer" className="tw-demo-link"><IconPlay /> Пітч-відео</a>
               )}
               {submission.description && (
                 <p className="tw-submitted-desc">{submission.description}</p>
@@ -921,43 +969,42 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
       ) : tournStatus === 'running' && activeRound ? (
         /* ── Project work phase ── */
         <div className="sub-wrap">
-          <div className="sub-card" style={{ marginTop: 8 }}>
+          <div className="sub-card tw-info-card">
             <div className="sub-card-accent" style={{ background: '#3b82f6' }} />
-            <h3 className="sub-card-title">🔧 Робота над проєктом</h3>
-            <div style={{ padding: '0 12px' }}>
-              <p style={{ margin: '0 0 12px', color: '#e0e0e0', lineHeight: 1.6 }}>
+            <WorkspaceCardTitle icon={IconClock} title="Робота над проєктом" badge="Очікує здачу" accent="#3b82f6" />
+            <div className="tw-soft-panel">
+              <p>
                 Зараз ви працюєте над проєктом. Коли відкриється період здачі, тут з'явиться форма для завантаження вашої роботи.
               </p>
               {subStart && subEnd && (
-                <div style={{ marginBottom: 12, padding: '10px 14px', background: 'rgba(59,130,246,.08)', borderRadius: 8, border: '1px solid rgba(59,130,246,.2)' }}>
-                  <span style={{ fontSize: 13, color: '#60a5fa' }}>
-                    📅 Період здачі: {new Date(subStart).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} — {new Date(subEnd).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                <div className="tw-date-strip tw-date-strip--blue">
+                  <span>
+                    <IconCalendar /> Період здачі: {new Date(subStart).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} — {new Date(subEnd).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
               )}
 
               {/* Temporary notes while working */}
               <div className="tw-work-notes">
-                <label style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5 }}>📝 Нотатки команди</label>
+                <label>Нотатки команди</label>
                 <textarea
                   className="db-input"
                   rows={4}
                   placeholder="Посилання на ресурси, ідеї, todo-лист..."
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
-                  style={{ resize: 'vertical', marginTop: 6, fontSize: 14 }}
                 />
-                <p style={{ fontSize: 11, color: '#666', margin: '4px 0 0' }}>Нотатки зберігаються локально у вашому браузері.</p>
+                <p>Нотатки зберігаються локально у вашому браузері.</p>
               </div>
             </div>
           </div>
         </div>
       ) : (
         <div className="sub-wrap">
-          <div className="sub-card" style={{ marginTop: 8 }}>
+          <div className="sub-card tw-info-card">
             <div className="sub-card-accent" style={{ background: '#9ca3af' }} />
-            <h3 className="sub-card-title">Здача роботи</h3>
-            <p className="tw-section-note" style={{ paddingLeft: 12, margin: 0, color: '#6b7280' }}>
+            <WorkspaceCardTitle icon={IconClock} title="Здача роботи" badge="Недоступно" accent="#9ca3af" />
+            <p className="tw-section-note">
               {subStart && subEnd
                 ? (now < subStart
                   ? `Здача відкриється ${new Date(subStart).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
@@ -971,7 +1018,7 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
                 : 'Здача наразі недоступна'}
             </p>
             {subStart && subEnd && now < subEnd && (
-              <div style={{ paddingLeft: 12 }}>
+              <div>
                 <DeadlineBar label="Період здачі до" dateStr={new Date(subEnd).toISOString()} />
               </div>
             )}

@@ -12,7 +12,7 @@ import IconGithub      from "@images/dashboard_components/icon_github.svg?react"
 import IconSend        from "@images/dashboard_components/send.svg?react";
 
 import { getMyTeams, getTeamById, updateTeam, searchUsers, getTournamentRounds, getTeamSubmissions, createSubmission, updateSubmission, API_BASE } from "@utils/authApi";
-import { StatusBadge, UserAvatar, pickCurrentRound } from "./db.shared.jsx";
+import { StatusBadge, UserAvatar, pickCurrentRound, getSocket } from "./db.shared.jsx";
 
 const AVATAR_GRADIENTS = [
   "linear-gradient(135deg,#AC9EF8,#7c5ff5)",
@@ -492,11 +492,29 @@ export default function TabTeams({ toast, setTab }) {
   const [detailCache, setDetailCache] = useState({});
   const [detailLoading, setDetailLoading] = useState({});
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try { setTeams(await getMyTeams()); } catch { toast.error("Помилка"); } finally { setLoading(false); }
+  const load = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
+    try { setTeams(await getMyTeams()); } catch { if (!silent) toast.error("Помилка"); } finally { if (!silent) setLoading(false); }
   }, [toast]);
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    const refresh = () => {
+      setDetailCache({});
+      load({ silent: true });
+    };
+    window.addEventListener('cl:teams:changed', refresh);
+    window.addEventListener('focus', refresh);
+    socket?.on?.('notification:new', refresh);
+    socket?.on?.('status:changed', refresh);
+    return () => {
+      window.removeEventListener('cl:teams:changed', refresh);
+      window.removeEventListener('focus', refresh);
+      socket?.off?.('notification:new', refresh);
+      socket?.off?.('status:changed', refresh);
+    };
+  }, [load]);
 
   const handleExpand = async (id) => {
     if (expanded === id) { setExpanded(null); return; }

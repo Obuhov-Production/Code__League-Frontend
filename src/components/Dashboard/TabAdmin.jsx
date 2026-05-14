@@ -17,7 +17,7 @@ import IconGithub  from '@images/dashboard_components/icon_github.svg?react';
 
 import {
   getTournaments, getAdminUsers, getAdminStats, getAdminTeams,
-  createTournament, updateTournament, uploadTournamentFile,
+  createTournament, updateTournament, uploadTournamentFile, deleteTournamentFile,
   updateTournamentStatus, deleteTournament,
   setUserRole, deleteAdminUser, setUserPassword, adminDeleteTeam,
   clearChatRoom, getCustomChatRooms, createChatRoom, deleteChatRoom,
@@ -600,8 +600,19 @@ function EditTournamentModal({ tournament, allTeams, toast, onClose, onSuccess, 
             <TournamentForm
               mode="edit"
               tournament={tournament}
-              onSubmit={async (payload) => {
+              onSubmit={async (payload, files, meta = {}) => {
                 await updateTournament(tournament.id, payload);
+                if (meta?.removedFiles?.length) {
+                  for (const file of meta.removedFiles) {
+                    await deleteTournamentFile(tournament.id, file.type, file.name).catch(() => {});
+                  }
+                }
+                if (files?.rules) {
+                  await uploadTournamentFile(tournament.id, 'rules', files.rules);
+                }
+                if (files?.tz?.length) {
+                  for (const f of files.tz) await uploadTournamentFile(tournament.id, 'tz', f);
+                }
                 toast.success('Турнір оновлено!');
                 onSuccess();
               }}
@@ -733,6 +744,7 @@ export default function TabAdmin({ toast }) {
   const [tournaments, setTournaments] = useState([]);
   const [users,       setUsers]       = useState([]);
   const [adminTeams,  setAdminTeams]  = useState([]);
+  const [teamsLoading, setTeamsLoading] = useState(false);
   const [stats,       setStats]       = useState(null);
   const [loading,     setLoading]     = useState(true);
   const [showCreate,     setShowCreate]     = useState(false);
@@ -884,8 +896,11 @@ export default function TabAdmin({ toast }) {
   useEffect(() => { loadApplications(); }, [loadApplications]);
 
   const loadTeams = useCallback(async () => {
-    try { setAdminTeams(await getAdminTeams()); } catch {}
-  }, []);
+    setTeamsLoading(true);
+    try { setAdminTeams(await getAdminTeams()); }
+    catch (err) { toast.error(err.message || 'Не вдалося завантажити команди'); }
+    finally { setTeamsLoading(false); }
+  }, [toast]);
 
   useEffect(() => { if (adminTab === 'teams') loadTeams(); }, [adminTab, loadTeams]);
 
@@ -1360,11 +1375,16 @@ export default function TabAdmin({ toast }) {
                 <TournamentForm
                   mode="create"
                   loading={creating}
-                  onSubmit={async (payload, files) => {
+                  onSubmit={async (payload, files, meta = {}) => {
                     setCreating(true);
                     try {
                       const result = await createTournament(payload);
                       const id = result?.id ?? result;
+                      if (id && meta?.removedFiles?.length) {
+                        for (const file of meta.removedFiles) {
+                          await deleteTournamentFile(id, file.type, file.name).catch(() => {});
+                        }
+                      }
                       if (id && files?.rules) {
                         await uploadTournamentFile(id, 'rules', files.rules).catch(() => {});
                       }
@@ -1547,7 +1567,10 @@ export default function TabAdmin({ toast }) {
                 <label style={{ fontSize: 13, color: '#666' }}>Турнір:</label>
                 <select className="db-select db-select-sm" value={filterTour} onChange={e => setFilterTour(e.target.value)}>
                   <option value="">— Усі —</option>
-                  {[...new Map(adminTeams.map(t => [t.tournament_id, t.tournament_name])).entries()].map(([id, name]) => (
+                  {[...new Map(adminTeams
+                    .filter(t => t.tournament_id != null)
+                    .map(t => [t.tournament_id, t.tournament_name || 'Без назви'])
+                  ).entries()].map(([id, name]) => (
                     <option key={id} value={id}>{name}</option>
                   ))}
                 </select>
@@ -1555,16 +1578,35 @@ export default function TabAdmin({ toast }) {
               <table className="db-admin-table">
                 <thead><tr><th>#</th><th>Команда</th><th>Турнір</th><th>Капітан</th><th>Учасників</th><th>Статус</th><th></th></tr></thead>
                 <tbody>
-                  {adminTeams
+                  {teamsLoading ? (
+                    <tr><td colSpan="7" style={{ textAlign: 'center', padding: 28 }}><div className="db-spinner sm" /></td></tr>
+                  ) : adminTeams.length === 0 ? (
+                    <tr><td colSpan="7" style={{ textAlign: 'center', padding: 28, color: '#aaa' }}>Команд ще немає</td></tr>
+                  ) : adminTeams
                     .filter(t => !filterTour || String(t.tournament_id) === String(filterTour))
                     .map(t => (
                       <tr key={t.id}>
                         <td style={{ color: '#bbb', fontSize: 12 }}>{t.id}</td>
-                        <td><strong>{t.name}</strong></td>
-                        <td style={{ fontSize: 13 }}>{t.tournament_name}</td>
-                        <td style={{ fontSize: 13, color: '#666' }}>{t.captain_name}</td>
-                        <td>{t.members_count}</td>
-                        <td><StatusBadge status={t.tournament_status} /></td>
+                        <td>
+                          <strong>{t.name || 'Без назви'}</strong>
+                          {(t.city || t.school) && (
+                            <div style={{ marginTop: 3, fontSize: 11, color: '#aaa' }}>
+                              {[t.city, t.school].filter(Boolean).join(' · ')}
+                            </div>
+                          )}
+                        </td>
+                        <td style={{ fontSize: 13 }}>{t.tournament_name || '—'}</td>
+                        <td style={{ fontSize: 13, color: '#666' }}>
+                          <div>{t.captain_name || '—'}</div>
+                          {t.captain_email && <div style={{ marginTop: 2, fontSize: 11, color: '#aaa' }}>{t.captain_email}</div>}
+                        </td>
+                        <td>
+                          <strong>{Number(t.members_count ?? 0)}</strong>
+                          {Number(t.pending_members_count ?? 0) > 0 && (
+                            <span style={{ marginLeft: 6, fontSize: 11, color: '#f59e0b' }}>+{t.pending_members_count} очікує</span>
+                          )}
+                        </td>
+                        <td><StatusBadge status={t.tournament_status || 'draft'} /></td>
                         <td>
                           <button className="db-btn db-btn-danger db-btn-sm" onClick={() => handleDeleteAdminTeam(t.id, t.name)}><IconTrash style={{ width: 13, height: 13, verticalAlign: -2, marginRight: 4 }} /> Видалити</button>
                         </td>

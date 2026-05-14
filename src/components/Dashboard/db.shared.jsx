@@ -4,7 +4,7 @@ const PublicProfileModal = lazy(() =>
   import('./PublicProfilePage.jsx').then(m => ({ default: m.PublicProfileModal }))
 );
 import { io } from 'socket.io-client';
-import { searchUsers, getUserProfile, getTournaments, API_BASE, CHECK_BACKEND, getToken } from '@utils/authApi';
+import { searchUsers, getUserProfile, getTournaments, getTournamentFiles, API_BASE, CHECK_BACKEND, getToken } from '@utils/authApi';
 
 import IconGithubSm  from '@images/dashboard_components/icon_github.svg?react';
 import IconLogoutSm  from '@images/dashboard_components/icon_logout.svg?react';
@@ -787,25 +787,37 @@ export function playDeleteSound() {
    JURY SEARCH SELECTOR
    Пошук користувачів з фільтрацією за ролями (organizer/jury)
 ══════════════════════════════════════════════════ */
-function JurySearchSelector({ selectedJury, onChange }) {
+function JurySearchSelector({ selectedJury, onChange, initialUsers = [] }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [selectedUsers, setSelectedUsers] = useState(initialUsers);
   const debounceRef = useRef(null);
 
   // Завантажуємо деталі обраних журі
   useEffect(() => {
+    setSelectedUsers(prev => {
+      const map = new Map(prev.map(u => [Number(u.id), u]));
+      initialUsers.forEach(u => {
+        if (u?.id) map.set(Number(u.id), u);
+      });
+      return selectedJury.map(id => map.get(Number(id)) || { id, username: `#${id}`, role: 'jury' });
+    });
+  }, [initialUsers, selectedJury]);
+
+  useEffect(() => {
+    const missingIds = selectedJury.filter(id => !selectedUsers.some(u => Number(u.id) === Number(id)));
+    if (missingIds.length === 0) return;
     const loadSelected = async () => {
-      if (selectedJury.length === 0) {
-        setSelectedUsers([]);
-        return;
-      }
       try {
-        const users = await Promise.all(selectedJury.map(id => getUserProfile(id)));
-        setSelectedUsers(users.filter(u => u && u.id));
+        const users = await Promise.all(missingIds.map(id => getUserProfile(id)));
+        setSelectedUsers(prev => {
+          const map = new Map(prev.map(u => [Number(u.id), u]));
+          users.filter(u => u && u.id).forEach(u => map.set(Number(u.id), u));
+          return selectedJury.map(id => map.get(Number(id)) || { id, username: `#${id}`, role: 'jury' });
+        });
       } catch {
-        setSelectedUsers([]);
+        setSelectedUsers(prev => selectedJury.map(id => prev.find(u => Number(u.id) === Number(id)) || { id, username: `#${id}`, role: 'jury' }));
       }
     };
     loadSelected();
@@ -837,6 +849,7 @@ function JurySearchSelector({ selectedJury, onChange }) {
 
   const addJury = (user) => {
     if (!selectedJury.includes(user.id)) {
+      setSelectedUsers(prev => [...prev.filter(u => Number(u.id) !== Number(user.id)), user]);
       onChange([...selectedJury, user.id]);
     }
     setQuery('');
@@ -963,6 +976,38 @@ const WIZARD_STEPS = [
 const RULES_ACCEPTED = '.doc,.docx,.pdf,.txt,.md,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown';
 const TZ_ACCEPTED = '.zip,.txt,.md,.pdf,.doc,.docx,.png,.jpg,.jpeg,.gif';
 
+function fileNameFromUrl(url) {
+  if (!url) return '';
+  const raw = String(url).split('/').pop() || '';
+  try { return decodeURIComponent(raw); } catch { return raw; }
+}
+
+function parsePrizeList(value) {
+  const fallback = [{ place: 1, description: '' }, { place: 2, description: '' }, { place: 3, description: '' }];
+  if (!value) return fallback;
+  if (Array.isArray(value)) return value.length ? value : fallback;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) && parsed.length ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function normalizeTournamentJury(tournament) {
+  const users = tournament?.jury_members || tournament?.jury || tournament?.assigned_jury || [];
+  if (!Array.isArray(users)) return [];
+  return users.filter(u => u && u.id).map(u => ({
+    ...u,
+    username: u.username || u.full_name || u.name || u.email || `#${u.id}`,
+  }));
+}
+
+function normalizeTournamentJuryIds(tournament) {
+  if (Array.isArray(tournament?.jury_ids)) return tournament.jury_ids.map(Number).filter(Boolean);
+  return normalizeTournamentJury(tournament).map(u => Number(u.id)).filter(Boolean);
+}
+
 function insertMd(textareaId, before, after, setFn, currentVal) {
   const ta = document.getElementById(textareaId);
   if (!ta) return;
@@ -1006,18 +1051,22 @@ export function TournamentForm({
   const [rulesText, setRulesText] = useState(t.rules || '');
   const [rulesFile, setRulesFile] = useState(null);
   const [rulesFileName, setRulesFileName] = useState(
-    t.rules_file_url ? decodeURIComponent(t.rules_file_url.split('/').pop()) : ''
+    t.rules_file_url ? fileNameFromUrl(t.rules_file_url) : ''
   );
+  const [rulesFileRemoved, setRulesFileRemoved] = useState(false);
 
   // Step 3 — ТЗ
-  const [tzMode, setTzMode] = useState('text');
+  const [tzMode, setTzMode] = useState(t.tz ? 'text' : (!isCreate && t.id ? 'file' : 'text'));
   const [tz, setTz] = useState(t.tz || '');
   const [tzMainFile, setTzMainFile] = useState(null);
   const [tzFiles, setTzFiles] = useState([]);
+  const [existingFiles, setExistingFiles] = useState({ rules: [], tz: [], misc: [] });
+  const [removedFiles, setRemovedFiles] = useState([]);
   const [showTzPreview, setShowTzPreview] = useState(false);
 
   // Step 4 — Журі
-  const [selectedJury, setSelectedJury] = useState(t.jury_ids || []);
+  const [selectedJury, setSelectedJury] = useState(normalizeTournamentJuryIds(t));
+  const [initialJuryUsers, setInitialJuryUsers] = useState(normalizeTournamentJury(t));
 
   // Step 5 — Налаштування
   const [startDate, setStartDate] = useState(toDateTimeInput(t.start_date));
@@ -1035,15 +1084,55 @@ export function TournamentForm({
   const [eloParticipation, setEloParticipation] = useState(t.elo_participation ?? 10);
   const [eloPerRound, setEloPerRound] = useState(t.elo_per_round ?? 20);
   const [eloWinner, setEloWinner] = useState(t.elo_winner ?? 100);
-  const [hasAdditionalPrizes, setHasAdditionalPrizes] = useState(() => {
-    if (!t.additional_prizes) return false;
-    try { return JSON.parse(t.additional_prizes).length > 0; } catch { return false; }
-  });
-  const [additionalPrizes, setAdditionalPrizes] = useState(() => {
-    if (!t.additional_prizes) return [{ place: 1, description: '' }, { place: 2, description: '' }, { place: 3, description: '' }];
-    try { const p = JSON.parse(t.additional_prizes); return p.length ? p : [{ place: 1, description: '' }, { place: 2, description: '' }, { place: 3, description: '' }]; }
-    catch { return [{ place: 1, description: '' }, { place: 2, description: '' }, { place: 3, description: '' }]; }
-  });
+  const [hasAdditionalPrizes, setHasAdditionalPrizes] = useState(() => (
+    parsePrizeList(t.additional_prizes).some(p => String(p?.description || '').trim())
+  ));
+  const [additionalPrizes, setAdditionalPrizes] = useState(() => parsePrizeList(t.additional_prizes));
+
+  useEffect(() => {
+    if (isCreate || !t.id) return;
+    let cancelled = false;
+
+    getTournamentFiles(t.id)
+      .then(data => {
+        if (cancelled) return;
+        const grouped = { rules: [], tz: [], misc: [] };
+        (data?.files || []).forEach(group => {
+          if (!group?.type) return;
+          grouped[group.type] = Array.isArray(group.files) ? group.files : [];
+        });
+        setExistingFiles(grouped);
+        if (!tz && grouped.tz?.length) setTzMode('file');
+        if (!rulesFileName && grouped.rules?.[0]?.name) setRulesFileName(grouped.rules[0].name);
+      })
+      .catch(() => {});
+
+    fetch(`${API_BASE}/tournaments/${t.id}/jury`, { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then(res => res.ok ? res.json() : [])
+      .then(users => {
+        if (cancelled || !Array.isArray(users)) return;
+        const normalized = users.filter(u => u?.id).map(u => ({
+          ...u,
+          username: u.username || u.full_name || u.name || u.email || `#${u.id}`,
+        }));
+        setInitialJuryUsers(normalized);
+        setSelectedJury(prev => prev.length ? prev : normalized.map(u => Number(u.id)).filter(Boolean));
+      })
+      .catch(() => {});
+
+    return () => { cancelled = true; };
+  }, [isCreate, t.id]);
+
+  const markExistingFileRemoved = (type, file) => {
+    if (!file?.name) return;
+    setRemovedFiles(prev => (
+      prev.some(item => item.type === type && item.name === file.name) ? prev : [...prev, { type, name: file.name }]
+    ));
+    setExistingFiles(prev => ({
+      ...prev,
+      [type]: (prev[type] || []).filter(item => item.name !== file.name),
+    }));
+  };
 
   const canNext = () => {
     if (step === 1) return name.trim().length > 0;
@@ -1079,7 +1168,8 @@ export function TournamentForm({
         : null,
     };
 
-    if (selectedJury.length > 0) payload.jury_ids = selectedJury;
+    if (rulesFileRemoved && !rulesFile) payload.rules_file_url = null;
+    if (!isCreate || selectedJury.length > 0) payload.jury_ids = selectedJury;
     if (isCreate) payload.status = status;
     if (parentTournamentId) payload.parent_tournament_id = Number(parentTournamentId);
 
@@ -1087,7 +1177,7 @@ export function TournamentForm({
       rules: rulesMode === 'file' ? rulesFile : null,
       tz: tzMode === 'file' && tzMainFile ? [tzMainFile, ...tzFiles] : tzFiles,
     };
-    await onSubmit(payload, files);
+    await onSubmit(payload, files, { removedFiles });
   };
 
   // Load available parent tournaments (only for create mode, exclude current)
@@ -1278,7 +1368,7 @@ export function TournamentForm({
                     style={{ display: 'none' }}
                     onChange={e => {
                       const f = e.target.files?.[0];
-                      if (f) { setRulesFile(f); setRulesFileName(f.name); }
+                      if (f) { setRulesFile(f); setRulesFileName(f.name); setRulesFileRemoved(false); }
                     }}
                   />
                   <span className="db-file-drop-icon">📄</span>
@@ -1291,22 +1381,33 @@ export function TournamentForm({
                     </>
                   )}
                 </label>
-                {rulesFileName && (
+                {rulesFileName && (rulesFile || !t.rules_file_url || rulesFileRemoved) && (
                   <div className="db-file-attached">
                     <span>📎 {rulesFileName}</span>
                     <button
                       type="button"
                       className="db-file-remove"
-                      onClick={() => { setRulesFile(null); setRulesFileName(''); }}
+                      onClick={() => { setRulesFile(null); setRulesFileName(''); setRulesFileRemoved(true); }}
                     >✕</button>
                   </div>
                 )}
-                {t.rules_file_url && !rulesFile && (
+                {t.rules_file_url && !rulesFile && !rulesFileRemoved && (
                   <div className="db-file-existing">
                     <span>📎 Поточний файл:</span>
                     <a href={t.rules_file_url} target="_blank" rel="noopener noreferrer">
-                      {decodeURIComponent(t.rules_file_url.split('/').pop())}
+                      {fileNameFromUrl(t.rules_file_url)}
                     </a>
+                    <button
+                      type="button"
+                      className="db-file-action"
+                      onClick={() => {
+                        markExistingFileRemoved('rules', { name: fileNameFromUrl(t.rules_file_url) });
+                        setRulesFileRemoved(true);
+                        setRulesFileName('');
+                      }}
+                    >
+                      Видалити
+                    </button>
                   </div>
                 )}
               </div>
@@ -1474,6 +1575,22 @@ export function TournamentForm({
                 <span className="db-file-drop-text">Додати файли матеріалів</span>
                 <span className="db-file-drop-hint">.zip, .pdf, .txt, .md, .doc, зображення — до 20 МБ кожен</span>
               </label>
+              {existingFiles.tz.length > 0 && (
+                <div className="db-tz-files-list">
+                  {existingFiles.tz.map(file => (
+                    <div key={file.name} className="db-file-attached db-file-attached--existing">
+                      <a href={file.url} target="_blank" rel="noopener noreferrer">Поточний файл: {file.name}</a>
+                      <button
+                        type="button"
+                        className="db-file-action"
+                        onClick={() => markExistingFileRemoved('tz', file)}
+                      >
+                        Видалити
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               {tzFiles.length > 0 && (
                 <div className="db-tz-files-list">
                   {tzFiles.map((f, i) => (
@@ -1494,7 +1611,7 @@ export function TournamentForm({
             <h4 className="db-wizard-step-title">⚖️ Призначення журі</h4>
             <div className="db-edit-field">
               <label className="db-edit-label">Виберіть журі для оцінювання</label>
-              <JurySearchSelector selectedJury={selectedJury} onChange={setSelectedJury} />
+              <JurySearchSelector selectedJury={selectedJury} onChange={setSelectedJury} initialUsers={initialJuryUsers} />
               <small className="db-field-hint">
                 💡 Журі зможуть оцінювати проєкти у всіх раундах цього турніру. Журі доступний окремий розділ зі списком команд та формою оцінювання.
               </small>

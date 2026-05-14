@@ -109,9 +109,12 @@ function TeamRegForm({ tournament, toast, onSuccess, onCancel, user }) {
         leader_email: emailTrim,
         members: cleanMembers,
       };
-      await registerTeam(teamPayload);
+      const createdTeam = await registerTeam(teamPayload);
       onSuccess();
-      window.location.reload();
+      window.dispatchEvent(new CustomEvent('cl:teams:changed', {
+        detail: { reason: 'team-created', team: createdTeam }
+      }));
+      toast.success('Команду створено');
     }
     catch (err) { toast.error(err.message); }
     finally { setLoading(false); }

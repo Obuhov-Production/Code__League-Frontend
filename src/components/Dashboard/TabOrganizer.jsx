@@ -3,7 +3,7 @@ import {
   getTournaments,
   createTournament, updateTournament,
   updateTournamentStatus, deleteTournament,
-  getAdminTeams, uploadTournamentFile,
+  getAdminTeams, uploadTournamentFile, deleteTournamentFile,
   getTournamentRounds, createRound, updateRound, deleteRound,
   advanceRound, uploadRoundFile,
 } from '@utils/authApi';
@@ -389,10 +389,15 @@ function EditTournamentModal({ tournament, toast, onClose, onSuccess }) {
             mode="edit"
             tournament={tournament}
             loading={saving}
-            onSubmit={async (payload, files) => {
+            onSubmit={async (payload, files, meta = {}) => {
               setSaving(true);
               try {
                 await updateTournament(tournament.id, payload);
+                if (meta?.removedFiles?.length) {
+                  for (const file of meta.removedFiles) {
+                    await deleteTournamentFile(tournament.id, file.type, file.name).catch(() => {});
+                  }
+                }
                 if (files?.rules) {
                   await uploadTournamentFile(tournament.id, 'rules', files.rules);
                 }
