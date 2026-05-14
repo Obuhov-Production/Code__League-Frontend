@@ -4,6 +4,8 @@ import {
   createTournament, updateTournament,
   updateTournamentStatus, deleteTournament,
   getAdminTeams, uploadTournamentFile,
+  getTournamentRounds, createRound, updateRound, deleteRound,
+  advanceRound,
 } from '@utils/authApi';
 import { StatusBadge, ConfirmModal, formatDate, TournamentForm } from './db.shared.jsx';
 import IconTeams from '@images/dashboard_components/icon_teams.svg?react';
@@ -65,6 +67,209 @@ function StatusPicker({ value, onChange, compact = false }) {
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+const ROUND_STATUS_COLORS = {
+  draft: '#888',
+  active: '#16a34a',
+  submission_closed: '#f59e0b',
+  evaluated: '#0ea5e9',
+};
+
+/* ── RoundManager — round navigation & CRUD ────────── */
+function RoundManager({ tournament, toast, onRoundsChange }) {
+  const [rounds, setRounds]       = useState([]);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [loading, setLoading]     = useState(true);
+  const [saving, setSaving]       = useState(false);
+  const [editMode, setEditMode]   = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [confirmModal, setConfirmModal] = useState(null);
+
+  // Create form state
+  const [newTitle, setNewTitle] = useState('');
+  const [newDesc, setNewDesc]   = useState('');
+  const [newTech, setNewTech]   = useState('');
+  const [newMust, setNewMust]   = useState('');
+  const [newStart, setNewStart] = useState('');
+  const [newEnd, setNewEnd]     = useState('');
+
+  const loadRounds = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await getTournamentRounds(tournament.id);
+      setRounds(r);
+      const ai = r.findIndex(x => x.status === 'active');
+      setActiveIdx(ai >= 0 ? ai : 0);
+      onRoundsChange?.(r);
+    } catch (e) { toast.error(e.message); }
+    finally { setLoading(false); }
+  }, [tournament.id, toast]);
+
+  useEffect(() => { loadRounds(); }, [loadRounds]);
+
+  const handleAdvance = async (dir) => {
+    const label = dir > 0 ? 'наступний' : 'попередній';
+    setConfirmModal({
+      message: `Перейти на ${label} раунд? ${dir > 0 ? 'Поточний раунд буде закрито для здачі.' : 'Поточний раунд повернеться в чернетку.'}`,
+      onConfirm: async () => {
+        setSaving(true);
+        try {
+          const res = await advanceRound(tournament.id, dir);
+          toast.success(`Активний раунд: ${res.active_round?.title}`);
+          await loadRounds();
+        } catch (e) { toast.error(e.message); }
+        finally { setSaving(false); setConfirmModal(null); }
+      },
+    });
+  };
+
+  const handleCreate = async () => {
+    if (!newTitle.trim() || !newStart || !newEnd) { toast.error('Заповніть назву та дати'); return; }
+    setSaving(true);
+    try {
+      await createRound(tournament.id, {
+        title: newTitle,
+        description: newDesc || null,
+        tech_requirements: newTech || null,
+        must_have_items: newMust ? newMust.split('\n').map(s => s.trim()).filter(Boolean) : [],
+        starts_at: new Date(newStart).toISOString(),
+        deadline_at: new Date(newEnd).toISOString(),
+        sort_order: rounds.length,
+        status: 'draft',
+      });
+      toast.success('Раунд створено');
+      setShowCreate(false);
+      setNewTitle(''); setNewDesc(''); setNewTech(''); setNewMust(''); setNewStart(''); setNewEnd('');
+      await loadRounds();
+    } catch (e) { toast.error(e.message); }
+    finally { setSaving(false); }
+  };
+
+  const handleDeleteRound = (roundId, title) => {
+    setConfirmModal({
+      message: `Видалити раунд "${title}"? Це видалить всі пов'язані здачі.`,
+      onConfirm: async () => {
+        try { await deleteRound(roundId); toast.success('Видалено'); await loadRounds(); }
+        catch (e) { toast.error(e.message); }
+        finally { setConfirmModal(null); }
+      },
+    });
+  };
+
+  const current = rounds[activeIdx];
+
+  if (loading) return <div className="db-loading" style={{ padding: 32 }}><div className="db-spinner" /></div>;
+
+  return (
+    <div className="org-round-manager">
+      {/* Navigation bar:  ‹ Round 1 of 3 › */}
+      <div className="org-round-nav">
+        <button
+          className="org-round-nav-btn"
+          disabled={activeIdx <= 0 || saving}
+          onClick={() => setActiveIdx(i => Math.max(0, i - 1))}
+        >‹</button>
+        <div className="org-round-nav-info">
+          {rounds.length === 0 ? (
+            <span style={{ color: '#888' }}>Раундів ще немає</span>
+          ) : (
+            <>
+              <span className="org-round-nav-title">{current?.title || `Раунд ${activeIdx + 1}`}</span>
+              <span className="org-round-nav-count">{activeIdx + 1} / {rounds.length}</span>
+            </>
+          )}
+        </div>
+        <button
+          className="org-round-nav-btn"
+          disabled={activeIdx >= rounds.length - 1 || saving}
+          onClick={() => setActiveIdx(i => Math.min(rounds.length - 1, i + 1))}
+        >›</button>
+      </div>
+
+      {/* Round status controls */}
+      {current && (
+        <div className="org-round-controls">
+          <span className="org-round-status" style={{ color: ROUND_STATUS_COLORS[current.status] || '#888' }}>
+            ● {current.status === 'active' ? 'Активний' : current.status === 'draft' ? 'Чернетка' : current.status === 'submission_closed' ? 'Здача закрита' : 'Оцінено'}
+          </span>
+          <div className="org-round-actions">
+            <button className="db-btn db-btn-ghost db-btn-sm" disabled={saving} onClick={() => handleAdvance(-1)} title="Попередній раунд">
+              ⏪ Попередній
+            </button>
+            <button className="db-btn db-btn-primary db-btn-sm" disabled={saving} onClick={() => handleAdvance(1)} title="Наступний раунд">
+              Наступний ⏩
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Round details */}
+      {current && (
+        <div className="org-round-details">
+          {current.description && (
+            <div className="org-round-field">
+              <label>Опис</label>
+              <p>{current.description}</p>
+            </div>
+          )}
+          {current.tech_requirements && (
+            <div className="org-round-field">
+              <label>Технічні вимоги</label>
+              <p>{current.tech_requirements}</p>
+            </div>
+          )}
+          {current.must_have_items?.length > 0 && (
+            <div className="org-round-field">
+              <label>Обов'язкові елементи</label>
+              <ul>{current.must_have_items.map((item, i) => <li key={i}>{item}</li>)}</ul>
+            </div>
+          )}
+          <div className="org-round-dates">
+            <span>📅 {new Date(current.starts_at).toLocaleString('uk-UA')} — {new Date(current.deadline_at).toLocaleString('uk-UA')}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <button className="db-btn db-btn-danger db-btn-sm" onClick={() => handleDeleteRound(current.id, current.title)}>🗑 Видалити</button>
+          </div>
+        </div>
+      )}
+
+      {/* Create new round */}
+      <button className="db-btn db-btn-ghost" style={{ marginTop: 12 }} onClick={() => setShowCreate(p => !p)}>
+        {showCreate ? '✕ Скасувати' : '+ Додати раунд'}
+      </button>
+
+      {showCreate && (
+        <div className="org-round-create-form">
+          <input className="db-input" placeholder="Назва раунду *" value={newTitle} onChange={e => setNewTitle(e.target.value)} />
+          <textarea className="db-input" rows={3} placeholder="Опис (завдання, правила...)" value={newDesc} onChange={e => setNewDesc(e.target.value)} style={{ resize: 'vertical' }} />
+          <textarea className="db-input" rows={2} placeholder="Технічні вимоги" value={newTech} onChange={e => setNewTech(e.target.value)} style={{ resize: 'vertical' }} />
+          <textarea className="db-input" rows={2} placeholder="Обов'язкові елементи (кожен з нового рядка)" value={newMust} onChange={e => setNewMust(e.target.value)} style={{ resize: 'vertical' }} />
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 12, color: '#888' }}>Початок</label>
+              <input className="db-input" type="datetime-local" value={newStart} onChange={e => setNewStart(e.target.value)} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 12, color: '#888' }}>Дедлайн</label>
+              <input className="db-input" type="datetime-local" value={newEnd} onChange={e => setNewEnd(e.target.value)} />
+            </div>
+          </div>
+          <button className="db-btn db-btn-primary" onClick={handleCreate} disabled={saving}>
+            {saving ? 'Зберігаю...' : 'Створити раунд'}
+          </button>
+        </div>
+      )}
+
+      {confirmModal && (
+        <ConfirmModal
+          message={confirmModal.message}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() => setConfirmModal(null)}
+        />
       )}
     </div>
   );
@@ -215,7 +420,7 @@ export default function TabOrganizer({ toast, user }) {
       )}
 
       <div className="db-admin-tabs">
-        {[['tournaments', '🏆 Турніри'], ['teams', <><IconTeams style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5, color: '#60a5fa' }} /> Команди</>]].map(([id, lbl]) => (
+        {[['tournaments', '🏆 Турніри'], ['rounds', '🔄 Раунди'], ['teams', <><IconTeams style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5, color: '#60a5fa' }} /> Команди</>]].map(([id, lbl]) => (
           <button
             key={id}
             className={`db-admin-tab-btn${orgTab === id ? ' active' : ''}`}
@@ -304,6 +509,35 @@ export default function TabOrganizer({ toast, user }) {
                   </tbody>
                 </table>
               </div>
+            </>
+          )}
+
+          {/* ─── ROUNDS ─── */}
+          {orgTab === 'rounds' && (
+            <>
+              <div className="org-round-tournament-picker">
+                <label style={{ fontSize: 13, color: '#666' }}>Турнір:</label>
+                <select
+                  className="db-select db-select-sm"
+                  value={filterTour}
+                  onChange={e => setFilterTour(e.target.value)}
+                >
+                  <option value="">— Оберіть турнір —</option>
+                  {tournaments.filter(t => canEditTournament(t)).map(t => (
+                    <option key={t.id} value={t.id}>{t.emoji || '🏆'} {t.name} ({t.status})</option>
+                  ))}
+                </select>
+              </div>
+              {filterTour ? (
+                <RoundManager
+                  key={filterTour}
+                  tournament={tournaments.find(t => String(t.id) === String(filterTour))}
+                  toast={toast}
+                  onRoundsChange={() => {}}
+                />
+              ) : (
+                <div style={{ textAlign: 'center', color: '#888', padding: 40 }}>Оберіть турнір для управління раундами</div>
+              )}
             </>
           )}
 

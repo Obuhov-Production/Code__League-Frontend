@@ -274,7 +274,6 @@ function TournamentModal({ tournament: t, user, toast, initReg, isRegistered, on
     return (
       <div className="modal-overlay" onClick={onClose}>
         <div className="modal-box modal-box--light db-tournament-modal" onClick={e => e.stopPropagation()}>
-          <button className="db-tm-close" onClick={onClose}>✕</button>
           <div className="db-modal-scroll-body">
             <TournamentForm
               mode="edit"
@@ -296,7 +295,6 @@ function TournamentModal({ tournament: t, user, toast, initReg, isRegistered, on
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box modal-box--light db-tournament-modal" onClick={e => e.stopPropagation()}>
-        <button className="db-tm-close" onClick={onClose}>✕</button>
         <div className="db-modal-scroll-body">
           <div className="db-tm-hero">
             <div className="db-tm-logo-wrap">

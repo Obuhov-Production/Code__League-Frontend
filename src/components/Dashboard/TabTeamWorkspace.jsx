@@ -632,6 +632,9 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
   const tourDeadline = team.end_date ? deadlineInfo(team.end_date) : null;
   const regDeadline  = team.registration_end ? deadlineInfo(team.registration_end) : null;
 
+  // Find the active round to show task/requirements
+  const activeRound = rounds.find(r => r.status === 'active') || null;
+
   return (
     <div className="db-tab tw-page">
       {/* ── Header ── */}
@@ -668,6 +671,56 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
           {canEdit && team.registration_end && <DeadlineBar label="Реєстрація до" dateStr={team.registration_end} />}
           {team.start_date   && <DeadlineBar label="Старт турніру"  dateStr={team.start_date} />}
           {team.end_date     && <DeadlineBar label="Кінець / здача" dateStr={team.end_date} />}
+        </div>
+      )}
+
+      {/* ── Active Round Info ── */}
+      {activeRound && (
+        <div className="sub-wrap">
+          <div className="sub-card" style={{ marginTop: 0 }}>
+            <div className="sub-card-accent" style={{ background: '#7c5ff5' }} />
+            <div style={{ padding: '0 12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <h3 className="sub-card-title" style={{ margin: 0 }}>
+                  🎯 {activeRound.title}
+                </h3>
+                <span style={{
+                  fontSize: 11, padding: '2px 8px', borderRadius: 8,
+                  background: '#16a34a22', color: '#16a34a', fontWeight: 600,
+                }}>Активний</span>
+              </div>
+
+              {activeRound.description && (
+                <div className="tw-round-field">
+                  <label style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5 }}>Завдання</label>
+                  <p style={{ margin: '4px 0 12px', lineHeight: 1.6, color: '#e0e0e0', whiteSpace: 'pre-wrap' }}>{activeRound.description}</p>
+                </div>
+              )}
+
+              {activeRound.tech_requirements && (
+                <div className="tw-round-field">
+                  <label style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5 }}>Технічні вимоги</label>
+                  <p style={{ margin: '4px 0 12px', lineHeight: 1.6, color: '#e0e0e0', whiteSpace: 'pre-wrap' }}>{activeRound.tech_requirements}</p>
+                </div>
+              )}
+
+              {activeRound.must_have_items?.length > 0 && (
+                <div className="tw-round-field">
+                  <label style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5 }}>Обов'язкові елементи</label>
+                  <ul style={{ margin: '4px 0 12px', paddingLeft: 20, color: '#e0e0e0' }}>
+                    {activeRound.must_have_items.map((item, i) => (
+                      <li key={i} style={{ marginBottom: 4 }}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 16, fontSize: 13, color: '#888', marginTop: 4, paddingBottom: 4 }}>
+                <span>📅 Початок: {new Date(activeRound.starts_at).toLocaleString('uk-UA')}</span>
+                <span>⏰ Дедлайн: {new Date(activeRound.deadline_at).toLocaleString('uk-UA')}</span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

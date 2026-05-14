@@ -46,7 +46,7 @@ const METRIC_OPTIONS = [
     title: 'Tournaments Activity', subtitle: 'Створено турнірів',    tooltip: 'Турнірів' },
   { value: 'teams',       label: 'Команди',          icon: <IconUser style={{ width: 18, height: 18, color: '#34d399' }} />, color: '#34d399',
     title: 'Teams Activity', subtitle: 'Створено команд',            tooltip: 'Команд' },
-  { value: 'submissions', label: 'Сабміти',          icon: '📦', color: '#f472b6',
+  { value: 'submissions', label: 'На розгляді',          icon: '📦', color: '#f472b6',
     title: 'Submissions Activity', subtitle: 'Відправлено сабмітів', tooltip: 'Сабмітів' },
 ];
 
@@ -585,7 +585,6 @@ function EditTournamentModal({ tournament, allTeams, toast, onClose, onSuccess, 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box modal-box--light db-tournament-modal" onClick={e => e.stopPropagation()}>
-        <button className="db-tm-close" onClick={onClose}>✕</button>
         <div className="db-modal-scroll-body">
           <div className="db-edit-header">
             <h3 className="db-edit-title">{tournament.name}</h3>
@@ -662,7 +661,6 @@ function ApplicationViewModal({ app, onClose, onAccept, onDecline }) {
     <>
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box modal-box--light db-tournament-modal" onClick={e => e.stopPropagation()}>
-        <button className="db-tm-close" onClick={onClose}>✕</button>
         <div className="db-modal-scroll-body">
 
           <div className="db-app-review-user" onClick={() => setViewProfile(app)} title="Переглянути профіль">

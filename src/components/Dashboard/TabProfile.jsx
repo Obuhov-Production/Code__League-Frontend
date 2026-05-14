@@ -425,7 +425,6 @@ function OrganizerApplyModal({ onClose, onSubmit }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box modal-box--light db-tournament-modal" onClick={e => e.stopPropagation()}>
-        <button className="db-tm-close" onClick={onClose}>✕</button>
         <div className="db-modal-scroll-body">
           <form className="db-edit-tournament-form" onSubmit={handleSubmit}>
             <div className="db-edit-header">

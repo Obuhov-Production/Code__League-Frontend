@@ -872,10 +872,47 @@ export async function evaluateSubmission(submissionId, data) {
   });
 }
 
-/* ── Submissions ──────────────────────────────────── */
+/* ── Rounds ───────────────────────────────────────── */
 export async function getTournamentRounds(tournamentId) {
   return request(`${BASE}/tournaments/${tournamentId}/rounds`, { headers: authHeaders() });
 }
+
+export async function createRound(tournamentId, data) {
+  return request(`${BASE}/tournaments/${tournamentId}/rounds`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateRound(roundId, data) {
+  return request(`${BASE}/rounds/${roundId}`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteRound(roundId) {
+  return request(`${BASE}/rounds/${roundId}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+}
+
+export async function getActiveRound(tournamentId) {
+  return request(`${BASE}/tournaments/${tournamentId}/active-round`, { headers: authHeaders() });
+}
+
+export async function advanceRound(tournamentId, direction) {
+  return request(`${BASE}/tournaments/${tournamentId}/advance-round`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ direction }),
+  });
+}
+
+/* ── Submissions ──────────────────────────────────── */
 
 export async function getTeamSubmissions(teamId) {
   return request(`${BASE}/submissions/teams/${teamId}`, { headers: authHeaders() });
