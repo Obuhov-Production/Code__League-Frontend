@@ -68,7 +68,7 @@ function DeadlineBadge({ label, dateStr }) {
   );
 }
 
-function SubmitWorkModal({ team, toast, onClose }) {
+function SubmitWorkPanel({ team, toast, onClose, onSaved }) {
   const [repoUrl,    setRepoUrl]    = useState('');
   const [branches,   setBranches]   = useState([]);
   const [branch,     setBranch]     = useState('');
@@ -81,6 +81,7 @@ function SubmitWorkModal({ team, toast, onClose }) {
   const [existing,   setExisting]   = useState(null);
   const [saving,     setSaving]     = useState(false);
   const [deadline,   setDeadline]   = useState(null);
+  const lastFetchedPath = useRef('');
 
   useEffect(() => {
     getTournamentRounds(team.tournament_id).then(r => {
@@ -137,6 +138,7 @@ function SubmitWorkModal({ team, toast, onClose }) {
   const fetchBranches = async () => {
     const path = parseRepoPath(repoUrl);
     if (!path) { toast.error('Невірний формат URL GitHub репозиторію'); return; }
+    if (lastFetchedPath.current === path && branches.length > 0) return;
     setLoadingB(true);
     setBranches([]);
     try {
@@ -145,10 +147,24 @@ function SubmitWorkModal({ team, toast, onClose }) {
       const data = await res.json();
       setBranches(data.map(b => b.name));
       if (!branch && data.length) setBranch(data[0].name);
+      lastFetchedPath.current = path;
       toast.success(`Знайдено ${data.length} гілок`);
     } catch (e) { toast.error(e.message); }
     finally { setLoadingB(false); }
   };
+
+  useEffect(() => {
+    const path = parseRepoPath(repoUrl);
+    if (!path) {
+      setBranches([]);
+      lastFetchedPath.current = '';
+      return;
+    }
+    const timer = setTimeout(() => {
+      if (path !== lastFetchedPath.current) fetchBranches();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [repoUrl]);
 
   const handleSubmit = async e => {
     e.preventDefault();
@@ -179,15 +195,13 @@ function SubmitWorkModal({ team, toast, onClose }) {
         await createSubmission(Number(finalRoundId), { ...payload, team_id: team.id });
         toast.success('Роботу подано!');
       }
-      onClose();
+      onSaved?.();
     } catch (err) { toast.error(err.message); }
     finally { setSaving(false); }
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box modal-box--light" onClick={e => e.stopPropagation()} style={{ maxWidth: 540 }}>
-        <button className="modal-close" onClick={onClose}>✕</button>
+    <div className="db-team-submit-panel">
         <h2 style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 700 }}>
           {existing ? <><IconPensil style={{ width: 16, height: 16, verticalAlign: -3, marginRight: 6 }} /> Оновити роботу</> : <><IconSend style={{ width: 16, height: 16, verticalAlign: -3, marginRight: 6 }} /> Подати роботу</>}
         </h2>
@@ -228,7 +242,8 @@ function SubmitWorkModal({ team, toast, onClose }) {
                   <input
                     className="db-input"
                     value={repoUrl}
-                    onChange={e => { setRepoUrl(e.target.value); setBranches([]); }}
+                    onChange={e => { setRepoUrl(e.target.value); setBranches([]); lastFetchedPath.current = ''; }}
+                    onBlur={() => { if (repoUrl.trim()) fetchBranches(); }}
                     placeholder="https://github.com/username/repo"
                     style={{ flex: 1 }}
                   />
@@ -261,7 +276,7 @@ function SubmitWorkModal({ team, toast, onClose }) {
               </div>
 
               <div>
-                <label className="db-edit-label">🌐 Live Demo URL</label>
+                <label className="db-edit-label">🌐 Live Demo URL <span style={{ color: '#888', fontWeight: 400 }}>(необов'язково)</span></label>
                 <input className="db-input" type="url" value={demoUrl}
                   onChange={e => setDemoUrl(e.target.value)}
                   placeholder="https://my-project.vercel.app" />
@@ -276,7 +291,7 @@ function SubmitWorkModal({ team, toast, onClose }) {
               </div>
 
               <div className="db-form-actions">
-                <button type="button" className="db-btn db-btn-ghost" onClick={onClose}>Скасувати</button>
+                <button type="button" className="db-btn db-btn-ghost" onClick={onClose}>Сховати</button>
                 <button type="submit" className="db-btn db-btn-primary" disabled={saving || isDeadlinePast || isSubmissionBlocked}>
                   {saving ? 'Збереження...' : (existing ? <><IconSave style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Оновити</> : <><IconSend style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Подати роботу</>)}
                 </button>
@@ -284,7 +299,6 @@ function SubmitWorkModal({ team, toast, onClose }) {
             </form>
           </>
         )}
-      </div>
     </div>
   );
 }
@@ -619,7 +633,7 @@ export default function TabTeams({ toast, setTab }) {
                     {canSubmit && (
                       <button
                         className={`db-btn db-btn-sm${submitBlocked ? ' db-btn-ghost' : ' db-btn-primary'}`}
-                        onClick={e => { e.stopPropagation(); setSubmitTeam(t); }}
+                        onClick={e => { e.stopPropagation(); setExpanded(t.id); setSubmitTeam(prev => prev === t.id ? null : t.id); }}
                         title={submitBlocked ? 'Дедлайн здачі минув' : ''}
                       >
                         {submitBlocked ? '🔒 Дедлайн минув' : <><IconSend style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Подати роботу</>}
@@ -722,7 +736,7 @@ export default function TabTeams({ toast, setTab }) {
                             {canSubmit && (
                               <button
                                 className={`db-btn db-btn-sm${submitBlocked ? ' db-btn-ghost' : ' db-btn-ghost'}`}
-                                onClick={e => { e.stopPropagation(); setSubmitTeam(t); }}
+                                onClick={e => { e.stopPropagation(); setSubmitTeam(prev => prev === t.id ? null : t.id); }}
                               >
                                 {submitBlocked ? '🔒 Дедлайн минув' : <><IconSend style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Подати роботу</>}
                               </button>
@@ -733,6 +747,18 @@ export default function TabTeams({ toast, setTab }) {
                               </button>
                             )}
                           </div>
+                          {submitTeam === t.id && (
+                            <SubmitWorkPanel
+                              team={t}
+                              toast={toast}
+                              onClose={() => setSubmitTeam(null)}
+                              onSaved={() => {
+                                setSubmitTeam(null);
+                                setDetailCache(prev => ({ ...prev, [t.id]: undefined }));
+                                load({ silent: true });
+                              }}
+                            />
+                          )}
                         </>
                       );
                     })()}
@@ -748,10 +774,6 @@ export default function TabTeams({ toast, setTab }) {
         <EditTeamModal team={editTeam} toast={toast}
           onClose={() => setEditTeam(null)}
           onSuccess={() => { setEditTeam(null); load(); toast.success("Команду оновлено!"); }} />
-      )}
-      {submitTeam && (
-        <SubmitWorkModal team={submitTeam} toast={toast}
-          onClose={() => setSubmitTeam(null)} />
       )}
     </div>
   );

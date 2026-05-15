@@ -265,6 +265,7 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
   const [locked,    setLocked]    = useState(!!existing);
   const [deadline,  setDeadline]  = useState(null);
   const [touched,   setTouched]   = useState({});
+  const [lastRepoPath, setLastRepoPath] = useState('');
 
   useEffect(() => {
     if (!roundId && rounds.length > 0) {
@@ -304,6 +305,7 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
 
   const fetchBranches = async () => {
     const path = parseRepoPath(repoUrl);
+    if (path === lastRepoPath && branches.length > 0) return;
     if (!path) { toast.error('Невірний формат URL GitHub репозиторію'); return; }
     setLoadingB(true);
     setBranches([]);
@@ -313,10 +315,24 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
       const data = await res.json();
       setBranches(data.map(b => b.name));
       if (!branch && data.length) setBranch(data[0].name);
+      setLastRepoPath(path);
       setRepoValid(true);
     } catch (e) { toast.error(e.message); setRepoValid(false); }
     finally { setLoadingB(false); }
   };
+
+  useEffect(() => {
+    const path = parseRepoPath(repoUrl);
+    if (!path) {
+      setBranches([]);
+      setLastRepoPath('');
+      return;
+    }
+    const timer = setTimeout(() => {
+      if (path !== lastRepoPath) fetchBranches();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [repoUrl]);
 
   const handleSave = async (e, draft = false) => {
     e?.preventDefault();
@@ -336,7 +352,6 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
     if (isDeadlinePast) { toast.error('Дедлайн здачі роботи минув'); return; }
     if (!repoUrl.trim()) { toast.error('Вкажіть URL репозиторію'); setTouched(t => ({...t, repo: true})); return; }
     if (!branch.trim())  { toast.error('Оберіть гілку'); return; }
-    if (!demoUrl.trim()) { toast.error('Вкажіть URL живого демо'); return; }
     if (!finalRoundId)   { toast.error('Не знайдено жодного раунду'); return; }
     if (!locked) { toast.error('Підтвердіть, що робота фінальна і готова до оцінювання'); return; }
     
@@ -414,8 +429,14 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
               <span className="sub-input-icon">🔗</span>
               <input
                 value={repoUrl}
-                onChange={e => { setRepoUrl(e.target.value); setRepoValid(null); setBranches([]); }}
-                onBlur={e => { setTouched(t => ({...t, repo: true})); if (e.target.value.trim()) verifyRepo(e.target.value); }}
+                onChange={e => { setRepoUrl(e.target.value); setRepoValid(null); setBranches([]); setLastRepoPath(''); }}
+                onBlur={e => {
+                  setTouched(t => ({...t, repo: true}));
+                  if (e.target.value.trim()) {
+                    verifyRepo(e.target.value);
+                    fetchBranches();
+                  }
+                }}
                 placeholder="https://github.com/username/repo"
               />
             </div>
@@ -445,7 +466,7 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
             <div className="sub-field">
               <label className="sub-label">
                 <span style={{ fontSize: 14 }}>🌐</span>
-                URL живого демо <span className="db-required">*</span>
+                URL живого демо <span className="sub-optional">(Необов'язково)</span>
               </label>
               <div className="sub-input-row">
                 <span className="sub-input-icon">🌐</span>
