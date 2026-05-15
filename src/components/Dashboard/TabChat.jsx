@@ -1502,7 +1502,7 @@ export default function TabChat({
         </div>
       </div>
 
-      {/* Members panel — Discord-style sidebar (works for all rooms) */}
+      {/* Members panel */}
       {membersPanelOpen && (
         <>
           <div className="db-chat-members-backdrop" onClick={() => setMembersPanelOpen(false)} />

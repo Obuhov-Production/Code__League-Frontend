@@ -1,6 +1,5 @@
 # Code League Frontend
 
-
 Frontend-частина платформи **Code League** для проведення IT-турнірів.
 
 
