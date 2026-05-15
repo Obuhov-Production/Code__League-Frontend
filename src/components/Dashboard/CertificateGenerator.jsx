@@ -241,7 +241,7 @@ export default function CertificateGenerator({
           position: fixed;
           inset: 0;
           z-index: 9999;
-          padding: 24px;
+          padding: 18px 18px 82px;
           background:
             radial-gradient(circle at top left, rgba(124, 95, 245, 0.22), transparent 34%),
             radial-gradient(circle at bottom right, rgba(245, 158, 11, 0.18), transparent 34%),
@@ -254,9 +254,10 @@ export default function CertificateGenerator({
 
         .cert-card {
           position: relative;
-          width: min(1120px, 96vw);
-          min-height: 760px;
-          padding: 44px 58px;
+          width: min(1040px, calc(100vw - 36px));
+          max-height: calc(100vh - 112px);
+          min-height: min(720px, calc(100vh - 112px));
+          padding: clamp(28px, 3.4vw, 44px) clamp(30px, 4.2vw, 58px);
           box-sizing: border-box;
           background:
             linear-gradient(#ffffff, #ffffff) padding-box,
@@ -270,7 +271,8 @@ export default function CertificateGenerator({
           color: #1e1b2e;
           text-align: center;
           font-family: Georgia, 'Times New Roman', serif;
-          overflow: hidden;
+          overflow: auto;
+          scrollbar-gutter: stable;
         }
 
         .cert-card::before,
@@ -416,7 +418,7 @@ export default function CertificateGenerator({
           position: relative;
           z-index: 2;
           margin: 0;
-          font-size: 58px;
+          font-size: clamp(44px, 5vw, 58px);
           line-height: 1;
           font-weight: 900;
           color: #1e1b2e;
@@ -524,7 +526,7 @@ export default function CertificateGenerator({
           margin: 8px auto 14px;
           max-width: 880px;
           color: #7c5ff5;
-          font-size: 44px;
+          font-size: clamp(34px, 4vw, 44px);
           line-height: 1.15;
           font-weight: 900;
           word-break: break-word;
@@ -752,13 +754,13 @@ export default function CertificateGenerator({
         .cert-actions {
           position: fixed;
           left: 50%;
-          bottom: 22px;
+          bottom: 14px;
           transform: translateX(-50%);
           z-index: 10000;
           display: flex;
-          gap: 12px;
-          padding: 10px;
-          border-radius: 18px;
+          gap: 8px;
+          padding: 8px;
+          border-radius: 14px;
           background: rgba(255, 255, 255, 0.88);
           backdrop-filter: blur(14px);
           box-shadow: 0 16px 40px rgba(30, 27, 46, 0.20);
@@ -766,11 +768,11 @@ export default function CertificateGenerator({
 
         .cert-action-btn {
           border: 0;
-          border-radius: 13px;
-          padding: 12px 18px;
+          border-radius: 11px;
+          padding: 10px 14px;
           cursor: pointer;
           font-family: Inter, Arial, sans-serif;
-          font-size: 14px;
+          font-size: 13px;
           font-weight: 900;
           transition:
             transform 0.18s ease,
@@ -828,6 +830,78 @@ export default function CertificateGenerator({
 
           .cert-seal {
             margin: 0 auto;
+          }
+        }
+
+        @media (max-height: 820px) and (min-width: 641px) {
+          .cert-overlay {
+            align-items: flex-start;
+            padding-top: 14px;
+          }
+
+          .cert-card {
+            min-height: auto;
+            padding: 26px 42px;
+          }
+
+          .cert-top {
+            margin-bottom: 14px;
+          }
+
+          .cert-logo-wrap {
+            width: 82px;
+            height: 82px;
+          }
+
+          .cert-logo {
+            width: 54px;
+            height: 54px;
+          }
+
+          .cert-title {
+            font-size: 46px;
+          }
+
+          .cert-divider {
+            margin: 16px auto 14px;
+          }
+
+          .cert-sub,
+          .cert-tournament {
+            margin-bottom: 12px;
+          }
+
+          .cert-team-label {
+            margin-top: 10px;
+          }
+
+          .cert-team {
+            margin-bottom: 10px;
+            font-size: 34px;
+          }
+
+          .cert-achievement {
+            margin: 14px auto 16px;
+          }
+
+          .cert-stat {
+            padding: 12px;
+          }
+
+          .cert-text {
+            margin-bottom: 14px;
+          }
+
+          .cert-members {
+            margin: 12px auto 16px;
+          }
+
+          .cert-bottom {
+            margin-top: 14px;
+          }
+
+          .cert-footer {
+            margin-top: 14px;
           }
         }
 
@@ -1198,7 +1272,7 @@ export default function CertificateGenerator({
 
       <div className="cert-actions cert-no-print">
         <button className="cert-action-btn cert-action-primary" onClick={handlePrint}>
-          🖨 Друк / PDF
+          🖨 Друк
         </button>
 
         <button className="cert-action-btn cert-action-muted" onClick={handleDownloadPdf}>

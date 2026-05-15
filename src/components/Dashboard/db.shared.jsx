@@ -88,17 +88,36 @@ export function PresenceBadge({ user, withDot = true, className = '' }) {
 
 /* constants */
 export const STATUS_LABEL = {
-  draft:        { label: 'Draft',   color: '#888',    bg: '#f0f0f0' },
-  registration: { label: 'Registration', color: '#7c5ff5', bg: '#eee9ff' },
-  running:      { label: 'Running',   color: '#16a34a', bg: '#dcfce7' },
-  finished:     { label: 'Finished', color: '#0ea5e9', bg: '#e0f2fe' },
+  draft:        { label: 'Чернетка', color: '#6b7280', bg: '#f3f4f6' },
+  registration: { label: 'Реєстрація', color: '#7c5ff5', bg: '#eee9ff' },
+  running:      { label: 'Активний', color: '#16a34a', bg: '#dcfce7' },
+  active:       { label: 'Активний', color: '#16a34a', bg: '#dcfce7' },
+  finished:     { label: 'Завершено', color: '#0ea5e9', bg: '#e0f2fe' },
+  closed:       { label: 'Завершено', color: '#0ea5e9', bg: '#e0f2fe' },
+  submission_closed: { label: 'Здача закрита', color: '#f59e0b', bg: '#fff7ed' },
+  evaluated:    { label: 'Оцінено', color: '#7c5ff5', bg: '#eee9ff' },
+  cancelled:    { label: 'Скасовано', color: '#ef4444', bg: '#fee2e2' },
+  pending:      { label: 'Очікує', color: '#f59e0b', bg: '#fff7ed' },
+  accepted:     { label: 'Прийнято', color: '#16a34a', bg: '#dcfce7' },
+  approved:     { label: 'Прийнято', color: '#16a34a', bg: '#dcfce7' },
+  rejected:     { label: 'Відхилено', color: '#ef4444', bg: '#fee2e2' },
+  locked:       { label: 'Заблоковано', color: '#ef4444', bg: '#fee2e2' },
 };
+
+export function getStatusMeta(status) {
+  return STATUS_LABEL[status] || { label: status || 'Невідомо', color: '#888', bg: '#eee' };
+}
+
+export function getStatusLabel(status) {
+  return getStatusMeta(status).label;
+}
 
 export const ACCENT = {
   draft:        ['#191A23','#2a2a3a'],  // темно-сірий/чорний для draft
   registration: ['#AC9EF8','#2d1f6e'],    // фіолетовий
   running:      ['#4ade80','#163028'],   // зелений
   finished:     ['#0ea5e9','#0c2a3b'],   // синій
+  cancelled:    ['#ef4444','#3b1111'],
 };
 
 export const BANNER_PRESETS = ['#0d1117', '#191A23', '#1a1a2e', '#1e1b2e', '#231b2e', '#2e231b', '#1b3b2e', '#2e1b3b'];
@@ -296,7 +315,7 @@ export function pickCurrentRound(rounds) {
    SHARED UI COMPONENTS
 ══════════════════════════════════════════════════ */
 export function StatusBadge({ status }) {
-  const s = STATUS_LABEL[status] || { label: status, color: '#888', bg: '#eee' };
+  const s = getStatusMeta(status);
   return <span className="db-status-badge" style={{ color: s.color, background: s.bg }}>{s.label}</span>;
 }
 
@@ -1400,8 +1419,8 @@ export function TournamentForm({
                 <label className="db-edit-label">Початковий статус <span className="db-required">*</span></label>
                 <div className="db-status-radio-group">
                   {[
-                    { v: 'draft', label: 'Draft', desc: 'Чернетка — не видна учасникам', color: '#888' },
-                    { v: 'registration', label: 'Registration', desc: 'Відразу відкрити реєстрацію', color: '#7c5ff5' },
+                    { v: 'draft', label: getStatusLabel('draft'), desc: 'Чернетка — не видна учасникам', color: getStatusMeta('draft').color },
+                    { v: 'registration', label: getStatusLabel('registration'), desc: 'Відразу відкрити реєстрацію', color: getStatusMeta('registration').color },
                   ].map(opt => (
                     <label
                       key={opt.v}
@@ -1422,7 +1441,7 @@ export function TournamentForm({
                   ))}
                 </div>
                 <small className="db-field-hint">
-                  ⚙️ Статус турніру автоматично змінится з "Registration" → "Running" в вказаний вами день.
+                  ⚙️ Статус турніру автоматично зміниться з "{getStatusLabel('registration')}" → "{getStatusLabel('running')}" у вказаний вами день.
                 </small>
               </div>
             )}

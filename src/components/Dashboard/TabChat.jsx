@@ -100,7 +100,7 @@ export default function TabChat({
   const [addMemberSearching, setAddMemberSearching] = useState(false);
   const [addMemberAdding, setAddMemberAdding] = useState(false);
   const addMemberTimer = useRef(null);
-  const [membersPanelOpen, setMembersPanelOpen] = useState(() => window.innerWidth >= 768);
+  const [membersPanelOpen, setMembersPanelOpen] = useState(false);
   const [teamMembers, setTeamMembers] = useState([]);
   const [teamMembersLoading, setTeamMembersLoading] = useState(false);
   const [allUsers, setAllUsers] = useState([]);
@@ -147,7 +147,9 @@ export default function TabChat({
   useEffect(() => {
     const refreshTeams = () => getMyTeams().then(setMyTeams).catch(() => {});
     refreshTeams();
-    getCustomChatRooms().then(setCustomRooms).catch(() => {});
+    getCustomChatRooms()
+      .then(rooms => setCustomRooms((rooms || []).filter(r => !String(r.name || '').startsWith('team_'))))
+      .catch(() => {});
     window.addEventListener('cl:teams:changed', refreshTeams);
     return () => window.removeEventListener('cl:teams:changed', refreshTeams);
   }, []);

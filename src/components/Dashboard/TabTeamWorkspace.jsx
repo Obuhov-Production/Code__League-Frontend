@@ -3,7 +3,7 @@ import {
   getTeamById, getTournamentRounds, getTeamSubmissions,
   createSubmission, updateSubmission, API_BASE, getTournamentFiles
 } from '@utils/authApi';
-import { StatusBadge, UserAvatar, pickCurrentRound, getSocket, MarkdownRenderer, CustomSelect } from './db.shared.jsx';
+import { StatusBadge, UserAvatar, pickCurrentRound, getSocket, MarkdownRenderer, CustomSelect, getStatusMeta } from './db.shared.jsx';
 
 import IconSave      from '@images/dashboard_components/save.svg?react';
 import IconTeams     from '@images/dashboard_components/icon_teams.svg?react';
@@ -45,7 +45,7 @@ function deadlineInfo(dateStr) {
 /* ══════════════════════════════════════════════════
    WorkTaskSection — round/task display
 ═══════════════════════════════════════════════════ */
-function WorkTaskSection({ rounds, submission, canSubmit, tournStatus }) {
+function WorkTaskSection({ rounds, submission, canSubmit, tournStatus, onOpenMaterial }) {
   let currentRound = null;
   if (submission?.round_id) {
     currentRound = rounds.find(r => r.id === submission.round_id || String(r.id) === String(submission.round_id));
@@ -75,12 +75,9 @@ function WorkTaskSection({ rounds, submission, canSubmit, tournStatus }) {
   const dInfo = currentRound.end_date ? deadlineInfo(currentRound.end_date) : null;
   const isPast = dInfo?.isPast ?? false;
   const isUrgent = dInfo && !isPast && dInfo.diff < 86400000;
-  const statusColor = currentRound.status === 'active' ? '#2dba6e'
-    : currentRound.status === 'closed' ? '#ef4444'
-    : '#AC9EF8';
-  const statusLabel = currentRound.status === 'active' ? 'Активний'
-    : currentRound.status === 'closed' ? 'Завершений'
-    : 'Чернетка';
+  const statusMeta = getStatusMeta(currentRound.status);
+  const statusColor = statusMeta.color;
+  const statusLabel = statusMeta.label;
 
   const mustHave = Array.isArray(currentRound.must_have_items) ? currentRound.must_have_items : [];
   const materials = Array.isArray(currentRound.materials) ? currentRound.materials : [];
@@ -130,7 +127,13 @@ function WorkTaskSection({ rounds, submission, canSubmit, tournStatus }) {
               {materials.map((m, i) => (
                 <li key={i}>
                   {m.startsWith('http') ? (
-                    <a href={m} target="_blank" rel="noreferrer" className="tw-task-link">🔗 {m}</a>
+                    <button
+                      type="button"
+                      className="tw-task-link tw-task-link-btn"
+                      onClick={() => onOpenMaterial?.({ name: m, url: m, kind: 'Матеріал' })}
+                    >
+                      🔗 {m}
+                    </button>
                   ) : (
                     <span className="tw-task-list-item">{m}</span>
                   )}
@@ -631,6 +634,7 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
   const [docUrl,   setDocUrl]   = useState(() => localStorage.getItem(docUrlKey) || '');
   const [docFile,  setDocFile]  = useState(null);
   const [tournamentFiles, setTournamentFiles] = useState([]);
+  const [materialModal, setMaterialModal] = useState(null);
 
   useEffect(() => { localStorage.setItem(storageKey, notes); }, [notes]);
   useEffect(() => { localStorage.setItem(docUrlKey, docUrl); }, [docUrl]);
@@ -717,10 +721,7 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
   const captainId = team.captain_id ?? null;
 
   const tournStatus = team.tournament_status ?? 'draft';
-  const statusColor = tournStatus === 'running'      ? '#2dba6e'
-                    : tournStatus === 'registration'  ? '#AC9EF8'
-                    : tournStatus === 'finished'      ? '#0ea5e9'
-                    : '#888';
+  const statusColor = getStatusMeta(tournStatus).color;
 
   const canEdit   = tournStatus === 'registration';
 
@@ -745,6 +746,17 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
     if (relativePath.startsWith('http')) return relativePath;
     const base = API_BASE.replace(/\/api$/, '');
     return base + relativePath;
+  };
+
+  const openMaterial = (file) => {
+    if (!file) return;
+    const url = file.url?.startsWith('http') ? file.url : fileUrl(file.url);
+    if (!url) return;
+    setMaterialModal({
+      name: file.name || 'Матеріал',
+      url,
+      kind: file.kind || 'Матеріал',
+    });
   };
 
   // Helper: download TZ text as .md file
@@ -941,11 +953,16 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
                       <label>Матеріали до ТЗ</label>
                       <div className="tw-file-list">
                         {tournamentFiles.map((f, i) => (
-                          <a key={i} href={fileUrl(f.url)} target="_blank" rel="noreferrer" download className="tw-file-link-card">
+                          <button
+                            key={i}
+                            type="button"
+                            className="tw-file-link-card"
+                            onClick={() => openMaterial({ ...f, kind: 'Матеріал до ТЗ' })}
+                          >
                             <IconAttach />
                             <span style={{ flex: 1 }}>{f.name}</span>
                             <small>Відкрити</small>
-                          </a>
+                          </button>
                         ))}
                       </div>
                     </div>
@@ -955,11 +972,40 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
             </div>
             {team.tournament_rules_file_url && (
               <div className="tw-materials-footer">
-                <a href={fileUrl(team.tournament_rules_file_url)} target="_blank" rel="noreferrer" download className="tw-file-pill tw-rules-wide-pill">
+                <button
+                  type="button"
+                  onClick={() => openMaterial({ name: 'Правила турніру', url: team.tournament_rules_file_url, kind: 'Правила' })}
+                  className="tw-file-pill tw-rules-wide-pill"
+                >
                   <IconExternal /> Відкрити правила
-                </a>
+                </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {materialModal && (
+        <div className="tw-material-modal-overlay" onClick={() => setMaterialModal(null)}>
+          <div className="tw-material-modal" onClick={event => event.stopPropagation()}>
+            <div className="tw-material-modal-head">
+              <div>
+                <span>{materialModal.kind}</span>
+                <strong>{materialModal.name}</strong>
+              </div>
+              <button type="button" onClick={() => setMaterialModal(null)} aria-label="Закрити">×</button>
+            </div>
+            <div className="tw-material-modal-body">
+              <iframe src={materialModal.url} title={materialModal.name} />
+            </div>
+            <div className="tw-material-modal-actions">
+              <a href={materialModal.url} download className="tw-file-pill blue">
+                <IconAttach /> Скачати
+              </a>
+              <button type="button" className="tw-file-pill" onClick={() => setMaterialModal(null)}>
+                Закрити
+              </button>
+            </div>
           </div>
         </div>
       )}

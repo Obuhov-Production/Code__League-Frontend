@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import Header from '@components/Header'
 import Footer from '@components/Footer'
+import { STATUS_LABEL as SHARED_STATUS_LABEL } from '@components/Dashboard/db.shared.jsx'
 import '@styles/components/leaderboard-page.css'
 
 const MEDALS = ['🥇', '🥈', '🥉']
@@ -60,13 +61,6 @@ const MOCK_DATA = {
   ],
 }
 
-const STATUS_LABEL = {
-  finished:     { label: 'Завершено',  color: '#6b7280' },
-  running:      { label: 'Активний',   color: '#22c55e' },
-  registration: { label: 'Реєстрація', color: '#3b82f6' },
-  draft:        { label: 'Чернетка',   color: '#f59e0b' },
-}
-
 // ── Custom dropdown (mobile) ──────────────────────────────────────────────
 function TournamentDropdown({ tournaments, selected, onSelect }) {
   const [open, setOpen] = useState(false)
@@ -75,7 +69,7 @@ function TournamentDropdown({ tournaments, selected, onSelect }) {
   const listRef = useRef(null)
 
   const current = tournaments.find(t => t.id === selected)
-  const currentStatus = current ? STATUS_LABEL[current.status] : null
+  const currentStatus = current ? SHARED_STATUS_LABEL[current.status] : null
 
   useEffect(() => {
     if (!open) return
@@ -153,7 +147,7 @@ function TournamentDropdown({ tournaments, selected, onSelect }) {
         aria-hidden={!open}
       >
         {tournaments.map((t, i) => {
-          const st = STATUS_LABEL[t.status]
+          const st = SHARED_STATUS_LABEL[t.status]
           const isSel = t.id === selected
           const isActive = i === activeIdx
           return (
@@ -272,7 +266,7 @@ export default function LeaderboardPage() {
             <div className="lb-controls-row">
             <div className="lb-tabs">
               {tournaments.map(t => {
-                const st = STATUS_LABEL[t.status]
+                const st = SHARED_STATUS_LABEL[t.status]
                 return (
                   <button
                     key={t.id}

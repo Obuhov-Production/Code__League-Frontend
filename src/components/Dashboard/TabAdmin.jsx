@@ -26,7 +26,7 @@ import {
   getAdminUserBadges, adminGrantBadge, adminRevokeBadge,
   getUserDailyStats,
 } from '@utils/authApi';
-import { StatusBadge, RoleBadges, CustomSelect, ConfirmModal, formatDate, STATUS_LABEL, UserAvatar, UserProfileModal, ALL_BADGES, TournamentForm, PresenceBadge } from './db.shared.jsx';
+import { StatusBadge, RoleBadges, CustomSelect, ConfirmModal, formatDate, getStatusMeta, getStatusLabel, UserAvatar, UserProfileModal, ALL_BADGES, TournamentForm, PresenceBadge } from './db.shared.jsx';
 
 /* ── Period Dropdown for Charts ───────────────────── */
 const PERIOD_OPTIONS = [
@@ -276,11 +276,15 @@ function UsersActivityChart() {
 }
 
 const TOUR_STATUS_OPTS = [
-  { value: 'draft',        label: 'Draft',        color: '#888' },
-  { value: 'registration', label: 'Registration', color: '#7c5ff5' },
-  { value: 'running',      label: 'Running',      color: '#16a34a' },
-  { value: 'finished',     label: 'Finished',     color: '#0ea5e9' },
-];
+  'draft',
+  'registration',
+  'running',
+  'finished',
+].map(value => ({
+  value,
+  label: getStatusLabel(value),
+  color: getStatusMeta(value).color,
+}));
 
 /* ── StatusPicker — custom colored status dropdown ─── */
 function StatusPicker({ value, onChange, compact = false }) {
@@ -658,8 +662,11 @@ function EditTournamentModal({ tournament, allTeams, toast, onClose, onSuccess, 
 
 /* ── Application View Modal ──────────────────── */
 function ApplicationViewModal({ app, onClose, onAccept, onDecline }) {
-  const STATUS_COLOR = { pending: '#f59e0b', approved: '#16a34a', rejected: '#ef4444' };
-  const STATUS_LABEL_MAP = { pending: <><IconTime style={{ width: 13, height: 13, verticalAlign: -2, marginRight: 3 }} /> Очікує</>, approved: '✓ Прийнято', rejected: '✗ Відхилено' };
+  const STATUS_LABEL_MAP = {
+    pending: <><IconTime style={{ width: 13, height: 13, verticalAlign: -2, marginRight: 3 }} /> {getStatusLabel('pending')}</>,
+    approved: `✓ ${getStatusLabel('approved')}`,
+    rejected: `✗ ${getStatusLabel('rejected')}`,
+  };
   const [viewProfile, setViewProfile] = useState(null);
 
   const contacts = [
@@ -680,7 +687,7 @@ function ApplicationViewModal({ app, onClose, onAccept, onDecline }) {
               <span className="db-app-review-name">{app.username}</span>
               <span className="db-app-review-email">{app.email}</span>
             </div>
-            <span className="db-app-review-status" style={{ '--status-c': STATUS_COLOR[app.status] || '#888' }}>
+            <span className="db-app-review-status" style={{ '--status-c': getStatusMeta(app.status).color }}>
               {STATUS_LABEL_MAP[app.status] || app.status}
             </span>
           </div>
@@ -1346,9 +1353,9 @@ export default function TabAdmin({ toast }) {
                           </td>
                           <td style={{ fontSize: 12, color: '#888', whiteSpace: 'nowrap' }}>{formatDate(a.created_at)}</td>
                           <td>
-                            {a.status === 'pending' && <span style={{ color: '#f59e0b', fontWeight: 600, fontSize: 12 }}><IconTime style={{ width: 12, height: 12, verticalAlign: -2, marginRight: 3 }} /> Очікує</span>}
-                            {a.status === 'approved' && <span style={{ color: '#16a34a', fontWeight: 600, fontSize: 12 }}>✓ Прийнято</span>}
-                            {a.status === 'rejected' && <span style={{ color: '#ef4444', fontWeight: 600, fontSize: 12 }}>✗ Відхилено</span>}
+                            {a.status === 'pending' && <span style={{ color: getStatusMeta('pending').color, fontWeight: 600, fontSize: 12 }}><IconTime style={{ width: 12, height: 12, verticalAlign: -2, marginRight: 3 }} /> {getStatusLabel('pending')}</span>}
+                            {a.status === 'approved' && <span style={{ color: getStatusMeta('approved').color, fontWeight: 600, fontSize: 12 }}>✓ {getStatusLabel('approved')}</span>}
+                            {a.status === 'rejected' && <span style={{ color: getStatusMeta('rejected').color, fontWeight: 600, fontSize: 12 }}>✗ {getStatusLabel('rejected')}</span>}
                           </td>
                           <td>
                             <div style={{ display: 'flex', gap: 6 }}>

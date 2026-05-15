@@ -7,7 +7,7 @@ import {
   getTournamentRounds, createRound, updateRound, deleteRound,
   advanceRound, uploadRoundFile,
 } from '@utils/authApi';
-import { StatusBadge, ConfirmModal, formatDate, TournamentForm, UserAvatar, CustomSelect } from './db.shared.jsx';
+import { StatusBadge, ConfirmModal, formatDate, TournamentForm, UserAvatar, CustomSelect, getStatusMeta, getStatusLabel } from './db.shared.jsx';
 import IconTeams from '@images/dashboard_components/icon_teams.svg?react';
 import IconLock  from '@images/dashboard_components/icon_lock_shield.svg?react';
 import IconTournament from '@images/dashboard_components/icon_tournament.svg?react';
@@ -16,12 +16,16 @@ import IconCheck from '@images/dashboard_components/icon_check_diamond.svg?react
 import IconTrophy from '@images/dashboard_components/icon_trophy_award.svg?react';
 
 const TOUR_STATUS_OPTS = [
-  { value: 'draft',        label: 'Draft',        color: '#888' },
-  { value: 'registration', label: 'Registration', color: '#7c5ff5' },
-  { value: 'running',      label: 'Running',      color: '#16a34a' },
-  { value: 'finished',     label: 'Finished',     color: '#0ea5e9' },
-  { value: 'cancelled',    label: 'Cancelled',    color: '#ef4444' },
-];
+  'draft',
+  'registration',
+  'running',
+  'finished',
+  'cancelled',
+].map(value => ({
+  value,
+  label: getStatusLabel(value),
+  color: getStatusMeta(value).color,
+}));
 
 /* ── StatusPicker ──────────────────────────────────── */
 function StatusPicker({ value, onChange, compact = false }) {
@@ -75,13 +79,6 @@ function StatusPicker({ value, onChange, compact = false }) {
     </div>
   );
 }
-
-const ROUND_STATUS_COLORS = {
-  draft: '#888',
-  active: '#16a34a',
-  submission_closed: '#f59e0b',
-  evaluated: '#0ea5e9',
-};
 
 /* ── RoundManager — round navigation & CRUD ────────── */
 function RoundManager({ tournament, toast, onRoundsChange }) {
@@ -255,8 +252,8 @@ function RoundManager({ tournament, toast, onRoundsChange }) {
       {/* Round status controls */}
       {current && (
         <div className="org-round-controls">
-          <span className="org-round-status" style={{ color: ROUND_STATUS_COLORS[current.status] || '#888' }}>
-            ● {current.status === 'active' ? 'Активний' : current.status === 'draft' ? 'Чернетка' : current.status === 'submission_closed' ? 'Здача закрита' : 'Оцінено'}
+          <span className="org-round-status" style={{ color: getStatusMeta(current.status).color }}>
+            ● {getStatusLabel(current.status)}
           </span>
           <div className="org-round-actions">
             <button className="db-btn db-btn-ghost db-btn-sm" disabled={saving || activeIdx <= 0} onClick={() => handleReorder(-1)} title="Вгору">↑</button>
@@ -482,7 +479,7 @@ function OrganizerTeamPanel({ team, detail, loading, expanded, onToggle }) {
                 <div><span>Telegram</span><strong>{telegram === 'Не вказано' ? telegram : `@${telegram.replace(/^@+/, '')}`}</strong></div>
                 <div><span>Місто</span><strong>{teamText(data?.city || team.city)}</strong></div>
                 <div><span>Заклад</span><strong>{teamText(data?.school || team.school)}</strong></div>
-                <div><span>Статус турніру</span><strong>{teamText(team.tournament_status)}</strong></div>
+                <div><span>Статус турніру</span><strong>{getStatusLabel(team.tournament_status)}</strong></div>
               </div>
 
               <div className="org-team-members-head">
@@ -506,7 +503,7 @@ function OrganizerTeamPanel({ team, detail, loading, expanded, onToggle }) {
                           <strong>{teamMemberName(member)} {isCaptain && <b>Капітан</b>}</strong>
                           <small>{teamText(member.email || member.user?.email, 'Email не вказано')}</small>
                         </span>
-                        <span className="org-team-member-status">{member.status || 'accepted'}</span>
+                        <span className="org-team-member-status">{getStatusLabel(member.status || 'accepted')}</span>
                       </div>
                     );
                   })}
@@ -814,7 +811,7 @@ export default function TabOrganizer({ toast, user }) {
                   placeholder="— Оберіть турнір —"
                   options={tournaments.filter(t => canEditTournament(t)).map(t => ({
                     value: t.id,
-                    label: `${t.emoji || '🏆'} ${t.name} (${t.status})`,
+                    label: `${t.emoji || '🏆'} ${t.name} (${getStatusLabel(t.status)})`,
                   }))}
                 />
               </div>

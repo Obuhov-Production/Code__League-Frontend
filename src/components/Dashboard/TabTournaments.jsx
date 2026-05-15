@@ -9,7 +9,7 @@ import IconUserSvg     from '@images/dashboard_components/icon_user.svg?react';
 import logoImg         from '@images/logos/logo.png';
 
 import { getTournaments, getMyTeams, registerTeam, updateTeam, searchUsers, updateTournament } from '@utils/authApi';
-import { StatusBadge, ACCENT, formatDate, daysLeft, resolveAvatarUrl, hasRole, TOURNAMENT_EMOJIS, TournamentForm } from './db.shared.jsx';
+import { StatusBadge, ACCENT, formatDate, daysLeft, resolveAvatarUrl, hasRole, TOURNAMENT_EMOJIS, TournamentForm, getStatusLabel } from './db.shared.jsx';
 
 function getTeamTournamentId(team) {
   return team?.tournament_id ?? team?.tournamentId ?? team?.tournament?.id ?? team?.tournament?.tournament_id ?? null;
@@ -404,9 +404,9 @@ export default function TabTournaments({ user, toast }) {
   }, [tournaments, search, canSeeDraft]);
 
   const FILTERS = [
-    { id: 'all', label: 'Всі' }, { id: 'registration', label: 'Реєстрація' },
-    { id: 'running', label: 'Активні' }, { id: 'finished', label: 'Завершені' },
-    ...(canSeeDraft ? [{ id: 'draft', label: 'Чернетки' }] : []),
+    { id: 'all', label: 'Всі' }, { id: 'registration', label: getStatusLabel('registration') },
+    { id: 'running', label: getStatusLabel('running') }, { id: 'finished', label: getStatusLabel('finished') },
+    ...(canSeeDraft ? [{ id: 'draft', label: getStatusLabel('draft') }] : []),
   ];
 
   return (

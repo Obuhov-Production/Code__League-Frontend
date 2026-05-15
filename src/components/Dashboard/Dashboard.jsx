@@ -24,7 +24,7 @@ import { getMe, clearSession, isLoggedIn, API_BASE, CHECK_BACKEND, DEV_MOCK_USER
   deleteAllNotifications, setMyStatus, getMyTeams,
   getTeamInviteDetails, acceptTeamInvite, rejectTeamInvite } from '@utils/authApi';
 import { useToast } from '@utils/toast.jsx';
-import { hasRole, UserAvatar, MiniProfileModal, UserSearchModal, TabTip, getSocket, playMsgSound, BASE_ROOMS, STICKER_PREFIX, parseFileUrls } from './db.shared.jsx';
+import { hasRole, UserAvatar, MiniProfileModal, UserSearchModal, TabTip, getSocket, playMsgSound, BASE_ROOMS, STICKER_PREFIX, parseFileUrls, getStatusMeta } from './db.shared.jsx';
 
 import TabOverview    from './TabOverview.jsx';
 import TabTournaments from './TabTournaments.jsx';
@@ -211,6 +211,19 @@ export default function Dashboard() {
   const notifRef = useRef(null);
 
   const chatUnreadTotal = Object.values(chatUnreadByRoom).reduce((s, v) => s + (v || 0), 0);
+  const nowOnline = u => u ? { ...u, status: 'online', last_seen_at: new Date().toISOString() } : u;
+
+  const refreshCurrentUser = async () => {
+    if (!CHECK_BACKEND || !isLoggedIn()) return null;
+    const fresh = await getMe();
+    saveUser(fresh);
+    if (hasRole(fresh, 'banned')) {
+      navigate('/banned', { replace: true });
+      return fresh;
+    }
+    setUser(nowOnline(fresh));
+    return fresh;
+  };
 
   useEffect(() => {
     try { localStorage.setItem('cl_chat_sound', JSON.stringify(soundOn)); } catch {}
@@ -226,19 +239,13 @@ export default function Dashboard() {
     /* On every dashboard mount we are by definition online — override any stale
      * status/last_seen left in cache or returned by the server before the
      * presence ping has had time to land. */
-    const nowOnline = u => u ? { ...u, status: 'online', last_seen_at: new Date().toISOString() } : u;
     const cached = loadCachedUser();
     if (cached) {
       if (hasRole(cached, 'banned')) { navigate('/banned', { replace: true }); return; }
       setUser(nowOnline(cached));
       setLoading(false);
     }
-    getMe()
-      .then(fresh => {
-        saveUser(fresh);
-        if (hasRole(fresh, 'banned')) { navigate('/banned', { replace: true }); return; }
-        setUser(nowOnline(fresh));
-      })
+    refreshCurrentUser()
       .catch(() => {
         if (!cached) { clearSession(); toast.error('Сесія закінчилась'); navigate('/login'); }
       })
@@ -379,6 +386,9 @@ export default function Dashboard() {
       if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
         new Notification('Code League', { body: notif.message });
       }
+      if (notif?.link_tab === 'applications') {
+        refreshCurrentUser().catch(() => {});
+      }
       if (['team_invite', 'team_member_joined', 'team_invite_rejected'].includes(notif?.icon)) {
         getMyTeams()
           .then(d => setMyTeams(Array.isArray(d) ? d : []))
@@ -388,8 +398,36 @@ export default function Dashboard() {
         }));
       }
     };
+    const onUserUpdated = payload => {
+      refreshCurrentUser()
+        .then(fresh => {
+          if (payload?.reason === 'role_changed' && fresh) {
+            toast.info('Ваші доступи оновлено', 3000);
+          }
+        })
+        .catch(() => {});
+    };
+    const onTournamentUpdated = payload => {
+      getMyTeams()
+        .then(d => setMyTeams(Array.isArray(d) ? d : []))
+        .catch(() => {});
+      window.dispatchEvent(new CustomEvent('cl:teams:changed', {
+        detail: {
+          reason: payload?.reason || 'tournament_status_changed',
+          tournamentId: payload?.tournamentId ?? payload?.tournament_id,
+          status: payload?.status,
+        },
+      }));
+      toast.info('Статус турніру оновлено', 3000);
+    };
     socket.on('notification:new', onNotif);
-    return () => socket.off('notification:new', onNotif);
+    socket.on('user:updated', onUserUpdated);
+    socket.on('tournament:updated', onTournamentUpdated);
+    return () => {
+      socket.off('notification:new', onNotif);
+      socket.off('user:updated', onUserUpdated);
+      socket.off('tournament:updated', onTournamentUpdated);
+    };
   }, [user]);
 
   // Global chat-message listener — track unread per room + play sound platform-wide
@@ -418,6 +456,17 @@ export default function Dashboard() {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        refreshCurrentUser().catch(() => {});
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, [user]);
 
   // Close panel on outside click or Escape
@@ -578,10 +627,7 @@ export default function Dashboard() {
               {myTeams.slice(0, 5).map((team) => {
                 const teamTabId = `team_${team.id}`;
                 const isActive = tab === teamTabId;
-                const statusColor = team.tournament_status === 'running' ? '#2dba6e'
-                  : team.tournament_status === 'registration' ? '#AC9EF8'
-                  : team.tournament_status === 'finished' ? '#0ea5e9'
-                  : '#888';
+                const statusColor = getStatusMeta(team.tournament_status).color;
                 return (
                   <button
                     key={teamTabId}
