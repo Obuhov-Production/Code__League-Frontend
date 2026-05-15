@@ -7,7 +7,7 @@ import { getMe, getMyTeams, updateMe, uploadAvatar, uploadBanner, deleteBanner,
   submitOrganizerApplication, getMyOrganizerApplication, getMyBadges,
   deleteMyAccount, clearSession,
   requestPasswordChange, confirmPasswordChange, verifyPasswordChangeCode,
-  getTeamSubmissions } from '@utils/authApi';
+  getTeamSubmissions, saveUser } from '@utils/authApi';
 import { BANNER_PRESETS, StatusBadge, UserAvatar, formatDate, formatDateTime, hasRole, displayName, resolveAvatarUrl, PresenceBadge } from './db.shared.jsx';
 import IconUser     from '@images/dashboard_components/icon_user_cube.svg?react';
 import IconMedal    from '@images/dashboard_components/icon_medal.svg?react';
@@ -580,6 +580,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
         middle_name: pibForm.middle_name.trim(),
       });
       setUser(updated);
+      saveUser(updated);
       getMyBadges().then(setMyBadges).catch(() => {});
       const allFilled = pibForm.first_name.trim() && pibForm.last_name.trim() && pibForm.middle_name.trim();
       if (allFilled && !hadConfirmed) {
@@ -596,6 +597,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
     try {
       const updated = await updateMe({ pinned_badge: newPin });
       setUser(updated);
+      saveUser(updated);
       setPinnedBadge(newPin);
       toast.success(newPin ? '📌 Бейдж закріплено!' : 'Бейдж відкріплено');
     } catch (err) { toast.error(err.message); }
@@ -647,7 +649,15 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
     })), []);
 
   const handleDeleteBanner = async () => {
-    try { await deleteBanner(); setUser(u => ({ ...u, banner_url: null })); toast.success('Банер видалено'); }
+    try {
+      await deleteBanner();
+      setUser(u => {
+        const next = { ...u, banner_url: null };
+        saveUser(next);
+        return next;
+      });
+      toast.success('Банер видалено');
+    }
     catch (err) { toast.error(err.message); }
   };
 
@@ -661,6 +671,7 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
       }
       const updated = await updateMe(payload);
       setUser(updated);
+      saveUser(updated);
       toast.success('Профіль оновлено!');
       setEditing(false);
     } catch (err) { toast.error(err.message); }
@@ -670,14 +681,30 @@ export default function TabProfile({ user, setUser, toast, onLogout, setTab }) {
   const handleAvatarPick = async e => {
     const file = e.target.files?.[0];
     if (!file) return;
-    try { const { url } = await uploadAvatar(file); setUser(u => ({ ...u, user_avatar_url: url })); toast.success('Аватар оновлено!'); }
+    try {
+      const { url } = await uploadAvatar(file);
+      setUser(u => {
+        const next = { ...u, user_avatar_url: url };
+        saveUser(next);
+        return next;
+      });
+      toast.success('Аватар оновлено!');
+    }
     catch (err) { toast.error(err.message); }
   };
 
   const handleBannerPick = async e => {
     const file = e.target.files?.[0];
     if (!file) return;
-    try { const { url } = await uploadBanner(file); setUser(u => ({ ...u, banner_url: url })); toast.success('Банер оновлено!'); }
+    try {
+      const { url } = await uploadBanner(file);
+      setUser(u => {
+        const next = { ...u, banner_url: url };
+        saveUser(next);
+        return next;
+      });
+      toast.success('Банер оновлено!');
+    }
     catch (err) { toast.error(err.message); }
   };
 

@@ -11,8 +11,8 @@ import IconSave        from "@images/dashboard_components/save.svg?react";
 import IconGithub      from "@images/dashboard_components/icon_github.svg?react";
 import IconSend        from "@images/dashboard_components/send.svg?react";
 
-import { getMyTeams, getTeamById, updateTeam, searchUsers, getTournamentRounds, getTeamSubmissions, createSubmission, updateSubmission, API_BASE } from "@utils/authApi";
-import { StatusBadge, UserAvatar, pickCurrentRound, getSocket, CustomSelect } from "./db.shared.jsx";
+import { getMyTeams, getTeamById, updateTeam, searchUsers, getTournamentRounds, getTeamSubmissions, createSubmission, updateSubmission } from "@utils/authApi";
+import { StatusBadge, UserAvatar, pickCurrentRound, getSocket, CustomSelect, resolveAvatarUrl } from "./db.shared.jsx";
 
 const AVATAR_GRADIENTS = [
   "linear-gradient(135deg,#AC9EF8,#7c5ff5)",
@@ -427,7 +427,7 @@ function EditTeamModal({ team, toast, onClose, onSuccess }) {
                       <span className="db-member-num">{i + 1}</span>
                       {m.linkedUser.user_avatar_url ? (
                         <img
-                          src={m.linkedUser.user_avatar_url.startsWith('http') ? m.linkedUser.user_avatar_url : `${API_BASE}${m.linkedUser.user_avatar_url}`}
+                          src={resolveAvatarUrl(m.linkedUser.user_avatar_url)}
                           alt={m.linkedUser.username} referrerPolicy="no-referrer"
                           className="db-member-linked-avatar db-member-linked-avatar--img"
                         />
@@ -464,7 +464,7 @@ function EditTeamModal({ team, toast, onClose, onSuccess }) {
                         {m.platformUser && !m.searching && (
                           <div className="db-platform-suggestion" onClick={() => addPlatformUser(i)}>
                             {m.platformUser.user_avatar_url ? (
-                              <img src={m.platformUser.user_avatar_url.startsWith('http') ? m.platformUser.user_avatar_url : `${API_BASE}${m.platformUser.user_avatar_url}`}
+                              <img src={resolveAvatarUrl(m.platformUser.user_avatar_url)}
                                 alt={m.platformUser.username} referrerPolicy="no-referrer"
                                 className="db-ps-avatar db-ps-avatar--img" />
                             ) : (

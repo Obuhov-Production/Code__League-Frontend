@@ -15,6 +15,21 @@ import IconElo         from '@images/dashboard_components/icon_stat_star.svg?rea
 import { getTournaments, getMyTeams } from '@utils/authApi';
 import { StatusBadge, UserAvatar, formatDate, ACCENT } from './db.shared.jsx';
 
+function formatDateTime(value) {
+  if (!value) return '—';
+  try {
+    return new Date(value).toLocaleString('uk-UA', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return '—';
+  }
+}
+
 function CountdownBanner({ tournament, d, h, m, s }) {
   const [time, setTime] = useState({ d, h, m, s });
   useEffect(() => {
@@ -280,7 +295,7 @@ export default function TabOverview({ user, toast, onNavigate }) {
                     <div className="db-ov-dot" style={{ background: e.color }} />
                     <div className="db-ov-item-text">
                       <strong>{e.name}</strong>
-                      <span>{e.label} — {formatDate(e.date)}</span>
+                      <span>{e.label} — {formatDateTime(e.date)}</span>
                     </div>
                   </div>
                 ));

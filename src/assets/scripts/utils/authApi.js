@@ -408,7 +408,7 @@ export async function getAllChatUsers() {
   // Normalize field names to match team-member shape used in the members panel
   return list.map(u => ({
     ...u,
-    user_avatar_url: u.user_avatar_url ?? u.avatar ?? null,
+    user_avatar_url: u.user_avatar_url ?? u.avatar_url ?? u.avatar ?? u.picture ?? u.photo_url ?? null,
     is_captain: false,
   }));
 }

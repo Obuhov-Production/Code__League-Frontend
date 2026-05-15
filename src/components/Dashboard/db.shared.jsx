@@ -229,16 +229,36 @@ export function daysLeft(dateStr) {
   return Math.ceil((new Date(dateStr) - new Date()) / 86400000);
 }
 
-/** Resolves a raw avatar URL — avoids doubling BASE when URL is already absolute. */
+const API_ASSET_BASE = String(API_BASE || '').replace(/\/api\/?$/, '').replace(/\/$/, '');
+
+/** Resolves backend-served files and external avatar URLs safely. */
 export function resolveAvatarUrl(url) {
   if (!url) return null;
-  return url.startsWith('http') ? url : API_BASE + url;
+  const raw = String(url).trim();
+  if (!raw) return null;
+  if (/^(data:|blob:)/i.test(raw)) return raw;
+  if (raw.startsWith('//')) return `${window.location.protocol}${raw}`;
+
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      const parsed = new URL(raw);
+      const base = new URL(API_ASSET_BASE || window.location.origin, window.location.origin);
+      const isLocalhostUpload = /^(localhost|127\.0\.0\.1)$/i.test(parsed.hostname)
+        && parsed.pathname.startsWith('/uploads/');
+      return isLocalhostUpload ? `${base.origin}${parsed.pathname}${parsed.search}${parsed.hash}` : raw;
+    } catch {
+      return raw;
+    }
+  }
+
+  const path = (raw.startsWith('/') ? raw : `/${raw}`).replace(/^\/api(?=\/uploads\/)/, '');
+  return `${API_ASSET_BASE}${path}`;
 }
 
 export function avatarUrl(user) {
   if (!user) return null;
   // Проверяем оба варианта поля (user_avatar_url для /me, avatar_url для admin/users)
-  const url = user.user_avatar_url || user.avatar_url;
+  const url = user.user_avatar_url || user.avatar_url || user.avatar || user.picture || user.photo_url || user.image_url;
   if (url) return resolveAvatarUrl(url);
   // Fallback: GitHub avatar по github_username
   if (user.github_username) return `https://avatars.githubusercontent.com/${user.github_username}`;
@@ -576,7 +596,7 @@ export function MiniProfileModal({ user, onClose, onGoProfile, onLogout }) {
 
 function UserProfileViewModal({ user, onClose }) {
   const bannerStyle = user.banner_url
-    ? { backgroundImage: `url(${API_BASE + user.banner_url})`, backgroundSize: 'cover', backgroundPosition: 'center top' }
+    ? { backgroundImage: `url(${resolveAvatarUrl(user.banner_url)})`, backgroundSize: 'cover', backgroundPosition: 'center top' }
     : { background: `linear-gradient(135deg, ${user.banner_color || '#1e1b2e'} 0%, #191A23 100%)` };
   return (
     <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1100 }}>
@@ -675,7 +695,7 @@ export function UserProfileModal({ profile, meId, onClose, onGoOwnProfile }) {
   }, [onClose]);
 
   const bannerStyle = profile.banner_url
-    ? { backgroundImage: `url(${API_BASE + profile.banner_url})`, backgroundSize: 'cover', backgroundPosition: 'center top' }
+    ? { backgroundImage: `url(${resolveAvatarUrl(profile.banner_url)})`, backgroundSize: 'cover', backgroundPosition: 'center top' }
     : { background: `linear-gradient(135deg, ${profile.banner_color || '#1e1b2e'} 0%, #191A23 100%)` };
   const isAdmin = profile.role === 'admin';
 
@@ -1130,6 +1150,67 @@ function insertMd(textareaId, before, after, setFn, currentVal) {
   }, 0);
 }
 
+function dateMs(value) {
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : null;
+}
+
+function validateTournamentFormDates(values, { isCreate = false } = {}) {
+  const required = [
+    [values.regStart, 'Вкажіть дату відкриття реєстрації'],
+    [values.regEnd, 'Вкажіть дату закриття реєстрації'],
+    [values.startDate, 'Вкажіть дату старту турніру'],
+    [values.endDate, 'Вкажіть дату фінішу турніру'],
+  ];
+
+  for (const [value, message] of required) {
+    if (!value) return message;
+  }
+
+  const regStart = dateMs(values.regStart);
+  const regEnd = dateMs(values.regEnd);
+  const start = dateMs(values.startDate);
+  const end = dateMs(values.endDate);
+  const subStart = dateMs(values.subStart);
+  const subEnd = dateMs(values.subEnd);
+
+  if ([regStart, regEnd, start, end].some(v => v === null)) {
+    return 'Перевірте формат дат. Усі основні дати мають бути коректними.';
+  }
+
+  const now = Date.now() - 60 * 1000;
+  if (isCreate) {
+    const pastDate = [
+      ['відкриття реєстрації', regStart],
+      ['закриття реєстрації', regEnd],
+      ['старт турніру', start],
+      ['фініш турніру', end],
+    ].find(([, time]) => time < now);
+    if (pastDate) return `Дата "${pastDate[0]}" не може бути в минулому.`;
+  }
+
+  if (regEnd <= regStart) return 'Закриття реєстрації має бути пізніше її відкриття.';
+  if (start < regEnd) return 'Старт турніру не може бути раніше закриття реєстрації.';
+  if (end <= start) return 'Фініш турніру має бути пізніше старту.';
+
+  if (subStart !== null && subStart < start) return 'Здача робіт не може відкриватися раніше старту турніру.';
+  if (subStart !== null && subStart >= end) return 'Відкриття здачі має бути раніше фінішу турніру.';
+  if (subEnd !== null && subEnd > end) return 'Дедлайн здачі не може бути пізніше фінішу турніру.';
+  if (subEnd !== null && subEnd <= start) return 'Дедлайн здачі має бути після старту турніру.';
+  if (subStart !== null && subEnd !== null && subEnd <= subStart) {
+    return 'Дедлайн здачі має бути пізніше відкриття здачі.';
+  }
+
+  const minTeam = Number(values.minSize);
+  const maxTeam = Number(values.maxSize);
+  if (!Number.isFinite(minTeam) || minTeam < 1) return 'Мінімальна кількість учасників має бути не менше 1.';
+  if (!Number.isFinite(maxTeam) || maxTeam < 1) return 'Максимальна кількість учасників має бути не менше 1.';
+  if (minTeam > maxTeam) return 'Мінімальна кількість учасників не може бути більшою за максимальну.';
+
+  return '';
+}
+
 export function TournamentForm({
   mode = 'edit',
   tournament = null,
@@ -1145,6 +1226,7 @@ export function TournamentForm({
 
   const [step, setStep] = useState(1);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [formError, setFormError] = useState('');
 
   // Step 1 — Основне
   const [emoji, setEmoji] = useState(t.emoji || '🏆');
@@ -1197,6 +1279,7 @@ export function TournamentForm({
     parsePrizeList(t.additional_prizes).some(p => String(p?.description || '').trim())
   ));
   const [additionalPrizes, setAdditionalPrizes] = useState(() => parsePrizeList(t.additional_prizes));
+  const minDateTime = isCreate ? toDateTimeInput(new Date()) : undefined;
 
   useEffect(() => {
     if (isCreate || !t.id) return;
@@ -1294,7 +1377,24 @@ export function TournamentForm({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setFormError('');
     if (!name.trim()) return;
+
+    const validationError = validateTournamentFormDates({
+      regStart,
+      regEnd,
+      startDate,
+      endDate,
+      subStart,
+      subEnd,
+      minSize,
+      maxSize,
+    }, { isCreate });
+    if (validationError) {
+      setFormError(validationError);
+      setStep(5);
+      return;
+    }
 
     const payload = {
       name: name.trim(),
@@ -1780,17 +1880,23 @@ export function TournamentForm({
           <div className="db-wizard-step-content">
             <h4 className="db-wizard-step-title">📅 Налаштування турніру</h4>
 
+            {formError && (
+              <div className="db-wizard-validation-error">
+                {formError}
+              </div>
+            )}
+
             <div className="db-wizard-date-section">
               <p className="db-wizard-section-subtitle">1. Реєстрація команд</p>
               <div className="db-edit-row-2">
                 <div className="db-edit-field">
                   <label className="db-edit-label">Відкрити реєстрацію <span className="db-required">*</span></label>
-                  <input type="datetime-local" className="db-input" value={regStart} onChange={e => setRegStart(e.target.value)} />
+                  <input type="datetime-local" className="db-input" min={minDateTime} value={regStart} onChange={e => { setRegStart(e.target.value); setFormError(''); }} />
                   <small className="db-field-hint">З цього моменту учасники бачать кнопку реєстрації та можуть створювати команду.</small>
                 </div>
                 <div className="db-edit-field">
                   <label className="db-edit-label">Закрити реєстрацію <span className="db-required">*</span></label>
-                  <input type="datetime-local" className="db-input" value={regEnd} onChange={e => setRegEnd(e.target.value)} />
+                  <input type="datetime-local" className="db-input" min={minDateTime || regStart || undefined} value={regEnd} onChange={e => { setRegEnd(e.target.value); setFormError(''); }} />
                   <small className="db-field-hint">Після цього часу нові команди вже не зможуть податися на турнір.</small>
                 </div>
               </div>
@@ -1799,12 +1905,12 @@ export function TournamentForm({
               <div className="db-edit-row-2">
                 <div className="db-edit-field">
                   <label className="db-edit-label">Старт турніру <span className="db-required">*</span></label>
-                  <input type="datetime-local" className="db-input" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                  <input type="datetime-local" className="db-input" min={regEnd || minDateTime} value={startDate} onChange={e => { setStartDate(e.target.value); setFormError(''); }} />
                   <small className="db-field-hint">У цей час турнір переходить у робочий етап: команди бачать ТЗ, матеріали та починають роботу.</small>
                 </div>
                 <div className="db-edit-field">
                   <label className="db-edit-label">Фініш турніру <span className="db-required">*</span></label>
-                  <input type="datetime-local" className="db-input" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                  <input type="datetime-local" className="db-input" min={startDate || minDateTime} value={endDate} onChange={e => { setEndDate(e.target.value); setFormError(''); }} />
                   <small className="db-field-hint">Фінальна дата турніру. Після неї турнір вважається завершеним.</small>
                 </div>
               </div>
@@ -1813,12 +1919,12 @@ export function TournamentForm({
               <div className="db-edit-row-2">
                 <div className="db-edit-field">
                   <label className="db-edit-label">Відкрити здачу</label>
-                  <input type="datetime-local" className="db-input" value={subStart} onChange={e => setSubStart(e.target.value)} />
+                  <input type="datetime-local" className="db-input" min={startDate || minDateTime} max={endDate || undefined} value={subStart} onChange={e => { setSubStart(e.target.value); setFormError(''); }} />
                   <small className="db-field-hint">З цього часу команда бачить форму подачі роботи: GitHub, демо, відео та опис.</small>
                 </div>
                 <div className="db-edit-field">
                   <label className="db-edit-label">Дедлайн здачі</label>
-                  <input type="datetime-local" className="db-input" value={subEnd} onChange={e => setSubEnd(e.target.value)} />
+                  <input type="datetime-local" className="db-input" min={subStart || startDate || minDateTime} max={endDate || undefined} value={subEnd} onChange={e => { setSubEnd(e.target.value); setFormError(''); }} />
                   <small className="db-field-hint">Після цього часу роботи більше не приймаються, а журі може фінально оцінювати подані проєкти.</small>
                 </div>
               </div>

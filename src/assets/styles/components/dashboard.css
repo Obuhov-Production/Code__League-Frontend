@@ -10396,6 +10396,18 @@
   min-width: 0;
 }
 
+.db-wizard-validation-error {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(239, 68, 68, .22);
+  border-radius: 12px;
+  background: rgba(239, 68, 68, .08);
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 .db-preview-modal--tz-side .db-preview-content--live {
   flex: 1;
 }
@@ -14279,9 +14291,37 @@
     height: calc(100vh - 24px);
     border-radius: 14px;
   }
-  .tw-material-modal-actions {
-    display: grid;
-    grid-template-columns: 1fr;
+.tw-material-modal-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  }
+}
+
+/* Overview masonry layout: cards fill vertical gaps instead of fixed grid rows. */
+.db-overview-grid {
+  display: block;
+  column-count: 3;
+  column-gap: 18px;
+}
+
+.db-overview-grid > .db-ov-section {
+  width: 100%;
+  box-sizing: border-box;
+  display: inline-flex;
+  margin: 0 0 18px;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+@media (max-width: 1180px) {
+  .db-overview-grid {
+    column-count: 2;
+  }
+}
+
+@media (max-width: 760px) {
+  .db-overview-grid {
+    column-count: 1;
   }
 }
 

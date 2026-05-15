@@ -19,7 +19,6 @@ import {
   getMutedChatUsers, toggleChatMute,
   pinChatMessage, unpinChatMessage,
   searchUsers, addTeamChatMember, getTeamChatMembers, getAllChatUsers,
-  API_BASE,
 } from '@utils/authApi';
 import {
   BASE_ROOMS, EMOJI_QUICK, EMOJI_REACT,
@@ -97,6 +96,7 @@ export default function TabChat({
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [addMemberQuery, setAddMemberQuery] = useState('');
   const [addMemberResult, setAddMemberResult] = useState(null);
+  const [addMemberResults, setAddMemberResults] = useState([]);
   const [addMemberSearching, setAddMemberSearching] = useState(false);
   const [addMemberAdding, setAddMemberAdding] = useState(false);
   const addMemberTimer = useRef(null);
@@ -754,27 +754,31 @@ export default function TabChat({
   const handleAddMemberSearch = (q) => {
     setAddMemberQuery(q);
     setAddMemberResult(null);
+    setAddMemberResults([]);
     clearTimeout(addMemberTimer.current);
     if (q.trim().length < 2) return;
     addMemberTimer.current = setTimeout(async () => {
       setAddMemberSearching(true);
       try {
         const results = await searchUsers(q.trim());
-        setAddMemberResult(results[0] || null);
+        const list = Array.isArray(results) ? results : [];
+        setAddMemberResults(list);
+        setAddMemberResult(list[0] || null);
       } catch { /* ignore */ }
       finally { setAddMemberSearching(false); }
     }, 400);
   };
 
-  const handleAddMemberConfirm = async () => {
-    if (!addMemberResult || !currentTeam) return;
+  const handleAddMemberConfirm = async (userToAdd = addMemberResult) => {
+    if (!userToAdd || !currentTeam) return;
     setAddMemberAdding(true);
     try {
-      await addTeamChatMember(currentTeam.id, addMemberResult.id);
-      toast.success(`${addMemberResult.username} додано до чату команди!`);
+      await addTeamChatMember(currentTeam.id, userToAdd.id);
+      toast.success(`${userToAdd.username} додано до чату команди!`);
       setAddMemberOpen(false);
       setAddMemberQuery('');
       setAddMemberResult(null);
+      setAddMemberResults([]);
     } catch (err) { toast.error(err.message || 'Помилка додавання'); }
     finally { setAddMemberAdding(false); }
   };
@@ -897,9 +901,9 @@ export default function TabChat({
                     <div className={`db-chat-imgs${fileUrls.length > 1 ? ' db-chat-imgs--grid' : ''}`}>
                       {fileUrls.map((url, i) => (
                         <button key={i} type="button" className="db-chat-img-link"
-                          onClick={e => { e.preventDefault(); e.stopPropagation(); setLightboxImg(API_BASE + url); }}
+                          onClick={e => { e.preventDefault(); e.stopPropagation(); setLightboxImg(resolveAvatarUrl(url)); }}
                           aria-label="Переглянути зображення">
-                          <img src={API_BASE + url} className="db-chat-img" alt="файл"
+                          <img src={resolveAvatarUrl(url)} className="db-chat-img" alt="файл"
                             onError={e => { e.target.style.display = 'none'; }} />
                         </button>
                       ))}
@@ -1179,20 +1183,39 @@ export default function TabChat({
                 autoFocus
               />
               {addMemberSearching && <p style={{ fontSize: 13, color: '#aaa', marginTop: 8 }}>Пошук...</p>}
-              {addMemberResult && !addMemberSearching && (
-                <div className="db-platform-suggestion" style={{ marginTop: 10 }}
-                  onClick={handleAddMemberConfirm}>
-                  <span className="db-ps-avatar">{addMemberResult.username.slice(0,2).toUpperCase()}</span>
-                  <div style={{ flex: 1 }}>
-                    <span className="db-ps-name">{addMemberResult.username}</span>
-                    {!addMemberResult.identity_confirmed && (
-                      <span style={{ display: 'block', fontSize: 11, color: '#e05fa0' }}>⚠️ ПІБ не підтверджено</span>
-                    )}
-                  </div>
-                  <span className="db-ps-add">{addMemberAdding ? '...' : '+ Додати'}</span>
+              {addMemberResults.length > 0 && !addMemberSearching && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10, maxHeight: 260, overflowY: 'auto' }}>
+                  {addMemberResults.map(result => (
+                    <div key={result.id} className="db-platform-suggestion"
+                      onClick={() => handleAddMemberConfirm(result)}>
+                      {result.user_avatar_url ? (
+                        <img
+                          src={resolveAvatarUrl(result.user_avatar_url)}
+                          alt={result.username}
+                          referrerPolicy="no-referrer"
+                          className="db-ps-avatar db-ps-avatar--img"
+                          onError={e => { e.currentTarget.style.display = 'none'; }}
+                        />
+                      ) : (
+                        <span className="db-ps-avatar">{(result.username || '?').slice(0,2).toUpperCase()}</span>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span className="db-ps-name">{result.username}</span>
+                        {(result.email || result.first_name || result.last_name) && (
+                          <span style={{ display: 'block', fontSize: 11, color: '#8f8aa3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {[result.last_name, result.first_name].filter(Boolean).join(' ') || result.email}
+                          </span>
+                        )}
+                        {!result.identity_confirmed && (
+                          <span style={{ display: 'block', fontSize: 11, color: '#e05fa0' }}>⚠️ ПІБ не підтверджено</span>
+                        )}
+                      </div>
+                      <span className="db-ps-add">{addMemberAdding ? '...' : '+ Додати'}</span>
+                    </div>
+                  ))}
                 </div>
               )}
-              {addMemberQuery.length >= 2 && !addMemberResult && !addMemberSearching && (
+              {addMemberQuery.length >= 2 && addMemberResults.length === 0 && !addMemberSearching && (
                 <p style={{ fontSize: 13, color: '#bbb', marginTop: 8 }}>Користувача не знайдено</p>
               )}
             </div>
@@ -1404,7 +1427,7 @@ export default function TabChat({
                   <div className="db-mention-avatar-wrap">
                     {u.user_avatar_url ? (
                       <img
-                        src={u.user_avatar_url.startsWith('http') ? u.user_avatar_url : `${API_BASE}${u.user_avatar_url}`}
+                        src={resolveAvatarUrl(u.user_avatar_url)}
                         alt={u.username}
                         referrerPolicy="no-referrer"
                         className="db-mention-avatar"
@@ -1544,7 +1567,7 @@ export default function TabChat({
                          })}>
                       <div className="db-chat-members-avatar-wrap">
                         {m.user_avatar_url ? (
-                          <img src={m.user_avatar_url.startsWith('http') ? m.user_avatar_url : `${API_BASE}${m.user_avatar_url}`}
+                          <img src={resolveAvatarUrl(m.user_avatar_url)}
                                alt={m.username || 'user'}
                                referrerPolicy="no-referrer"
                                className="db-chat-members-avatar" />
@@ -1577,7 +1600,7 @@ export default function TabChat({
                          })}>
                       <div className="db-chat-members-avatar-wrap">
                         {m.user_avatar_url ? (
-                          <img src={m.user_avatar_url.startsWith('http') ? m.user_avatar_url : `${API_BASE}${m.user_avatar_url}`}
+                          <img src={resolveAvatarUrl(m.user_avatar_url)}
                                alt={m.username || 'user'}
                                referrerPolicy="no-referrer"
                                className="db-chat-members-avatar" />
@@ -1638,7 +1661,7 @@ export default function TabChat({
           : chatProfile.role && chatProfile.role !== 'user' ? chatProfile.role
           : null;
         const bannerStyle = chatProfile.banner_url
-          ? { backgroundImage: `url(${API_BASE + chatProfile.banner_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+          ? { backgroundImage: `url(${resolveAvatarUrl(chatProfile.banner_url)})`, backgroundSize: 'cover', backgroundPosition: 'center' }
           : { background: chatProfile.banner_color
               ? `linear-gradient(135deg, ${chatProfile.banner_color} 0%, rgba(0,0,0,.4) 100%)`
               : 'linear-gradient(135deg, #2c2540 0%, #191A23 100%)' };
@@ -1824,3 +1847,5 @@ export default function TabChat({
     </div>
   );
 }
+
+
