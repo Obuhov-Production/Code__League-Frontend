@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useRef } from 'react';
+import { friendlyErrorMessage } from './errorMessages';
 
 const ToastContext = createContext(null);
 
@@ -23,7 +24,8 @@ export function ToastProvider({ children }) {
 
   const show = useCallback((message, type = 'info', duration = 3500) => {
     const id = ++_id;
-    setToasts((prev) => [...prev, { id, message, type, removing: false }]);
+    const safeMessage = type === 'error' ? friendlyErrorMessage(message) : String(message || '');
+    setToasts((prev) => [...prev, { id, message: safeMessage, type, removing: false }]);
     timers.current[id] = setTimeout(() => remove(id), duration);
     return id;
   }, [remove]);

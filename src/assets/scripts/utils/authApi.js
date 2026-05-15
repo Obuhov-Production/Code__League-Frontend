@@ -2,6 +2,8 @@
  * Auth API utility — talks to backend via Vite proxy /api → http://localhost:3001
  */
 
+import { apiErrorMessage, createFriendlyError } from './errorMessages';
+
 const API_PROXY_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 const DIRECT_BACKEND_BASE = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
 const BASE = API_PROXY_BASE;
@@ -70,7 +72,7 @@ async function request(url, options = {}) {
     res = await fetch(url, options);
   } catch (networkErr) {
     if (DEBUG_API) console.error(`%c[API] NETWORK ERROR → ${url}`, 'color:#dc2626;font-weight:bold', networkErr);
-    throw networkErr;
+    throw createFriendlyError(networkErr);
   }
 
   let data;
@@ -78,7 +80,7 @@ async function request(url, options = {}) {
     data = await res.json();
   } catch (parseErr) {
     if (DEBUG_API) console.error(`%c[API] JSON PARSE ERROR (${res.status}) → ${url}`, 'color:#dc2626;font-weight:bold', parseErr);
-    throw new Error(`Non-JSON response: ${res.status} ${res.statusText}`);
+    throw new Error(apiErrorMessage({ message: `Non-JSON response: ${res.status} ${res.statusText}` }, res.status));
   }
 
   if (DEBUG_API) {
@@ -99,7 +101,7 @@ async function request(url, options = {}) {
       }
     }
   }
-  if (!res.ok) throw new Error(data.message || 'Request failed');
+  if (!res.ok) throw new Error(apiErrorMessage(data, res.status));
   return data;
 }
 

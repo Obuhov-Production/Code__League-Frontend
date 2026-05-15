@@ -92,7 +92,18 @@ export default function TabJury({ user, toast }) {
 
   const setCrit = (key, val) => setReviewForm(p => ({ ...p, criteria: { ...p.criteria, [key]: val } }));
 
-  if (loading) return <div className="db-loading"><div className="db-spinner" /></div>;
+  if (loading) return (
+    <div className="db-skeleton-stack">
+      <div className="db-skeleton-panel">
+        <div className="db-card-skeleton db-skeleton-line" style={{ width: 220, height: 28, marginBottom: 14 }} />
+        <div className="db-card-skeleton db-skeleton-line" style={{ width: '64%' }} />
+      </div>
+      <div className="db-skeleton-grid">
+        {[1, 2, 3].map(i => <div key={i} className="db-card-skeleton" style={{ height: 120 }} />)}
+      </div>
+      {[1, 2].map(i => <div key={i} className="db-card-skeleton" style={{ height: 86 }} />)}
+    </div>
+  );
 
   const techCrit = EVAL_CRITERIA.filter(c => c.group === 'tech');
   const funcCrit = EVAL_CRITERIA.filter(c => c.group === 'func');

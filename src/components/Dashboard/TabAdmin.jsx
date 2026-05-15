@@ -1579,7 +1579,11 @@ export default function TabAdmin({ toast }) {
                 <thead><tr><th>#</th><th>Команда</th><th>Турнір</th><th>Капітан</th><th>Учасників</th><th>Статус</th><th></th></tr></thead>
                 <tbody>
                   {teamsLoading ? (
-                    <tr><td colSpan="7" style={{ textAlign: 'center', padding: 28 }}><div className="db-spinner sm" /></td></tr>
+                    [1, 2, 3, 4].map(i => (
+                      <tr key={`team-skeleton-${i}`}>
+                        <td colSpan="7"><div className="db-card-skeleton" style={{ height: 42 }} /></td>
+                      </tr>
+                    ))
                   ) : adminTeams.length === 0 ? (
                     <tr><td colSpan="7" style={{ textAlign: 'center', padding: 28, color: '#aaa' }}>Команд ще немає</td></tr>
                   ) : adminTeams

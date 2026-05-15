@@ -1254,7 +1254,16 @@ export default function TabChat({
             <div className="db-chat-load-older"><div className="db-spinner db-spinner--sm" /></div>
           )}
           {loading
-            ? <div className="db-loading"><div className="db-spinner" /></div>
+            ? (
+              <div className="db-chat-skeleton">
+                {[1, 2, 3, 4, 5].map(i => (
+                  <div className={`db-chat-skeleton-row${i % 2 === 0 ? ' right' : ''}`} key={i}>
+                    <div className="db-card-skeleton db-skeleton-avatar" />
+                    <div className="db-card-skeleton db-chat-skeleton-bubble" />
+                  </div>
+                ))}
+              </div>
+            )
             : messages.length === 0
               ? <div className="db-empty" style={{ marginTop: 48 }}><IconChat /><p>Поки немає повідомлень. Будьте першим!</p></div>
               : (() => {

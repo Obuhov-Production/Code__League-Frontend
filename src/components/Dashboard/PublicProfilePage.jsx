@@ -113,7 +113,12 @@ export function PublicProfileModal({ username, onClose }) {
         <button className="db-pp-modal-close" onClick={onClose} aria-label="Закрити">✕</button>
 
         {loading && (
-          <div className="db-pp-modal-loading"><div className="db-spinner" /></div>
+          <div className="db-skeleton-stack db-skeleton-page">
+            <div className="db-card-skeleton" style={{ height: 120, borderRadius: 18 }} />
+            <div className="db-card-skeleton db-skeleton-avatar" style={{ width: 72, height: 72, marginTop: -48 }} />
+            <div className="db-card-skeleton db-skeleton-line" style={{ width: 180, height: 18 }} />
+            <div className="db-card-skeleton db-skeleton-line" style={{ width: '70%' }} />
+          </div>
         )}
         {error && (
           <div className="db-pp-modal-error">
@@ -148,7 +153,12 @@ export default function PublicProfilePage() {
 
   if (loading) return (
     <div className="db-public-profile-page">
-      <div className="db-public-profile-loading"><div className="db-spinner" /></div>
+      <div className="db-skeleton-stack db-skeleton-page">
+        <div className="db-card-skeleton" style={{ height: 220, borderRadius: 24 }} />
+        <div className="db-skeleton-grid">
+          {[1, 2, 3].map(i => <div key={i} className="db-card-skeleton" style={{ height: 92 }} />)}
+        </div>
+      </div>
     </div>
   );
   if (error || !profile) return (

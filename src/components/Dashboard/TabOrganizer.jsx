@@ -10,6 +10,10 @@ import {
 import { StatusBadge, ConfirmModal, formatDate, TournamentForm, UserAvatar, CustomSelect } from './db.shared.jsx';
 import IconTeams from '@images/dashboard_components/icon_teams.svg?react';
 import IconLock  from '@images/dashboard_components/icon_lock_shield.svg?react';
+import IconTournament from '@images/dashboard_components/icon_tournament.svg?react';
+import IconCalendar from '@images/dashboard_components/icon_calendar_card.svg?react';
+import IconCheck from '@images/dashboard_components/icon_check_diamond.svg?react';
+import IconTrophy from '@images/dashboard_components/icon_trophy_award.svg?react';
 
 const TOUR_STATUS_OPTS = [
   { value: 'draft',        label: 'Draft',        color: '#888' },
@@ -612,6 +616,21 @@ export default function TabOrganizer({ toast, user }) {
     { value: 'members', label: 'За кількістю учасників' },
   ];
 
+  const organizerStats = useMemo(() => {
+    const running = tournaments.filter(t => t.status === 'running').length;
+    const registration = tournaments.filter(t => t.status === 'registration').length;
+    const finished = tournaments.filter(t => t.status === 'finished').length;
+    const teamsTotal = tournaments.reduce((sum, t) => sum + Number(t.teams_count || 0), 0);
+
+    return [
+      { label: 'Турніри', value: tournaments.length, Icon: IconTournament, tone: 'violet' },
+      { label: 'Активні', value: running, Icon: IconCheck, tone: 'green' },
+      { label: 'Реєстрація', value: registration, Icon: IconCalendar, tone: 'blue' },
+      { label: 'Команди', value: teamsTotal || teams.length, Icon: IconTrophy, tone: 'amber' },
+      { label: 'Завершені', value: finished, Icon: IconTeams, tone: 'slate' },
+    ];
+  }, [tournaments, teams.length]);
+
   const toggleTeam = async (team) => {
     const nextId = expandedTeamId === team.id ? null : team.id;
     setExpandedTeamId(nextId);
@@ -640,6 +659,20 @@ export default function TabOrganizer({ toast, user }) {
 
       <div className="db-admin-tip" style={{ marginBottom: 16 }}>
         🗂️ Організатор може створювати та керувати турнірами і переглядати команди.
+      </div>
+
+      <div className="org-visual-stats" aria-label="Статистика організатора">
+        {organizerStats.map(({ label, value, Icon, tone }) => (
+          <div className={`org-visual-stat org-visual-stat--${tone}`} key={label}>
+            <span className="org-visual-stat-icon">
+              <Icon />
+            </span>
+            <span className="org-visual-stat-body">
+              <strong>{value}</strong>
+              <small>{label}</small>
+            </span>
+          </div>
+        ))}
       </div>
 
       {/* Create form — full-screen overlay wizard */}

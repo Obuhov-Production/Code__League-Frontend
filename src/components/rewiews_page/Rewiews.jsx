@@ -679,7 +679,15 @@ function RewiewsPage() {
 						</div>
 
 						{loading ? (
-							<div className="reviews-page_empty">Завантажуємо відгуки...</div>
+							<div className="reviews-page_skeleton" aria-label="Завантаження відгуків">
+								{[0, 1, 2].map((row) => (
+									<div className="reviews-page_skeleton-row" key={row}>
+										{Array.from({ length: 7 }).map((_, index) => (
+											<div className="reviews-page_skeleton-card" key={index} />
+										))}
+									</div>
+								))}
+							</div>
 						) : visibleReviews.length === 0 ? (
 							<div className="reviews-page_empty">За цими фільтрами відгуків немає</div>
 						) : (
