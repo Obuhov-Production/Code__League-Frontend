@@ -67,7 +67,7 @@
 }
 
 .reviews-page_search,
-.reviews-page_select {
+.reviews-page_select-trigger {
   width: 100%;
   height: 44px;
   border: 1px solid rgba(172, 158, 248, 0.22);
@@ -81,14 +81,73 @@
 }
 
 .reviews-page_search:focus,
-.reviews-page_select:focus {
+.reviews-page_select-wrap--open .reviews-page_select-trigger,
+.reviews-page_select-trigger:focus {
   border-color: rgba(172, 158, 248, 0.62);
   box-shadow: 0 0 0 3px rgba(172, 158, 248, 0.12);
 }
 
-.reviews-page_select option {
+.reviews-page_select-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+.reviews-page_select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.reviews-page_select-trigger span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reviews-page_select-chevron {
+  color: rgba(243, 243, 243, 0.68);
+  font-size: 18px;
+  line-height: 1;
+  transition: transform 0.16s ease;
+}
+
+.reviews-page_select-wrap--open .reviews-page_select-chevron {
+  transform: rotate(180deg);
+}
+
+.reviews-page_select-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  z-index: 20;
+  overflow: hidden;
+  padding: 6px;
+  border: 1px solid rgba(172, 158, 248, 0.28);
+  border-radius: 12px;
   background: #191a23;
-  color: #f3f3f3;
+  box-shadow: 0 18px 34px rgba(8, 8, 14, 0.28);
+}
+
+.reviews-page_select-option {
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color_light);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  padding: 9px 10px;
+  text-align: left;
+}
+
+.reviews-page_select-option:hover,
+.reviews-page_select-option--active {
+  background: rgba(172, 158, 248, 0.18);
 }
 
 .reviews-page_grid {
@@ -113,13 +172,46 @@
   background: rgba(25, 26, 35, 0.55);
 }
 
+.reviews-page_loop {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow: hidden;
+  width: 100vw;
+  max-width: 100vw;
+  margin-left: calc(50% - 50vw);
+  padding: 4px 0 58px;
+}
+
+.reviews-page_loop-row {
+  overflow: hidden;
+  width: 100%;
+}
+
+.reviews-page_loop-row:nth-child(even) {
+  margin-left: -78px;
+}
+
+.reviews-page_loop-track,
 .reviews-page_strip {
   --duration: 60s;
   display: flex;
   align-items: flex-start;
   gap: 22px;
   width: max-content;
-  padding: 10px 0 20px 0;
+  padding: 10px 0 20px;
+}
+
+.reviews-page_loop-track--left {
+  animation: reviewsLoop var(--duration) linear infinite;
+  animation-delay: var(--delay, 0ms);
+  animation-fill-mode: both;
+}
+
+.reviews-page_loop-track--right {
+  animation: reviewsLoopReverse var(--duration) linear infinite;
+  animation-delay: var(--delay, 0ms);
+  animation-fill-mode: both;
 }
 
 .reviews-page_strip--loop {

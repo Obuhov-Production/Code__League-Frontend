@@ -12,6 +12,28 @@ const MEDALS = ['🥇', '🥈', '🥉']
 const FROM_BACKEND = import.meta.env.VITE_LEADERBOARD_FROM_BACKEND === 'true'
 const API_BASE     = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')
 
+function getCriteriaItems(criteria) {
+  if (!criteria || typeof criteria !== 'object') return []
+
+  return Object.entries(criteria)
+    .map(([key, raw]) => {
+      if (raw && typeof raw === 'object') {
+        const score = Number(raw.score ?? raw.value ?? raw.total)
+        if (!Number.isFinite(score)) return null
+        return {
+          key,
+          label: String(raw.label ?? raw.key ?? key),
+          score,
+        }
+      }
+
+      const score = Number(raw)
+      if (!Number.isFinite(score)) return null
+      return { key, label: key, score }
+    })
+    .filter(Boolean)
+}
+
 // ── Static mock (показується коли FROM_BACKEND=false) ─────────────────────
 const MOCK_TOURNAMENTS = [
   { id: 1, name: 'Code League Spring 2026', status: 'finished' },
@@ -247,6 +269,7 @@ export default function LeaderboardPage() {
           </div>
         ) : (
           <>
+            <div className="lb-controls-row">
             <div className="lb-tabs">
               {tournaments.map(t => {
                 const st = STATUS_LABEL[t.status]
@@ -263,8 +286,9 @@ export default function LeaderboardPage() {
               })}
             </div>
             {rows.length > 0 && (
-              <button className="lb-csv-btn" onClick={downloadCSV} title="Експорт CSV">📥 Експорт CSV</button>
+              <button className="lb-csv-btn" onClick={downloadCSV} title="Експорт CSV">Експорт CSV</button>
             )}
+            </div>
 
             {/* ── Tournament dropdown (mobile) ── */}
             <TournamentDropdown
@@ -282,6 +306,7 @@ export default function LeaderboardPage() {
             <span>Команда</span>
             <span>Рейтинг</span>
             <span>Балів</span>
+            <span className="lb-actions-head"></span>
           </div>
 
           {loadingRows ? (
@@ -294,13 +319,12 @@ export default function LeaderboardPage() {
               </div>
             ))
           ) : rows.map((row, i) => {
-            const score = Number(row.total_score)
+            const score = Number(row.total_score || 0)
             const pct   = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0
             const isExpanded = expandedRow === row.team_id
-            const criteria = row.criteria_breakdown || {}
-            const criteriaKeys = Object.keys(criteria)
+            const criteriaItems = getCriteriaItems(row.criteria_breakdown)
             return (
-              <div key={row.team_id} className={`lb-board-row${i < 3 ? ' top' : ''}`} style={{ flexWrap: 'wrap' }}>
+              <div key={row.team_id} className={`lb-board-row${i < 3 ? ' top' : ''}`}>
                 <span className="lb-rank">{MEDALS[i] ?? `${i + 1}.`}</span>
                 <div className="lb-team">
                   <strong>{row.team_name}</strong>
@@ -312,21 +336,24 @@ export default function LeaderboardPage() {
                   </div>
                 </div>
                 <span className="lb-score">{score.toFixed(1)}</span>
-                {criteriaKeys.length > 0 && (
+                <div className="lb-actions">
+                  {criteriaItems.length > 0 && (
                   <button
                     type="button"
                     onClick={() => setExpandedRow(isExpanded ? null : row.team_id)}
-                    style={{ marginLeft: 8, background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 12 }}
+                    className="lb-detail-btn"
+                    aria-expanded={isExpanded}
                   >
-                    {isExpanded ? '▲ Деталі' : '▼ Деталі'}
+                    Деталі
                   </button>
-                )}
-                {isExpanded && criteriaKeys.length > 0 && (
-                  <div style={{ width: '100%', marginTop: 8, paddingLeft: 48, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                    {criteriaKeys.map(key => (
-                      <div key={key} style={{ background: '#f3f4f6', padding: '6px 12px', borderRadius: 8, border: '1px solid #e5e7eb' }}>
-                        <span style={{ color: '#666', fontSize: 12 }}>{key}</span>
-                        <span style={{ color: '#111', fontWeight: 600, marginLeft: 8 }}>{Number(criteria[key]).toFixed(1)}</span>
+                  )}
+                </div>
+                {isExpanded && criteriaItems.length > 0 && (
+                  <div className="lb-criteria">
+                    {criteriaItems.map(item => (
+                      <div key={item.key} className="lb-crit-item">
+                        <span>{item.label}</span>
+                        <strong>{item.score.toFixed(1)}</strong>
                       </div>
                     ))}
                   </div>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Header from '@components/Header'
 import Footer from '@components/Footer'
 import illustrationSvg from '@images/contact/Illustration.svg'
@@ -253,6 +253,82 @@ function ReviewBubble({ review }) {
 	)
 }
 
+function ReviewsSelect({ value, onChange, options, ariaLabel }) {
+	const [isOpen, setIsOpen] = useState(false)
+	const selectRef = useRef(null)
+	const selected = options.find((option) => option.value === value) || options[0]
+
+	useEffect(() => {
+		if (!isOpen) return undefined
+
+		const handleClickOutside = (event) => {
+			if (selectRef.current && !selectRef.current.contains(event.target)) {
+				setIsOpen(false)
+			}
+		}
+
+		document.addEventListener('mousedown', handleClickOutside)
+		return () => document.removeEventListener('mousedown', handleClickOutside)
+	}, [isOpen])
+
+	return (
+		<div className={`reviews-page_select-wrap${isOpen ? ' reviews-page_select-wrap--open' : ''}`} ref={selectRef}>
+			<button
+				type="button"
+				className="reviews-page_select-trigger"
+				onClick={() => setIsOpen((prev) => !prev)}
+				aria-haspopup="listbox"
+				aria-expanded={isOpen}
+				aria-label={ariaLabel}
+			>
+				<span>{selected?.label}</span>
+				<span className="reviews-page_select-chevron" aria-hidden="true">⌄</span>
+			</button>
+			{isOpen && (
+				<div className="reviews-page_select-menu" role="listbox">
+					{options.map((option) => (
+						<button
+							key={option.value}
+							type="button"
+							className={`reviews-page_select-option${option.value === value ? ' reviews-page_select-option--active' : ''}`}
+							onClick={() => {
+								onChange(option.value)
+								setIsOpen(false)
+							}}
+							role="option"
+							aria-selected={option.value === value}
+						>
+							{option.label}
+						</button>
+					))}
+				</div>
+			)}
+		</div>
+	)
+}
+
+const ratingOptions = [
+	{ value: 'all', label: 'Усі оцінки' },
+	{ value: '5', label: '5 зірок' },
+	{ value: '4', label: '4 зірки' },
+	{ value: '3', label: '3 зірки' },
+	{ value: '2', label: '2 зірки' },
+	{ value: '1', label: '1 зірка' },
+]
+
+const sortOptions = [
+	{ value: 'newest', label: 'Нові спочатку' },
+	{ value: 'oldest', label: 'Старі спочатку' },
+	{ value: 'rating-high', label: 'Вища оцінка' },
+	{ value: 'rating-low', label: 'Нижча оцінка' },
+]
+
+const sourceOptions = [
+	{ value: 'all', label: 'Усі джерела' },
+	{ value: 'real', label: 'Від користувачів' },
+	{ value: 'preset', label: 'Приклади' },
+]
+
 function RewiewsPage() {
 	const toast = useToast()
 
@@ -269,6 +345,9 @@ function RewiewsPage() {
 		const raw = Number(localStorage.getItem(STRIP_PROGRESS_KEY) || 0)
 		return Number.isFinite(raw) && raw >= 0 ? raw % STRIP_ANIMATION_DURATION : 0
 	})
+	const loopStartedAtRef = useRef(Date.now())
+	const loopRef = useRef(null)
+	const loopPlaybackFrameRef = useRef(null)
 
 	const [form, setForm] = useState({
 		name: '',
@@ -371,21 +450,6 @@ function RewiewsPage() {
 	checkAuth()
 	}, [toast])
 
-	const strips = useMemo(() => {
-		const PER_ROW = 6
-		const source = reviews.length ? reviews : PRESET_REVIEWS
-		const rows = []
-		for (let i = 0; i < source.length; i += PER_ROW) {
-			const chunk = source.slice(i, i + PER_ROW)
-			// Якщо останній рядок неповний — добиваємо до 6 з source
-			const padded = chunk.length < PER_ROW
-				? [...chunk, ...source.slice(0, PER_ROW - chunk.length)]
-				: chunk
-			rows.push([...padded, ...padded])
-		}
-		return rows
-	}, [reviews])
-
 	const visibleReviews = useMemo(() => {
 		const q = reviewQuery.trim().toLowerCase()
 		const filtered = reviews.filter((review) => {
@@ -404,6 +468,64 @@ function RewiewsPage() {
 			return new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
 		})
 	}, [reviews, reviewQuery, ratingFilter, sortMode, sourceFilter])
+
+	const reviewRows = useMemo(() => {
+		const MAX_ROWS = 10
+		const TARGET_PER_ROW = 4
+		const MIN_LOOP_CARDS = 14
+		const source = visibleReviews
+		if (!source.length) return []
+
+		const rowCount = Math.min(MAX_ROWS, Math.max(1, Math.ceil(source.length / TARGET_PER_ROW)))
+
+		return Array.from({ length: rowCount }, (_, rowIndex) => {
+			const startIndex = (rowIndex * TARGET_PER_ROW) % source.length
+			const targetLength = Math.max(MIN_LOOP_CARDS, Math.min(source.length, MIN_LOOP_CARDS + 4))
+
+			return Array.from({ length: targetLength }, (_, itemIndex) => {
+				const sourceIndex = (startIndex + itemIndex) % source.length
+				return source[sourceIndex]
+			})
+		})
+	}, [visibleReviews])
+
+	const isLoopFiltered = reviewQuery.trim() || ratingFilter !== 'all' || sortMode !== 'newest' || sourceFilter !== 'all'
+	const easeLoopPlayback = (targetRate) => {
+		if (!loopRef.current) return
+		if (loopPlaybackFrameRef.current) cancelAnimationFrame(loopPlaybackFrameRef.current)
+
+		const animations = [...loopRef.current.querySelectorAll('.reviews-page_loop-track')]
+			.flatMap((track) => track.getAnimations())
+		const startRates = animations.map((animation) => animation.playbackRate || 0)
+		const startedAt = performance.now()
+		const duration = targetRate === 0 ? 520 : 360
+
+		const tick = (now) => {
+			const progress = Math.min(1, (now - startedAt) / duration)
+			const eased = 1 - Math.pow(1 - progress, 3)
+
+			animations.forEach((animation, index) => {
+				const nextRate = startRates[index] + ((targetRate - startRates[index]) * eased)
+				animation.playbackRate = nextRate
+			})
+
+			if (progress < 1) {
+				loopPlaybackFrameRef.current = requestAnimationFrame(tick)
+			}
+		}
+
+		loopPlaybackFrameRef.current = requestAnimationFrame(tick)
+	}
+	const getLoopStyle = (rowIndex) => {
+		const duration = ((rowIndex % 2 === 0 ? 54 : 48) + (rowIndex * 3)) * (isLoopFiltered ? 1.45 : 1)
+		const elapsed = savedAnimationMs + (Date.now() - loopStartedAtRef.current) + (rowIndex * 3700)
+		const delay = -(elapsed % (duration * 1000))
+
+		return {
+			'--duration': `${duration}s`,
+			'--delay': `${delay}ms`,
+		}
+	}
 
 	const handleSubmit = async (e) => {
 		e.preventDefault()
@@ -551,25 +673,9 @@ function RewiewsPage() {
 								onChange={(e) => setReviewQuery(e.target.value)}
 								placeholder="Пошук за автором або текстом..."
 							/>
-							<select className="reviews-page_select" value={ratingFilter} onChange={(e) => setRatingFilter(e.target.value)}>
-								<option value="all">Усі оцінки</option>
-								<option value="5">5 зірок</option>
-								<option value="4">4 зірки</option>
-								<option value="3">3 зірки</option>
-								<option value="2">2 зірки</option>
-								<option value="1">1 зірка</option>
-							</select>
-							<select className="reviews-page_select" value={sortMode} onChange={(e) => setSortMode(e.target.value)}>
-								<option value="newest">Нові спочатку</option>
-								<option value="oldest">Старі спочатку</option>
-								<option value="rating-high">Вища оцінка</option>
-								<option value="rating-low">Нижча оцінка</option>
-							</select>
-							<select className="reviews-page_select" value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
-								<option value="all">Усі джерела</option>
-								<option value="real">Від користувачів</option>
-								<option value="preset">Приклади</option>
-							</select>
+							<ReviewsSelect value={ratingFilter} onChange={setRatingFilter} options={ratingOptions} ariaLabel="Фільтр за оцінкою" />
+							<ReviewsSelect value={sortMode} onChange={setSortMode} options={sortOptions} ariaLabel="Сортування відгуків" />
+							<ReviewsSelect value={sourceFilter} onChange={setSourceFilter} options={sourceOptions} ariaLabel="Фільтр за джерелом" />
 						</div>
 
 						{loading ? (
@@ -577,9 +683,25 @@ function RewiewsPage() {
 						) : visibleReviews.length === 0 ? (
 							<div className="reviews-page_empty">За цими фільтрами відгуків немає</div>
 						) : (
-							<div className="reviews-page_grid">
-								{visibleReviews.map((review) => (
-									<ReviewBubble key={`review-${review.id}`} review={review} />
+							<div
+								className={`reviews-page_loop${isLoopFiltered ? ' reviews-page_loop--filtered' : ''}`}
+								ref={loopRef}
+								onMouseEnter={() => easeLoopPlayback(0)}
+								onMouseLeave={() => easeLoopPlayback(1)}
+								onFocus={() => easeLoopPlayback(0)}
+								onBlur={() => easeLoopPlayback(1)}
+							>
+								{reviewRows.map((row, rowIndex) => (
+									<div className="reviews-page_loop-row" key={`review-row-${rowIndex}`}>
+										<div
+											className={`reviews-page_loop-track${rowIndex % 2 === 0 ? ' reviews-page_loop-track--right' : ' reviews-page_loop-track--left'}`}
+											style={getLoopStyle(rowIndex)}
+										>
+											{[...row, ...row].map((review, duplicateIndex) => (
+												<ReviewBubble key={`review-${rowIndex}-${duplicateIndex}-${review.id}`} review={review} />
+											))}
+										</div>
+									</div>
 								))}
 							</div>
 						)}

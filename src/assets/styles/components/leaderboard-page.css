@@ -63,6 +63,13 @@
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.lb-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 20px;
 }
 
@@ -252,7 +259,7 @@
 .lb-board-header,
 .lb-board-row {
   display: grid;
-  grid-template-columns: 48px 1fr 160px 72px;
+  grid-template-columns: 48px minmax(160px, 1fr) minmax(140px, 160px) 72px 96px;
   align-items: center;
   gap: 16px;
   padding: 14px 24px;
@@ -337,6 +344,78 @@
   text-align: right;
 }
 
+.lb-actions,
+.lb-actions-head {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.lb-detail-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: #6b6478;
+  cursor: pointer;
+  font-family: 'Poppins', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  min-height: 32px;
+  padding: 7px 9px;
+  white-space: nowrap;
+  transition: background .16s ease, border-color .16s ease, color .16s ease;
+}
+
+.lb-detail-btn::before {
+  content: "▾";
+  color: #9b8df4;
+  font-size: 11px;
+  line-height: 1;
+  transition: transform .16s ease;
+}
+
+.lb-detail-btn[aria-expanded="true"]::before {
+  transform: rotate(180deg);
+}
+
+.lb-detail-btn:hover {
+  border-color: rgba(172, 158, 248, 0.28);
+  color: var(--color_dark);
+  background: rgba(172, 158, 248, 0.08);
+}
+
+.lb-criteria {
+  grid-column: 2 / -1;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+
+.lb-crit-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #f3f4f6;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.lb-crit-item span {
+  color: #666;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.lb-crit-item strong {
+  color: #111;
+  font-weight: 700;
+}
+
 /* ── CTA block ── */
 .lb-cta {
   text-align: center;
@@ -408,6 +487,9 @@
   /* swap tabs → custom dropdown */
   .lb-tabs { display: none; }
   .lb-dd   { display: block; }
+  .lb-controls-row {
+    display: block;
+  }
 }
 
 @media (max-width: 640px) {
@@ -434,6 +516,15 @@
   .lb-board-header span:nth-child(3),
   .lb-board-row .lb-bar-wrap { display: none; }
 
+  .lb-actions-head { display: none; }
+  .lb-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+  .lb-criteria {
+    grid-column: 1 / -1;
+  }
+
   .lb-rank      { font-size: 18px; }
   .lb-team strong { font-size: 14px; }
   .lb-team span   { font-size: 11px; }
@@ -457,16 +548,30 @@
 
 /* ── CSV Export Button ── */
 .lb-csv-btn {
-  margin: 12px 0 0 auto;
-  display: block;
-  background: #1e1b2e;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 8px 16px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  color: #1e1b2e;
+  border: 1px solid #dedbea;
+  border-radius: 12px;
+  padding: 9px 14px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  transition: background .2s;
+  box-shadow: 0 6px 18px rgba(30, 27, 46, 0.06);
+  transition: background .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease;
 }
-.lb-csv-btn:hover { background: #7c5ff5; }
+.lb-csv-btn::before {
+  content: "↧";
+  color: #8b7cf6;
+  font-size: 14px;
+  line-height: 1;
+}
+.lb-csv-btn:hover {
+  background: #fbfaff;
+  border-color: rgba(172, 158, 248, 0.72);
+  color: #171522;
+  box-shadow: 0 8px 22px rgba(124, 95, 245, 0.10);
+}

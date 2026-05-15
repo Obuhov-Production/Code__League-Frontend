@@ -12,7 +12,7 @@ import IconGithub      from "@images/dashboard_components/icon_github.svg?react"
 import IconSend        from "@images/dashboard_components/send.svg?react";
 
 import { getMyTeams, getTeamById, updateTeam, searchUsers, getTournamentRounds, getTeamSubmissions, createSubmission, updateSubmission, API_BASE } from "@utils/authApi";
-import { StatusBadge, UserAvatar, pickCurrentRound, getSocket } from "./db.shared.jsx";
+import { StatusBadge, UserAvatar, pickCurrentRound, getSocket, CustomSelect } from "./db.shared.jsx";
 
 const AVATAR_GRADIENTS = [
   "linear-gradient(135deg,#AC9EF8,#7c5ff5)",
@@ -213,13 +213,11 @@ function SubmitWorkModal({ team, toast, onClose }) {
             {rounds.length > 0 && (
               <div className="db-form-row" style={{ marginBottom: 12 }}>
                 <label>Раунд</label>
-                <select className="db-input" value={roundId} onChange={e => {
-                  setRoundId(e.target.value);
-                  const r = rounds.find(r => String(r.id) === e.target.value);
+                <CustomSelect value={roundId} onChange={(value) => {
+                  setRoundId(value);
+                  const r = rounds.find(r => String(r.id) === String(value));
                   setDeadline(r?.end_date || null);
-                }}>
-                  {rounds.map(r => <option key={r.id} value={r.id}>{r.title || `Раунд ${r.order_index ?? r.id}`}</option>)}
-                </select>
+                }} options={rounds.map(r => ({ value: r.id, label: r.title || `Раунд ${r.order_index ?? r.id}` }))} />
               </div>
             )}
 
@@ -244,9 +242,11 @@ function SubmitWorkModal({ team, toast, onClose }) {
               <div>
                 <label className="db-edit-label">🌿 Гілка <span className="db-required">*</span></label>
                 {branches.length > 0 ? (
-                  <select className="db-input" value={branch} onChange={e => setBranch(e.target.value)}>
-                    {branches.map(b => <option key={b} value={b}>{b}</option>)}
-                  </select>
+                  <CustomSelect
+                    value={branch}
+                    onChange={setBranch}
+                    options={branches.map(b => ({ value: b, label: b }))}
+                  />
                 ) : (
                   <input className="db-input" value={branch} onChange={e => setBranch(e.target.value)} placeholder="main" />
                 )}

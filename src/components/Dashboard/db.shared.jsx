@@ -1453,16 +1453,15 @@ export function TournamentForm({
             {isCreate && (
               <div className="db-edit-field" style={{ marginTop: 12 }}>
                 <label className="db-edit-label">🔗 Батьківський турнір (якщо це раунд)</label>
-                <select
-                  className="db-input db-select"
+                <CustomSelect
                   value={parentTournamentId}
-                  onChange={e => setParentTournamentId(e.target.value)}
-                >
-                  <option value="">— Самостійний турнір —</option>
-                  {parentTournaments.map(pt => (
-                    <option key={pt.id} value={pt.id}>{pt.emoji || '🏆'} {pt.name}</option>
-                  ))}
-                </select>
+                  onChange={setParentTournamentId}
+                  placeholder="— Самостійний турнір —"
+                  options={parentTournaments.map(pt => ({
+                    value: pt.id,
+                    label: `${pt.emoji || '🏆'} ${pt.name}`,
+                  }))}
+                />
                 <small className="db-field-hint">
                   Якщо цей турнір є раундом іншого турніру, він автоматично додасться як раунд у батьківський.
                 </small>

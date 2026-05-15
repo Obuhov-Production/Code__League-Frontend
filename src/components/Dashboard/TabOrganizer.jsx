@@ -7,7 +7,7 @@ import {
   getTournamentRounds, createRound, updateRound, deleteRound,
   advanceRound, uploadRoundFile,
 } from '@utils/authApi';
-import { StatusBadge, ConfirmModal, formatDate, TournamentForm } from './db.shared.jsx';
+import { StatusBadge, ConfirmModal, formatDate, TournamentForm, UserAvatar, CustomSelect } from './db.shared.jsx';
 import IconTeams from '@images/dashboard_components/icon_teams.svg?react';
 import IconLock  from '@images/dashboard_components/icon_lock_shield.svg?react';
 
@@ -434,6 +434,14 @@ const teamMemberName = (member) => (
   member?.full_name || member?.fullName || member?.username || member?.user?.username || member?.email || 'Учасник'
 );
 
+const teamMemberAvatarUser = (member) => ({
+  username: teamMemberName(member),
+  email: member?.email || member?.user?.email || null,
+  user_avatar_url: member?.user_avatar_url || member?.avatar_url || member?.user?.user_avatar_url || member?.user?.avatar_url || null,
+  avatar_url: member?.avatar_url || member?.user?.avatar_url || null,
+  status: member?.presence || member?.status || member?.user?.status || null,
+});
+
 function OrganizerTeamPanel({ team, detail, loading, expanded, onToggle }) {
   const data = detail || team;
   const members = Array.isArray(data?.members) ? data.members : [];
@@ -484,7 +492,12 @@ function OrganizerTeamPanel({ team, detail, loading, expanded, onToggle }) {
                     const isCaptain = captainId != null && String(memberId) === String(captainId);
                     return (
                       <div key={`${memberId || index}-${index}`} className="org-team-member">
-                        <span className="org-team-member-avatar">{teamMemberName(member).slice(0, 2).toUpperCase()}</span>
+                        <UserAvatar
+                          user={teamMemberAvatarUser(member)}
+                          size={34}
+                          className="org-team-member-avatar"
+                          showStatus={Boolean(member.presence || member.user?.status)}
+                        />
                         <span className="org-team-member-body">
                           <strong>{teamMemberName(member)} {isCaptain && <b>Капітан</b>}</strong>
                           <small>{teamText(member.email || member.user?.email, 'Email не вказано')}</small>
@@ -584,6 +597,20 @@ export default function TabOrganizer({ toast, user }) {
       return teamText(a.name).localeCompare(teamText(b.name), 'uk');
     });
   }, [teams, filterTour, teamSearch, teamSort]);
+
+  const teamTournamentOptions = useMemo(() => (
+    [...new Map(teams
+      .filter(t => t.tournament_id != null)
+      .map(t => [t.tournament_id, t.tournament_name || 'Без назви'])
+    ).entries()].map(([id, name]) => ({ value: id, label: name }))
+  ), [teams]);
+
+  const teamSortOptions = [
+    { value: 'name', label: 'За назвою' },
+    { value: 'tournament', label: 'За турніром' },
+    { value: 'captain', label: 'За капітаном' },
+    { value: 'members', label: 'За кількістю учасників' },
+  ];
 
   const toggleTeam = async (team) => {
     const nextId = expandedTeamId === team.id ? null : team.id;
@@ -748,16 +775,15 @@ export default function TabOrganizer({ toast, user }) {
             <>
               <div className="org-round-tournament-picker">
                 <label style={{ fontSize: 13, color: '#666' }}>Турнір:</label>
-                <select
-                  className="db-select db-select-sm"
+                <CustomSelect
                   value={filterTour}
-                  onChange={e => setFilterTour(e.target.value)}
-                >
-                  <option value="">— Оберіть турнір —</option>
-                  {tournaments.filter(t => canEditTournament(t)).map(t => (
-                    <option key={t.id} value={t.id}>{t.emoji || '🏆'} {t.name} ({t.status})</option>
-                  ))}
-                </select>
+                  onChange={setFilterTour}
+                  placeholder="— Оберіть турнір —"
+                  options={tournaments.filter(t => canEditTournament(t)).map(t => ({
+                    value: t.id,
+                    label: `${t.emoji || '🏆'} ${t.name} (${t.status})`,
+                  }))}
+                />
               </div>
               {filterTour ? (
                 <RoundManager
@@ -787,21 +813,17 @@ export default function TabOrganizer({ toast, user }) {
                     onChange={e => setTeamSearch(e.target.value)}
                     placeholder="Пошук: команда, капітан, місто, заклад..."
                   />
-                  <select className="db-select db-select-sm" value={filterTour} onChange={e => setFilterTour(e.target.value)}>
-                    <option value="">Усі турніри</option>
-                    {[...new Map(teams
-                      .filter(t => t.tournament_id != null)
-                      .map(t => [t.tournament_id, t.tournament_name || 'Без назви'])
-                    ).entries()].map(([id, name]) => (
-                      <option key={id} value={id}>{name}</option>
-                    ))}
-                  </select>
-                  <select className="db-select db-select-sm" value={teamSort} onChange={e => setTeamSort(e.target.value)}>
-                    <option value="name">За назвою</option>
-                    <option value="tournament">За турніром</option>
-                    <option value="captain">За капітаном</option>
-                    <option value="members">За кількістю учасників</option>
-                  </select>
+                  <CustomSelect
+                    value={filterTour}
+                    onChange={setFilterTour}
+                    placeholder="Усі турніри"
+                    options={teamTournamentOptions}
+                  />
+                  <CustomSelect
+                    value={teamSort}
+                    onChange={setTeamSort}
+                    options={teamSortOptions}
+                  />
                 </div>
 
                 <div className="org-teams-list">
@@ -819,45 +841,6 @@ export default function TabOrganizer({ toast, user }) {
                   ))}
                 </div>
               </div>
-              <div className="org-teams-toolbar">
-                <label style={{ fontSize: 13, color: '#666' }}>Турнір:</label>
-                <select
-                  className="db-select db-select-sm"
-                  value={filterTour}
-                  onChange={e => setFilterTour(e.target.value)}
-                >
-                  <option value="">— Усі —</option>
-                  {[...new Map(teams.map(t => [t.tournament_id, t.tournament_name])).entries()].map(([id, name]) => (
-                    <option key={id} value={id}>{name}</option>
-                  ))}
-                </select>
-              </div>
-              <table className="db-admin-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Команда</th>
-                    <th>Турнір</th>
-                    <th>Капітан</th>
-                    <th>Учасників</th>
-                    <th>Статус</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {teams
-                    .filter(t => !filterTour || String(t.tournament_id) === String(filterTour))
-                    .map(t => (
-                      <tr key={t.id}>
-                        <td style={{ color: '#bbb', fontSize: 12 }}>{t.id}</td>
-                        <td><strong>{t.name}</strong></td>
-                        <td style={{ fontSize: 13 }}>{t.tournament_name}</td>
-                        <td style={{ fontSize: 13, color: '#666' }}>{t.captain_name}</td>
-                        <td>{t.members_count}</td>
-                        <td><StatusBadge status={t.tournament_status} /></td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
             </div>
           )}
         </>

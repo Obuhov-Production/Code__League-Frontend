@@ -1565,15 +1565,15 @@ export default function TabAdmin({ toast }) {
             <div className="db-admin-table-wrap">
               <div style={{ marginBottom: 12, display: 'flex', gap: 10, alignItems: 'center' }}>
                 <label style={{ fontSize: 13, color: '#666' }}>Турнір:</label>
-                <select className="db-select db-select-sm" value={filterTour} onChange={e => setFilterTour(e.target.value)}>
-                  <option value="">— Усі —</option>
-                  {[...new Map(adminTeams
+                <CustomSelect
+                  value={filterTour}
+                  onChange={setFilterTour}
+                  placeholder="— Усі —"
+                  options={[...new Map(adminTeams
                     .filter(t => t.tournament_id != null)
                     .map(t => [t.tournament_id, t.tournament_name || 'Без назви'])
-                  ).entries()].map(([id, name]) => (
-                    <option key={id} value={id}>{name}</option>
-                  ))}
-                </select>
+                  ).entries()].map(([id, name]) => ({ value: id, label: name }))}
+                />
               </div>
               <table className="db-admin-table">
                 <thead><tr><th>#</th><th>Команда</th><th>Турнір</th><th>Капітан</th><th>Учасників</th><th>Статус</th><th></th></tr></thead>

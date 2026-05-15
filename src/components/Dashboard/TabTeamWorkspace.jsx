@@ -3,7 +3,7 @@ import {
   getTeamById, getTournamentRounds, getTeamSubmissions,
   createSubmission, updateSubmission, API_BASE, getTournamentFiles
 } from '@utils/authApi';
-import { StatusBadge, UserAvatar, pickCurrentRound, getSocket, MarkdownRenderer } from './db.shared.jsx';
+import { StatusBadge, UserAvatar, pickCurrentRound, getSocket, MarkdownRenderer, CustomSelect } from './db.shared.jsx';
 
 import IconSave      from '@images/dashboard_components/save.svg?react';
 import IconTeams     from '@images/dashboard_components/icon_teams.svg?react';
@@ -380,9 +380,14 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
             {existing && <span className="sub-hero-saved"> · Збережено ✓</span>}
           </p>
           {rounds.length > 0 && (
-            <select className="sub-round-select" value={roundId} onChange={e => setRoundId(e.target.value)}>
-              {rounds.map(r => <option key={r.id} value={r.id}>{r.title || `Раунд ${r.order_index ?? r.id}`}</option>)}
-            </select>
+            <CustomSelect
+              value={roundId}
+              onChange={setRoundId}
+              options={rounds.map(r => ({
+                value: r.id,
+                label: r.title || `Раунд ${r.order_index ?? r.id}`,
+              }))}
+            />
           )}
         </div>
         {deadline && !isDeadlinePast && <CountdownTimer deadline={deadline} />}
@@ -421,9 +426,11 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
               {branches.length > 0 ? (
                 <div className="sub-input-row">
                   <span className="sub-input-icon">⇄</span>
-                  <select value={branch} onChange={e => setBranch(e.target.value)}>
-                    {branches.map(b => <option key={b} value={b}>{b}</option>)}
-                  </select>
+                  <CustomSelect
+                    value={branch}
+                    onChange={setBranch}
+                    options={branches.map(b => ({ value: b, label: b }))}
+                  />
                 </div>
               ) : (
                 <div className="sub-input-row">

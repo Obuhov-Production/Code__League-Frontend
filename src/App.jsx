@@ -7,6 +7,7 @@ import Footer from '@components/Footer'
 import HeroSection from '@components/HeroSection'
 import InfoSection from '@components/InfoSection'
 import ServicesSection from '@components/ServicesSection'
+import AppDownloadSection from '@components/AppDownloadSection'
 import CTASection from '@components/CTASection'
 import AboutSection from '@components/AboutSection'
 import Accordion from '@components/Accordion'
@@ -33,6 +34,9 @@ function HomePage() {
       <main className="main-content">
         <HeroSection />
         <InfoSection />
+        <div className="clear-space-50px"></div>
+        <AppDownloadSection />
+        <div className="clear-space-50px"></div>
         <ServicesSection />
         <div className="clear-space-50px"></div>
         <CTASection />

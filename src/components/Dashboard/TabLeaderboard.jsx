@@ -6,6 +6,28 @@ import { getTournaments, getLeaderboard, getMyTeams } from '@utils/authApi';
 import { CustomSelect, STATUS_LABEL, formatDate, hasRole } from './db.shared.jsx';
 import CertificateGenerator from './CertificateGenerator.jsx';
 
+function getCriteriaItems(criteria) {
+  if (!criteria || typeof criteria !== 'object') return [];
+
+  return Object.entries(criteria)
+    .map(([key, raw]) => {
+      if (raw && typeof raw === 'object') {
+        const score = Number(raw.score ?? raw.value ?? raw.total);
+        if (!Number.isFinite(score)) return null;
+        return {
+          key,
+          label: String(raw.label ?? raw.key ?? key),
+          score,
+        };
+      }
+
+      const score = Number(raw);
+      if (!Number.isFinite(score)) return null;
+      return { key, label: key, score };
+    })
+    .filter(Boolean);
+}
+
 export default function TabLeaderboard({ user, toast }) {
   const [tournaments,  setTournaments]  = useState([]);
   const [selected,     setSelected]     = useState('');
@@ -95,7 +117,7 @@ export default function TabLeaderboard({ user, toast }) {
           )}
           {isOrganizer && leaderboard.length > 0 && (
             <button className="db-btn db-btn-ghost db-btn-sm db-lb-csv-btn" onClick={downloadCSV} title="Експорт CSV">
-              <span>📥</span>CSV
+              Експорт CSV
             </button>
           )}
         </div>
@@ -133,11 +155,10 @@ export default function TabLeaderboard({ user, toast }) {
         <div className="db-leaderboard">
           <div className="db-leaderboard-header"><span>#</span><span>Команда</span><span>Рейтинг</span><span>Балів</span><span className="db-lb-actions-head">Дії</span></div>
           {leaderboard.map((row, i) => {
-            const score = Number(row.total_score);
+            const score = Number(row.total_score || 0);
             const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
             const isExpanded = expandedRow === row.team_id;
-            const criteria = row.criteria_breakdown || {};
-            const criteriaKeys = Object.keys(criteria);
+            const criteriaItems = getCriteriaItems(row.criteria_breakdown);
             return (
               <div key={row.team_id} className={`db-leaderboard-row${i < 3 ? ' top' : ''}${userTeamIds.has(row.team_id) ? ' mine' : ''}`}>
                 <span className={`db-rank db-rank-${i + 1}`}>{MEDALS[i] || i + 1}</span>
@@ -164,23 +185,24 @@ export default function TabLeaderboard({ user, toast }) {
                       date={formatDate(new Date())}
                     />
                   )}
-                  {criteriaKeys.length > 0 && (
+                  {criteriaItems.length > 0 && (
                     <button
                       type="button"
                       className="db-btn db-btn-ghost db-btn-sm db-lb-expand-btn"
                       onClick={() => setExpandedRow(isExpanded ? null : row.team_id)}
                       title={isExpanded ? 'Сховати деталі' : 'Показати деталі'}
+                      aria-expanded={isExpanded}
                     >
-                      {isExpanded ? '▲ Деталі' : '▼ Деталі'}
+                      Деталі
                     </button>
                   )}
                 </div>
-                {isExpanded && criteriaKeys.length > 0 && (
+                {isExpanded && criteriaItems.length > 0 && (
                   <div className="db-lb-criteria">
-                    {criteriaKeys.map(key => (
-                      <div key={key} className="db-lb-crit-item">
-                        <span>{key}</span>
-                        <strong>{Number(criteria[key]).toFixed(1)}</strong>
+                    {criteriaItems.map(item => (
+                      <div key={item.key} className="db-lb-crit-item">
+                        <span>{item.label}</span>
+                        <strong>{item.score.toFixed(1)}</strong>
                       </div>
                     ))}
                   </div>
