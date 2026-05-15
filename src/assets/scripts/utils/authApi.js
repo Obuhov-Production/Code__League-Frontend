@@ -5,9 +5,32 @@
 import { apiErrorMessage, createFriendlyError } from './errorMessages';
 
 const API_PROXY_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
-const DIRECT_BACKEND_BASE = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
+const ENV_BACKEND_BASE = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
 const BASE = API_PROXY_BASE;
-export const API_BASE = BASE.startsWith('http') ? BASE : DIRECT_BACKEND_BASE;
+
+const getBrowserLocation = () => (typeof window !== 'undefined' ? window.location : null);
+const isLoopbackHost = (host = '') => {
+  const clean = host.replace(/^\[|\]$/g, '').toLowerCase();
+  return clean === 'localhost' || clean === '127.0.0.1' || clean === '::1' || clean === '0.0.0.0';
+};
+const getUrlHost = (url) => {
+  try { return new URL(url).hostname; } catch { return ''; }
+};
+const currentLocation = getBrowserLocation();
+const currentOrigin = currentLocation?.origin || '';
+const runningOnLoopback = isLoopbackHost(currentLocation?.hostname || '');
+const envBackendIsLoopback = isLoopbackHost(getUrlHost(ENV_BACKEND_BASE));
+const DIRECT_BACKEND_BASE =
+  currentOrigin && envBackendIsLoopback && !runningOnLoopback
+    ? currentOrigin
+    : ENV_BACKEND_BASE;
+const ABSOLUTE_API_BASE = BASE.startsWith('http') ? BASE : `${DIRECT_BACKEND_BASE}${BASE}`;
+const BROWSER_API_BASE = BASE.startsWith('http') ? BASE : BASE;
+
+export const API_BASE = (() => {
+  if (!BASE.startsWith('http')) return DIRECT_BACKEND_BASE;
+  try { return new URL(BASE).origin; } catch { return DIRECT_BACKEND_BASE; }
+})();
 
 export const DEBUG_API = import.meta.env.VITE_DEBUG_API === 'true';
 
@@ -16,6 +39,8 @@ if (DEBUG_API) {
   console.log('VITE_API_BASE_URL  :', import.meta.env.VITE_API_BASE_URL);
   console.log('VITE_BACKEND_URL   :', import.meta.env.VITE_BACKEND_URL);
   console.log('BASE (proxy)       :', BASE);
+  console.log('ABSOLUTE_API_BASE  :', ABSOLUTE_API_BASE);
+  console.log('BROWSER_API_BASE   :', BROWSER_API_BASE);
   console.log('API_BASE (direct)  :', API_BASE);
   console.log('CHECK_BACKEND      :', import.meta.env.VITE_CHECK_BACKEND);
   console.groupEnd();
@@ -41,9 +66,9 @@ export const DEV_MOCK_USER = {
 // OAuth: browser redirects go directly to backend (bypass Vite proxy),
 // so must use full backend URL including /api prefix.
 export const OAUTH_URLS = {
-  google: `${DIRECT_BACKEND_BASE}${BASE}/auth/google`,
-  discord: `${DIRECT_BACKEND_BASE}${BASE}/auth/discord`,
-  github: `${DIRECT_BACKEND_BASE}${BASE}/auth/github`,
+  google: `${BROWSER_API_BASE}/auth/google`,
+  discord: `${BROWSER_API_BASE}/auth/discord`,
+  github: `${BROWSER_API_BASE}/auth/github`,
 };
 
 /** Build auth headers */

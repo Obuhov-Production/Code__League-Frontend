@@ -24,6 +24,112 @@ const AVATAR_GRADIENTS = [
   'linear-gradient(135deg,#f8d4a4,#e08a20)',
 ];
 
+const DOC_ACCEPTED = [
+  '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.svg',
+  '.md', '.markdown', '.txt', '.rtf', '.csv',
+  '.doc', '.docx', '.odt', '.ppt', '.pptx', '.pps', '.ppsx', '.odp', '.xls', '.xlsx',
+  '.zip', '.rar', '.7z',
+].join(',');
+
+const getFileExt = (value = '') => {
+  const clean = String(value).split('?')[0].split('#')[0];
+  const name = clean.slice(clean.lastIndexOf('/') + 1);
+  const dot = name.lastIndexOf('.');
+  return dot >= 0 ? name.slice(dot + 1).toLowerCase() : '';
+};
+
+const isImageExt = ext => ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg'].includes(ext);
+const isTextExt = ext => ['md', 'markdown', 'txt', 'csv', 'json', 'log'].includes(ext);
+const isOfficeExt = ext => ['doc', 'docx', 'ppt', 'pptx', 'pps', 'ppsx', 'xls', 'xlsx'].includes(ext);
+
+async function saveBlobAs(blob, suggestedName) {
+  if (window.showSaveFilePicker) {
+    const handle = await window.showSaveFilePicker({ suggestedName });
+    const writable = await handle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    return;
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = suggestedName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function downloadUrl(url, suggestedName = 'material') {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = suggestedName;
+  a.target = '_blank';
+  a.rel = 'noreferrer';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function MaterialPreview({ file }) {
+  const [text, setText] = useState('');
+  const [error, setError] = useState('');
+  const ext = getFileExt(file?.name || file?.url);
+
+  useEffect(() => {
+    setText('');
+    setError('');
+    if (!file?.url || !isTextExt(ext)) return;
+    let active = true;
+    fetch(file.url)
+      .then(res => {
+        if (!res.ok) throw new Error('preview');
+        return res.text();
+      })
+      .then(value => { if (active) setText(value); })
+      .catch(() => { if (active) setError('Не вдалося відкрити текстовий перегляд.'); });
+    return () => { active = false; };
+  }, [file?.url, ext]);
+
+  if (!file?.url) return null;
+
+  if (isImageExt(ext)) {
+    return (
+      <div className="tw-material-image-preview">
+        <img src={file.url} alt={file.name || 'Матеріал'} />
+      </div>
+    );
+  }
+
+  if (ext === 'pdf') {
+    return (
+      <object data={file.url} type="application/pdf" className="tw-material-frame">
+        <iframe src={file.url} title={file.name || 'PDF'} />
+      </object>
+    );
+  }
+
+  if (isTextExt(ext)) {
+    return (
+      <div className="tw-material-text-preview">
+        {error ? <p>{error}</p> : <pre>{text || 'Завантаження перегляду...'}</pre>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="tw-material-empty-preview">
+      <IconAttach />
+      <h4>{isOfficeExt(ext) ? 'Документ потрібно зберегти для перегляду' : 'Попередній перегляд недоступний'}</h4>
+      <p>
+        {isOfficeExt(ext)
+          ? 'Файли Word, PowerPoint та Excel браузер напряму не відкриває стабільно. Збережіть файл і відкрийте його у відповідній програмі.'
+          : 'Цей формат краще завантажити на пристрій.'}
+      </p>
+    </div>
+  );
+}
+
 function deadlineInfo(dateStr) {
   if (!dateStr) return null;
   const now = Date.now();
@@ -321,6 +427,15 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
     finally { setLoadingB(false); }
   };
 
+  const handleDocFile = (file) => {
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) {
+      toast.error('Файл має бути до 25МБ');
+      return;
+    }
+    setDocFileName(file.name);
+  };
+
   useEffect(() => {
     const path = parseRepoPath(repoUrl);
     if (!path) {
@@ -502,20 +617,15 @@ function SubmissionSection({ team, toast, rounds, existing, onSaved }) {
               <input
                 type="file"
                 style={{ display: 'none' }}
-                accept=".pdf,.png,.jpg,.jpeg"
+                accept={DOC_ACCEPTED}
                 onChange={e => {
                   const file = e.target.files?.[0];
-                  if (!file) return;
-                  if (file.size > 10 * 1024 * 1024) {
-                    toast.error('Файл має бути до 10МБ');
-                    return;
-                  }
-                  setDocFileName(file.name);
+                  handleDocFile(file);
                 }}
               />
               <div className="sub-file-drop-icon">{docFileName ? '📄' : '☁️'}</div>
               <p className="sub-file-drop-title">{docFileName || 'Клікніть, щоб вибрати файл'}</p>
-              <p className="sub-file-drop-hint">PDF, PNG або JPG до 10МБ. Для суддів додайте посилання на файл у нотатках.</p>
+              <p className="sub-file-drop-hint">PDF, DOCX, PPTX, MD, TXT, зображення або архів до 25МБ. Для суддів додайте посилання на файл у нотатках.</p>
             </label>
             {docFileName && (
               <button type="button" className="sub-file-remove-inline" onClick={() => setDocFileName('')}>
@@ -780,18 +890,28 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
     });
   };
 
-  // Helper: download TZ text as .md file
-  const downloadTzMd = () => {
+  const saveTzMd = async () => {
     if (!team.tournament_tz) return;
     const blob = new Blob([team.tournament_tz], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${(team.tournament_name || 'tournament').replace(/\s+/g, '_')}-tz.md`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    try {
+      await saveBlobAs(blob, `${(team.tournament_name || 'tournament').replace(/\s+/g, '_')}-tz.md`);
+    } catch (error) {
+      if (error?.name === 'AbortError') return;
+      toast.error('Не вдалося зберегти файл');
+    }
+  };
+
+  const saveMaterial = async (file) => {
+    if (!file?.url) return;
+    try {
+      const response = await fetch(file.url);
+      if (!response.ok) throw new Error('download');
+      const blob = await response.blob();
+      await saveBlobAs(blob, file.name || 'material');
+    } catch (error) {
+      if (error?.name === 'AbortError') return;
+      downloadUrl(file.url, file.name || 'material');
+    }
   };
 
   const hasTournamentMaterials =
@@ -963,8 +1083,8 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
                         <MarkdownRenderer text={team.tournament_tz} />
                       </div>
                       <div className="tw-link-row">
-                        <button type="button" onClick={downloadTzMd} className="tw-file-pill blue">
-                          <IconAttach /> Скачати ТЗ як .md
+                        <button type="button" onClick={saveTzMd} className="tw-file-pill blue">
+                          <IconAttach /> Зберегти ТЗ як .md
                         </button>
                       </div>
                     </>
@@ -1017,12 +1137,12 @@ export default function TabTeamWorkspace({ teamId, toast, onBack }) {
               <button type="button" onClick={() => setMaterialModal(null)} aria-label="Закрити">×</button>
             </div>
             <div className="tw-material-modal-body">
-              <iframe src={materialModal.url} title={materialModal.name} />
+              <MaterialPreview file={materialModal} />
             </div>
             <div className="tw-material-modal-actions">
-              <a href={materialModal.url} download className="tw-file-pill blue">
-                <IconAttach /> Скачати
-              </a>
+              <button type="button" className="tw-file-pill blue" onClick={() => saveMaterial(materialModal)}>
+                <IconAttach /> Зберегти як
+              </button>
               <button type="button" className="tw-file-pill" onClick={() => setMaterialModal(null)}>
                 Закрити
               </button>

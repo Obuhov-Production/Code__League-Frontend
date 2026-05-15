@@ -241,6 +241,7 @@ export default function CertificateGenerator({
           position: fixed;
           inset: 0;
           z-index: 9999;
+          --cert-scale: 1;
           padding: 18px 18px 82px;
           background:
             radial-gradient(circle at top left, rgba(124, 95, 245, 0.22), transparent 34%),
@@ -249,14 +250,13 @@ export default function CertificateGenerator({
           display: flex;
           align-items: center;
           justify-content: center;
-          overflow: auto;
+          overflow: hidden;
         }
 
         .cert-card {
           position: relative;
           width: min(1040px, calc(100vw - 36px));
-          max-height: calc(100vh - 112px);
-          min-height: min(720px, calc(100vh - 112px));
+          min-height: 720px;
           padding: clamp(28px, 3.4vw, 44px) clamp(30px, 4.2vw, 58px);
           box-sizing: border-box;
           background:
@@ -271,8 +271,8 @@ export default function CertificateGenerator({
           color: #1e1b2e;
           text-align: center;
           font-family: Georgia, 'Times New Roman', serif;
-          overflow: auto;
-          scrollbar-gutter: stable;
+          overflow: hidden;
+          zoom: var(--cert-scale);
         }
 
         .cert-card::before,
@@ -833,9 +833,32 @@ export default function CertificateGenerator({
           }
         }
 
+        @media (max-height: 1120px) and (min-width: 901px) {
+          .cert-overlay {
+            --cert-scale: 0.94;
+          }
+        }
+
+        @media (max-height: 1040px) and (min-width: 901px) {
+          .cert-overlay {
+            --cert-scale: 0.88;
+          }
+        }
+
+        @media (max-height: 960px) and (min-width: 901px) {
+          .cert-overlay {
+            --cert-scale: 0.8;
+          }
+        }
+
+        @media (max-height: 860px) and (min-width: 901px) {
+          .cert-overlay {
+            --cert-scale: 0.72;
+          }
+        }
+
         @media (max-height: 820px) and (min-width: 641px) {
           .cert-overlay {
-            align-items: flex-start;
             padding-top: 14px;
           }
 
@@ -910,6 +933,7 @@ export default function CertificateGenerator({
             padding: 12px 12px 112px;
             align-items: flex-start;
             justify-content: center;
+            overflow: auto;
           }
 
           .cert-card {

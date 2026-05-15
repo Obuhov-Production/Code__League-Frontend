@@ -502,7 +502,6 @@ export default function TabTeams({ toast, setTab }) {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(null);
   const [editTeam, setEditTeam] = useState(null);
-  const [submitTeam, setSubmitTeam] = useState(null);
   const [detailCache, setDetailCache] = useState({});
   const [detailLoading, setDetailLoading] = useState({});
 
@@ -633,7 +632,7 @@ export default function TabTeams({ toast, setTab }) {
                     {canSubmit && (
                       <button
                         className={`db-btn db-btn-sm${submitBlocked ? ' db-btn-ghost' : ' db-btn-primary'}`}
-                        onClick={e => { e.stopPropagation(); setExpanded(t.id); setSubmitTeam(prev => prev === t.id ? null : t.id); }}
+                        onClick={e => { e.stopPropagation(); setTab?.(`team_${t.id}`); }}
                         title={submitBlocked ? 'Дедлайн здачі минув' : ''}
                       >
                         {submitBlocked ? '🔒 Дедлайн минув' : <><IconSend style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Подати роботу</>}
@@ -736,7 +735,7 @@ export default function TabTeams({ toast, setTab }) {
                             {canSubmit && (
                               <button
                                 className={`db-btn db-btn-sm${submitBlocked ? ' db-btn-ghost' : ' db-btn-ghost'}`}
-                                onClick={e => { e.stopPropagation(); setSubmitTeam(prev => prev === t.id ? null : t.id); }}
+                                onClick={e => { e.stopPropagation(); setTab?.(`team_${t.id}`); }}
                               >
                                 {submitBlocked ? '🔒 Дедлайн минув' : <><IconSend style={{ width: 14, height: 14, verticalAlign: -2, marginRight: 5 }} /> Подати роботу</>}
                               </button>
@@ -747,18 +746,6 @@ export default function TabTeams({ toast, setTab }) {
                               </button>
                             )}
                           </div>
-                          {submitTeam === t.id && (
-                            <SubmitWorkPanel
-                              team={t}
-                              toast={toast}
-                              onClose={() => setSubmitTeam(null)}
-                              onSaved={() => {
-                                setSubmitTeam(null);
-                                setDetailCache(prev => ({ ...prev, [t.id]: undefined }));
-                                load({ silent: true });
-                              }}
-                            />
-                          )}
                         </>
                       );
                     })()}
