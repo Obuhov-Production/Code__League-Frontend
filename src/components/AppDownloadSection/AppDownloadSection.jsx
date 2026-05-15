@@ -1,8 +1,8 @@
 import laptopImage from '@images/apps/laptop.png'
 import phoneImage from '@images/apps/phone.png'
 
-const MOBILE_LINK = '/mobile_app'
-const DESKTOP_LINK = '/pc_app'
+const MOBILE_LINK = '/download_mobile'
+const DESKTOP_LINK = '/download_pc'
 
 function AppDownloadSection() {
   return (
@@ -16,8 +16,7 @@ function AppDownloadSection() {
             </h2>
             <p className="app-download-text">
               Стеж за турнірами, командою, дедлайнами та результатами у зручному
-              застосунку. На мобільному відкривається мобільна версія, а на ПК
-              доступний окремий desktop-застосунок для роботи з великого екрана.
+              застосунку.
             </p>
 
             <div className="app-download-points" aria-label="Переваги застосунків">
@@ -25,6 +24,7 @@ function AppDownloadSection() {
               <span>Команди</span>
               <span>Рейтинги</span>
               <span>Здача робіт</span>
+              <span>Чат</span>
             </div>
 
             <a
