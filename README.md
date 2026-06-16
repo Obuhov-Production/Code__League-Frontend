@@ -168,9 +168,9 @@ Frontend працює з backend API та підтримує два режими
 ```env
 VITE_APP_NAME=Code League
 VITE_APP_VERSION=0.0.0
-VITE_FRONTEND_PORT=3000
+VITE_FRONTEND_PORT=4000
 VITE_API_BASE_URL=/api
-VITE_BACKEND_URL=http://localhost:3001
+VITE_BACKEND_URL=http://localhost:4001
 ```
 
 

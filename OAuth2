@@ -1,13 +1,13 @@
 # Google OAuth
 # Get credentials at: https://console.cloud.google.com/apis/credentials
-# Authorized redirect URI: http://localhost:3001/api/auth/google/callback
+# Authorized redirect URI: http://localhost:4001/api/auth/google/callback
 GOOGLE_CLIENT_ID=1010092539444-ilprspnrvman9lud67mktkp7gnlbo5c1.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=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
-GOOGLE_CALLBACK_URL=http://localhost:3001/auth/google/callback
+GOOGLE_CALLBACK_URL=http://localhost:4001/auth/google/callback
 
 # Discord OAuth
 # Get credentials at: https://discord.com/developers/applications
-# Redirect URI: http://localhost:3001/api/auth/discord/callback
+# Redirect URI: http://localhost:4001/api/auth/discord/callback
 DISCORD_CLIENT_ID=1488212461252509807
 DISCORD_CLIENT_SECRET=KP9ztwx7a6yRoI-slCU23pH2Uo8mkeMq
-DISCORD_CALLBACK_URL=http://localhost:3001/auth/discord/callback
+DISCORD_CALLBACK_URL=http://localhost:4001/auth/discord/callback

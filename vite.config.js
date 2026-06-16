@@ -10,8 +10,8 @@ const __dirname = path.dirname(__filename)
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, __dirname, '')
-  const frontendPort = Number(env.VITE_FRONTEND_PORT || 3000)
-  const backendUrl = env.VITE_BACKEND_URL || 'http://localhost:3001'
+  const frontendPort = Number(env.VITE_FRONTEND_PORT || 4000)
+  const backendUrl = env.VITE_BACKEND_URL || 'http://localhost:4001'
   const debugApi = env.VITE_DEBUG_API === 'true'
 
   return {

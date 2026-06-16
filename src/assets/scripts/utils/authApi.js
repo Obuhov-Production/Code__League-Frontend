@@ -1,11 +1,11 @@
 /**
- * Auth API utility — talks to backend via Vite proxy /api → http://localhost:3001
+ * Auth API utility — talks to backend via Vite proxy /api → http://localhost:4001
  */
 
 import { apiErrorMessage, createFriendlyError } from './errorMessages';
 
 const API_PROXY_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
-const DIRECT_BACKEND_BASE = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '');
+const DIRECT_BACKEND_BASE = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:4001').replace(/\/$/, '');
 const BASE = API_PROXY_BASE;
 export const API_BASE = BASE.startsWith('http') ? BASE : DIRECT_BACKEND_BASE;
 
